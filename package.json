@@ -1,0 +1,22 @@
+{
+  "name": "inknest",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Local-first desktop Markdown note-taking app.",
+  "type": "module",
+  "scripts": {
+    "dev": "node scripts/phase0-command.mjs dev",
+    "check": "node scripts/check-baseline.mjs",
+    "test": "node scripts/check-baseline.mjs",
+    "build": "node scripts/phase0-command.mjs build",
+    "package": "node scripts/phase0-command.mjs package"
+  },
+  "keywords": [
+    "markdown",
+    "notes",
+    "electron",
+    "local-first"
+  ],
+  "author": "",
+  "license": "Apache-2.0"
+}
