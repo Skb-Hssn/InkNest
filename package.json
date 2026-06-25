@@ -3,13 +3,13 @@
   "version": "0.1.0",
   "private": true,
   "description": "Local-first desktop Markdown note-taking app.",
-  "type": "module",
+  "main": "out/main/index.js",
   "scripts": {
-    "dev": "node scripts/phase0-command.mjs dev",
-    "check": "node scripts/check-baseline.mjs",
-    "test": "node scripts/check-baseline.mjs",
-    "build": "node scripts/phase0-command.mjs build",
-    "package": "node scripts/phase0-command.mjs package"
+    "dev": "electron-vite dev --noSandbox -- --disable-gpu --disable-gpu-compositing --disable-accelerated-video-decode --disable-accelerated-video-encode --disable-features=Vulkan,DefaultANGLEVulkan,VulkanFromANGLE,VaapiVideoDecoder,VaapiVideoEncoder --ozone-platform=x11",
+    "check": "node scripts/check-scaffold.mjs && tsc --noEmit",
+    "test": "npm run check",
+    "build": "tsc --noEmit && electron-vite build",
+    "package": "npm run build"
   },
   "keywords": [
     "markdown",
@@ -18,5 +18,23 @@
     "local-first"
   ],
   "author": "",
-  "license": "Apache-2.0"
+  "license": "Apache-2.0",
+  "dependencies": {
+    "lucide-react": "^1.21.0",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.0.1",
+    "@types/react": "^19.2.17",
+    "@types/react-dom": "^19.2.3",
+    "@vitejs/plugin-react": "^5.2.0",
+    "autoprefixer": "^10.4.20",
+    "electron": "^42.5.0",
+    "electron-vite": "^5.0.0",
+    "postcss": "^8.4.49",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^6.0.3",
+    "vite": "^7.3.6"
+  }
 }
