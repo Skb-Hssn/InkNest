@@ -1,0 +1,34 @@
+# Dependencies
+node_modules/
+
+# Build and package output
+dist/
+dist-electron/
+out/
+release/
+build/
+coverage/
+
+# Runtime and local workspace data
+.inknest/
+.inknest-workspaces/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and editor state
+.env
+.env.*
+!.env.example
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+
+# TypeScript and tooling caches
+*.tsbuildinfo
+.eslintcache
+.vite/
+.vitest/
