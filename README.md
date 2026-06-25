@@ -4,17 +4,33 @@ InkNest is a local-first desktop Markdown note-taking app. The MVP focuses on on
 
 ## Current Status
 
-This repository is at the phase 0 baseline from `PLAN.md`. App code has not been scaffolded yet; the Electron, Vite, React, TypeScript, and Tailwind setup begins in phase 1.
+This repository has the phase 1 app shell from `PLAN.md`: Electron, Vite, React, TypeScript, and Tailwind are scaffolded with a minimal InkNest workspace screen. Filesystem features and workspace selection begin in later phases.
 
 ## First Command
 
-Run the baseline check:
+Install dependencies, then run the lightweight scaffold check:
 
 ```sh
+npm install
 npm run check
 ```
 
-The `dev`, `build`, and `package` scripts are present as phase-0 placeholders so contributors can see the intended workflow. They should be replaced with real Electron/Vite commands during phase 1.
+Start the desktop app during development:
+
+```sh
+npm run dev
+```
+
+On Linux, the development command runs Electron with `--no-sandbox` through
+electron-vite's `--noSandbox` option. This avoids local SUID sandbox helper
+permission failures in development environments where Electron's
+`chrome-sandbox` binary is not owned and configured by root.
+
+Build the Electron/Vite output:
+
+```sh
+npm run build
+```
 
 ## Source Layout
 

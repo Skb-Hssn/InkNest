@@ -21,26 +21,26 @@ This plan turns `SPEC.md` into an implementation roadmap. It is not a replacemen
 
 The MVP is broken into small phases so each step can be implemented, checked, and tested independently.
 
-| Phase | Focus | Main Result |
-| ----- | ----- | ----------- |
-| 0 | Repository baseline | Project scripts and conventions are clear |
-| 1 | App shell scaffold | Electron, Vite, React, TypeScript, and Tailwind are running |
-| 2 | Secure Electron boundary | Renderer talks to main process through a safe preload API |
-| 3 | Static application layout | The main note-taking UI exists with empty states |
-| 4 | Workspace selection | User can choose and reopen one active workspace |
-| 5 | Workspace file model | Main process can scan folders and Markdown notes safely |
-| 6 | Note CRUD | User can create, read, rename, duplicate, move, and delete notes |
-| 7 | Folder organization | User can organize notes in folders |
-| 8 | Visual Markdown editor | User edits formatted content and saves valid Markdown |
-| 9 | Toolbar and editing commands | Common Markdown actions are available through visible controls |
-| 10 | Auto-save and safe writes | Edits persist reliably with visible save status |
-| 11 | Search and tags | User can search titles, content, and frontmatter tags |
-| 12 | Import, assets, and links | Images, local assets, and external links behave safely |
-| 13 | Export | Notes export to Markdown, HTML, and PDF |
-| 14 | Settings and themes | Preferences persist across restarts |
-| 15 | Reliability and external changes | Conflicts, missing files, and trash restore are handled |
-| 16 | Accessibility and polish | MVP is comfortable, keyboard-friendly, and ready to package |
-| 17 | Release validation | MVP acceptance criteria and tests pass |
+| Phase | Focus                            | Main Result                                                      |
+| ----- | -------------------------------- | ---------------------------------------------------------------- |
+| 0     | Repository baseline              | Project scripts and conventions are clear                        |
+| 1     | App shell scaffold               | Electron, Vite, React, TypeScript, and Tailwind are running      |
+| 2     | Secure Electron boundary         | Renderer talks to main process through a safe preload API        |
+| 3     | Static application layout        | The main note-taking UI exists with empty states                 |
+| 4     | Workspace selection              | User can choose and reopen one active workspace                  |
+| 5     | Workspace file model             | Main process can scan folders and Markdown notes safely          |
+| 6     | Note CRUD                        | User can create, read, rename, duplicate, move, and delete notes |
+| 7     | Folder organization              | User can organize notes in folders                               |
+| 8     | Visual Markdown editor           | User edits formatted content and saves valid Markdown            |
+| 9     | Toolbar and editing commands     | Common Markdown actions are available through visible controls   |
+| 10    | Auto-save and safe writes        | Edits persist reliably with visible save status                  |
+| 11    | Search and tags                  | User can search titles, content, and frontmatter tags            |
+| 12    | Import, assets, and links        | Images, local assets, and external links behave safely           |
+| 13    | Export                           | Notes export to Markdown, HTML, and PDF                          |
+| 14    | Settings and themes              | Preferences persist across restarts                              |
+| 15    | Reliability and external changes | Conflicts, missing files, and trash restore are handled          |
+| 16    | Accessibility and polish         | MVP is comfortable, keyboard-friendly, and ready to package      |
+| 17    | Release validation               | MVP acceptance criteria and tests pass                           |
 
 ## Phase 0: Repository Baseline
 
