@@ -8,6 +8,8 @@ out/
 release/
 build/
 coverage/
+playwright-report/
+test-results/
 
 # Runtime and local workspace data
 .inknest/
