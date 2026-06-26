@@ -1,9 +1,9 @@
 # ARCH.md - InkNest Architecture
 
-This document describes the architecture established by Phase 0 and Phase 1 of
-`PLAN.md`. It focuses on the repository baseline and the first running app
-shell, before workspace selection, note storage, and filesystem features are
-implemented.
+This document describes the architecture established by Phase 0, Phase 1, and
+Phase 2 of `PLAN.md`. It covers the repository baseline, the first running app
+shell, and the secure Electron boundary that renderer code must use before
+workspace selection, note storage, and filesystem features are implemented.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -40,6 +40,7 @@ InkNest/
   tests/
   src/
     main/
+      ipc/
     preload/
     renderer/
     shared/
@@ -49,10 +50,12 @@ InkNest/
 
 - `src/main/` contains Electron main-process code. This is where native desktop
   behavior and future filesystem services belong.
+- `src/main/ipc/` contains grouped IPC handlers, IPC error handling, and request
+  validation owned by the main process.
 - `src/preload/` contains the preload bridge exposed to renderer code.
 - `src/renderer/` contains the React app, styles, and browser-like UI code.
-- `src/shared/` contains shared TypeScript types and future shared validation
-  contracts.
+- `src/shared/` contains shared TypeScript types, IPC channel names, and preload
+  API contracts.
 - `tests/` contains automated checks for the scaffold and future app behavior.
 - `scripts/` contains repository maintenance and validation scripts.
 
@@ -93,16 +96,16 @@ Electron main process
   attaches preload script
 
 Preload bridge
-  exposes a narrow window.inknest API
+  exposes a narrow typed window.inknest API
   keeps renderer code away from direct Electron and Node.js access
 
 React renderer
   renders the InkNest app shell
   owns visible UI state for the scaffold
-  calls window.inknest for allowed app information
+  calls window.inknest for allowed app information through IPC
 
 Shared types
-  define the typed preload API contract used by preload and renderer code
+  define IPC channel names and the typed preload API contract
 ```
 
 ### Main Process
@@ -125,30 +128,39 @@ selection, note file access, dialogs, export, and external link handling.
 
 ### Preload Bridge
 
-The Phase 1 preload bridge lives in `src/preload/index.ts`.
+The preload bridge lives in `src/preload/index.ts`.
 
 It exposes a small `window.inknest` object through Electron's context bridge.
-The current API is intentionally harmless:
+Phase 2 replaced the original synchronous scaffold method with an async IPC
+bridge. Renderer code now calls grouped APIs such as:
 
 ```ts
-window.inknest.getAppInfo();
+window.inknest.app.getInfo();
+window.inknest.workspace.getActive();
+window.inknest.settings.get();
 ```
 
-This proves that renderer code can call a preload method without giving the
-renderer unrestricted access to Electron or Node.js APIs.
+Each method returns a typed result envelope rather than throwing raw main-process
+errors into the renderer.
 
 ### Shared Preload Contract
 
-The preload API type contract lives in `src/shared/preload.ts`.
+The preload API type contract lives in `src/shared/preload.ts`. Shared IPC
+types and channel names live in `src/shared/ipc.ts`.
 
-It defines:
+Together they define:
 
 - `AppInfo`
+- `IpcResult<T>`
+- `WorkspaceInfo`
+- `NoteSummary`
+- `AppSettings`
+- `ipcChannels`
 - `InkNestApi`
 
-Keeping this contract in `src/shared/` lets preload and renderer code agree on
-the same API shape. Later phases can extend this pattern for workspace, notes,
-settings, dialogs, links, and export APIs.
+Keeping these contracts in `src/shared/` lets main, preload, and renderer code
+agree on the same channel names and API shape. Later phases should extend this
+pattern rather than letting renderer code call arbitrary IPC channels directly.
 
 ### Renderer App
 
@@ -190,7 +202,7 @@ App starts
   -> Electron main process creates BrowserWindow
   -> BrowserWindow loads preload script
   -> BrowserWindow loads React renderer
-  -> React renderer reads window.inknest.getAppInfo()
+  -> React renderer reads window.inknest.app.getInfo()
   -> UI displays the phase shell and empty workspace state
 ```
 
@@ -207,14 +219,157 @@ Phase 1 is complete when:
 - The first screen is the workspace app experience.
 - `npm run check` or the equivalent lightweight check passes.
 
-## Architecture Direction After Phase 1
+## Phase 2 Architecture: Secure Electron Boundary
 
-Phase 2 will harden the Electron boundary before filesystem features begin.
-That means future work should preserve the current split:
+Phase 2 hardens the Electron boundary before filesystem features begin. The
+renderer must request actions through `window.inknest`; it must not import
+Electron, Node.js modules, or direct filesystem APIs.
 
-- Renderer code requests actions.
-- Preload exposes a narrow typed API.
-- Main-process services own native and filesystem behavior.
+### Browser Window Security
+
+The main window is created in `src/main/index.ts` with the security settings
+that define the app boundary:
+
+- `contextIsolation: true`
+- `nodeIntegration: false`
+- `sandbox: true`
+- preload script attached from `src/preload/index.ts`
+
+The native menu remains hidden and the window title remains `InkNest`.
+
+### IPC Handler Layout
+
+Grouped IPC handlers live under `src/main/ipc/`.
+
+```text
+src/main/ipc/
+  app.ts          app metadata
+  workspace.ts    active workspace placeholder state
+  notes.ts        note list/read placeholders
+  settings.ts     app settings placeholder state
+  links.ts        safe external link opening
+  dialogs.ts      native dialog placeholders
+  export.ts       export placeholder boundary
+  validation.ts   shared main-process payload validators
+  errors.ts       safe IPC request errors
+  register.ts     result-envelope wrapper around ipcMain.handle
+  index.ts        registers all handler groups
+```
+
+`src/main/ipc/index.ts` registers all handler groups during app startup. Current
+handlers are intentionally small because workspace and note storage arrive in
+later phases, but the boundary is already in place.
+
+### IPC Result Shape
+
+IPC handlers return a safe result envelope:
+
+```ts
+type IpcResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: { code: string; message: string } };
+```
+
+Known request errors return useful messages such as `INVALID_PAYLOAD` or
+`WORKSPACE_REQUIRED`. Unexpected errors are logged in the main process and
+returned to the renderer as a generic `INTERNAL_ERROR` message.
+
+### Current Preload API
+
+The current `window.inknest` surface is grouped by feature area:
+
+```ts
+window.inknest = {
+  app: {
+    getInfo()
+  },
+  workspace: {
+    getActive(),
+    select(path)
+  },
+  notes: {
+    list(),
+    read(path)
+  },
+  settings: {
+    get(),
+    save(payload)
+  },
+  links: {
+    openExternal(payload)
+  },
+  dialogs: {
+    selectImage()
+  },
+  export: {
+    note(path)
+  }
+};
+```
+
+The preload script invokes only approved channel names from `src/shared/ipc.ts`.
+It does not expose `ipcRenderer`, `shell`, Node.js filesystem modules, or broad
+process access to renderer code.
+
+### Validation Rules
+
+Main-process handlers validate payloads before doing work. Phase 2 currently
+includes validators for:
+
+- plain object payloads
+- non-empty string fields
+- settings theme values
+- safe `http:` and `https:` external URLs
+- workspace-bound paths
+
+Path validation resolves requested paths against the active workspace and
+rejects paths outside that workspace. Later filesystem services should reuse or
+extend this rule before reading or writing files.
+
+External links are opened only from the main process through Electron's
+`shell.openExternal`, and only after URL validation rejects unsupported schemes
+such as `file:`.
+
+### Phase 2 Data Flow
+
+```text
+Renderer asks for app info
+  -> window.inknest.app.getInfo()
+  -> preload invokes ipcChannels.app.getInfo
+  -> main-process app handler returns AppInfo
+  -> registerIpcHandler wraps it as { ok: true, data }
+  -> renderer displays phase-2-secure-boundary
+```
+
+Invalid requests follow the same path, but validators throw safe request errors
+that are returned as `{ ok: false, error }`.
+
+### Tests
+
+Current automated coverage includes:
+
+- `tests/phase1.test.mjs` for the Electron/Vite/React scaffold and secure window
+  settings.
+- `tests/phase2.test.mjs` for grouped IPC registration, exact channel names,
+  preload restrictions, validation rules, result envelopes, and main-process
+  ownership of native behavior.
+- `tests/e2e/phase1.spec.ts` for the rendered app shell and runtime preload API,
+  including invalid payload rejection and no renderer Node.js access.
+
+Use `npm run check` as the lightweight validation command. It runs scaffold
+checks, Node tests, and TypeScript validation. `npm run test:e2e` builds the app
+and runs Playwright/Electron tests; depending on the host sandbox, Electron may
+need to run outside restricted filesystem or process sandboxing.
+
+## Architecture Direction After Phase 2
+
+Future work should preserve the current split:
+
+- Renderer code requests actions through `window.inknest`.
+- Preload exposes a narrow typed API and approved channel invocations only.
+- Main-process handlers own native behavior, filesystem behavior, dialogs,
+  export, and external links.
+- Main-process services validate payloads and workspace paths before acting.
 - Shared types keep IPC contracts explicit.
 
 This keeps InkNest aligned with the local-first goal while avoiding direct
