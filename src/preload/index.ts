@@ -28,6 +28,7 @@ const inknestApi: InkNestApi = {
   folders: {
     create: (payload = {}) => ipcRenderer.invoke(ipcChannels.folders.create, payload),
     rename: (payload) => ipcRenderer.invoke(ipcChannels.folders.rename, payload),
+    move: (payload) => ipcRenderer.invoke(ipcChannels.folders.move, payload),
     delete: (payload) => ipcRenderer.invoke(ipcChannels.folders.delete, payload)
   },
   settings: {

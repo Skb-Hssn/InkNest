@@ -39,6 +39,7 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "export:note",
     "folders:create",
     "folders:delete",
+    "folders:move",
     "folders:rename",
     "links:open-external",
     "notes:create",

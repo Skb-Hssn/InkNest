@@ -1,10 +1,11 @@
 # ARCH.md - InkNest Architecture
 
 This document describes the architecture established by Phase 0, Phase 1,
-Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 of `PLAN.md`. It covers the repository baseline,
+Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, and Phase 7 of `PLAN.md`. It covers the repository baseline,
 the first running app shell, the secure Electron boundary, the static
 application layout, the workspace selection flow, and the workspace file model
-plus note CRUD behavior that future search and editor behavior will build on.
+plus note and folder organization behavior that future search and editor
+behavior will build on.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -340,7 +341,7 @@ Renderer asks for app info
   -> preload invokes ipcChannels.app.getInfo
   -> main-process app handler returns AppInfo
   -> registerIpcHandler wraps it as { ok: true, data }
-  -> renderer displays phase-6-note-crud
+  -> renderer displays phase-7-folder-organization
 ```
 
 Invalid requests follow the same path, but validators throw safe request errors
@@ -427,7 +428,7 @@ App starts
   -> React renderer initializes static placeholders
   -> renderer asks window.inknest.app.getInfo()
   -> preload invokes ipcChannels.app.getInfo
-  -> main-process handler returns phase-6-note-crud
+  -> main-process handler returns phase-7-folder-organization
   -> status bar displays the current phase marker
 ```
 
@@ -447,7 +448,7 @@ Phase 4 makes the workspace switcher real while keeping one active workspace at
 a time. The renderer still has no direct filesystem access; it asks the preload
 bridge for workspace actions and the main process owns native dialogs,
 persistence, and path checks. The app info milestone is now
-`phase-6-note-crud`.
+`phase-7-folder-organization`.
 
 ### Workspace Contract
 
@@ -557,7 +558,7 @@ the Electron main process. The renderer still does not touch the filesystem
 directly; it asks `window.inknest.workspace.scan()`, `window.inknest.notes.list()`,
 or `window.inknest.notes.read(path)` through the preload bridge.
 
-The app info milestone is now `phase-6-note-crud`.
+The app info milestone is now `phase-7-folder-organization`.
 
 ### Workspace File Contract
 
@@ -748,7 +749,89 @@ workspace boundary, and file model.
 
 `npm run check` remains the lightweight validation command.
 
-## Architecture Direction After Phase 6
+## Phase 7 Architecture: Folder Organization
+
+Phase 7 turns folders into a usable organization surface in the sidebar. Notes
+and folders remain plain filesystem entries inside the active workspace, and the
+renderer still reaches them only through the preload API.
+
+### Folder Organization Contract
+
+The shared IPC contract now includes `MoveFolderPayload`:
+
+```ts
+type MoveFolderPayload = {
+  path: string;
+  parentPath: string;
+};
+```
+
+The preload folder surface exposes:
+
+```ts
+window.inknest.folders.create(payload);
+window.inknest.folders.rename(payload);
+window.inknest.folders.move(payload);
+window.inknest.folders.delete(payload);
+```
+
+The `folders:move` channel accepts workspace-relative paths only. The main
+process validates the active workspace, the source folder, and the target parent
+folder before touching disk.
+
+### Main-Process Folder Operations
+
+`src/main/services/folder-service.ts` owns folder scanning and mutations:
+
+- `scanWorkspaceFolders` returns sorted workspace-relative folder summaries.
+- `createWorkspaceFolder` creates collision-safe user folders.
+- `renameWorkspaceFolder` renames a user folder without leaving the workspace.
+- `moveWorkspaceFolder` moves a folder into another safe workspace folder.
+- `deleteWorkspaceFolder` removes a folder after renderer confirmation.
+
+Folder moves reject unsafe targets, including the workspace root as a source,
+app-owned folders such as `.inknest/` and `assets/`, and moving a folder into
+itself or one of its descendants.
+
+### Renderer Behavior
+
+`src/renderer/src/App.tsx` now builds a collapsible folder tree from scanned
+folder summaries. Users can:
+
+- expand and collapse nested folders
+- select folders from the tree
+- create folders under the selected folder
+- rename, move, and delete folders from inline sidebar actions
+- move notes into folders from the existing note move menu
+
+The renderer keeps expanded ancestors visible after creates, renames, and moves.
+After every folder or note mutation, it rescans the workspace so the sidebar and
+note list reflect the filesystem state.
+
+### Phase 7 Data Flow
+
+```text
+User moves a folder
+  -> renderer calls window.inknest.folders.move({ path, parentPath })
+  -> preload invokes folders:move
+  -> main process validates payload and active workspace
+  -> folder service rejects unsafe moves or renames the directory
+  -> renderer rescans workspace and selects the moved folder path
+```
+
+Delete follows the same boundary, with renderer-side confirmation plus a
+`{ confirmed: true }` payload before recursive folder deletion is allowed.
+
+### Tests
+
+`tests/phase7.test.mjs` verifies the folder move contract, guarded folder move
+service behavior, collapsible folder tree renderer controls, and this
+architecture documentation. Earlier phase tests continue to protect the shell,
+workspace boundary, file model, and note CRUD behavior.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 7
 
 Future work should preserve the current split:
 

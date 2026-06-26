@@ -125,6 +125,42 @@ export async function renameWorkspaceFolder(
   };
 }
 
+export async function moveWorkspaceFolder(
+  workspaceRoot: string,
+  folderPath: string,
+  parentPath: string
+): Promise<FolderSummary> {
+  const root = resolveInsideWorkspace(workspaceRoot);
+  const sourcePath = await resolveUserFolderPath(root, folderPath);
+  const targetParentPath = await resolveWritableUserFolderPath(root, parentPath);
+  const relativeSourcePath = toWorkspaceRelativePath(root, sourcePath);
+  const relativeTargetParentPath = toWorkspaceRelativePath(root, targetParentPath);
+
+  if (
+    relativeTargetParentPath === relativeSourcePath ||
+    relativeTargetParentPath.startsWith(`${relativeSourcePath}/`)
+  ) {
+    throw invalidPayload("Folder cannot be moved into itself.");
+  }
+
+  const targetName = await createAvailableFolderNameExcluding(
+    root,
+    relativeTargetParentPath,
+    path.basename(sourcePath),
+    sourcePath
+  );
+  const targetPath = path.join(targetParentPath, targetName);
+
+  if (path.resolve(targetPath) !== path.resolve(sourcePath)) {
+    await rename(sourcePath, targetPath);
+  }
+
+  return {
+    name: targetName,
+    path: toWorkspaceRelativePath(root, targetPath)
+  };
+}
+
 export async function deleteWorkspaceFolder(
   workspaceRoot: string,
   folderPath: string
@@ -201,6 +237,26 @@ async function resolveUserFolderPath(workspaceRoot: string, folderPath: string) 
 
   if (!folderStats.isDirectory()) {
     throw invalidPayload("Path must be a workspace folder.");
+  }
+
+  return folder;
+}
+
+async function resolveWritableUserFolderPath(
+  workspaceRoot: string,
+  folderPath: string
+) {
+  const folder = resolveInsideWorkspace(workspaceRoot, folderPath);
+  const relativePath = toWorkspaceRelativePath(workspaceRoot, folder);
+
+  if (isAppOwnedFolderPath(relativePath)) {
+    throw invalidPayload("Folders cannot be moved into app-owned folders.");
+  }
+
+  const folderStats = await stat(folder);
+
+  if (!folderStats.isDirectory()) {
+    throw invalidPayload("Target parent must be a workspace folder.");
   }
 
   return folder;

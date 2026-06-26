@@ -4,6 +4,6 @@ import { registerIpcHandler } from "./register";
 export function registerAppHandlers() {
   registerIpcHandler<AppInfo>(ipcChannels.app.getInfo, () => ({
     name: "InkNest",
-    phase: "phase-6-note-crud"
+    phase: "phase-7-folder-organization"
   }));
 }

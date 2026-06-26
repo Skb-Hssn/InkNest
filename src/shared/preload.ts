@@ -8,6 +8,7 @@ import type {
   DuplicateNotePayload,
   FolderSummary,
   IpcResult,
+  MoveFolderPayload,
   MoveNotePayload,
   NoteContent,
   NoteSummary,
@@ -49,6 +50,7 @@ export type InkNestApi = {
   folders: {
     create: (payload?: CreateFolderPayload) => Promise<IpcResult<FolderSummary>>;
     rename: (payload: RenameFolderPayload) => Promise<IpcResult<FolderSummary>>;
+    move: (payload: MoveFolderPayload) => Promise<IpcResult<FolderSummary>>;
     delete: (
       payload: DeleteFolderPayload
     ) => Promise<IpcResult<{ deleted: true; path: string }>>;
