@@ -115,8 +115,9 @@ test("phase 3 renderer uses the preload boundary only", async () => {
   assert.match(appSource, /window\.inknest\.app\.getInfo\(\)/);
   assert.match(appSource, /window\.inknest\.workspace\.getActive\(\)/);
   assert.match(appSource, /window\.inknest\.notes\.read/);
+  assert.match(appSource, /window\.inknest\.links\.openExternal/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
-  assert.doesNotMatch(appSource, /window\.inknest\.(settings|links|dialogs|export)\./);
+  assert.doesNotMatch(appSource, /window\.inknest\.(settings|dialogs|export)\./);
   assert.doesNotMatch(appSource, /ipcRenderer|shell\.openExternal/);
   assert.doesNotMatch(sharedIpcSource, /phase-3/);
 });

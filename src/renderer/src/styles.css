@@ -144,12 +144,33 @@ input {
     @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-700 transition hover:bg-ink-50 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  .markdown-toolbar {
+    @apply static flex max-h-28 shrink-0 flex-wrap items-start gap-1 overflow-y-auto border-b border-ink-100 bg-white px-4 py-1.5;
+  }
+
+  .toolbar-group {
+    @apply flex flex-wrap items-center gap-1 rounded-md border border-ink-100 bg-ink-50/60 px-1 py-1;
+  }
+
   .toolbar-button {
     @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent px-2 text-xs font-semibold text-neutral-600 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
+  .toolbar-button-active {
+    @apply border-ink-500/50 bg-ink-100 text-ink-900 shadow-sm;
+  }
+
   .toolbar-separator {
     @apply mx-1 h-5 w-px bg-ink-100;
+  }
+
+  .color-palette {
+    @apply static flex shrink-0 flex-wrap items-center gap-1 border-b border-ink-100 bg-white px-4 py-2;
+  }
+
+  .color-swatch {
+    @apply h-7 w-7 rounded-md border border-neutral-300 shadow-sm transition hover:scale-105 hover:border-ink-500 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+    background: var(--swatch-color);
   }
 
   .status-pill {
@@ -166,6 +187,7 @@ input {
 
   .visual-editor {
     @apply min-h-full w-full rounded-md border border-ink-100 bg-white px-8 py-7 text-base leading-7 text-ink-900 outline-none transition focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+    overflow-wrap: anywhere;
   }
 
   .visual-editor:empty::before {
@@ -195,6 +217,21 @@ input {
     @apply my-3;
   }
 
+  .visual-editor [style*="text-align: left"],
+  .visual-editor [style*="text-align:left"] {
+    text-align: left;
+  }
+
+  .visual-editor [style*="text-align: center"],
+  .visual-editor [style*="text-align:center"] {
+    text-align: center;
+  }
+
+  .visual-editor [style*="text-align: right"],
+  .visual-editor [style*="text-align:right"] {
+    text-align: right;
+  }
+
   .visual-editor ul,
   .visual-editor ol {
     @apply my-3 pl-6;
@@ -212,24 +249,81 @@ input {
     @apply my-1 pl-1;
   }
 
+  .visual-editor li > ul,
+  .visual-editor li > ol {
+    @apply my-1;
+  }
+
   .visual-editor input[type="checkbox"] {
     @apply mr-2 align-middle;
   }
 
   .visual-editor blockquote {
-    @apply my-4 border-l-4 border-ink-100 bg-ink-50 px-4 py-2 text-neutral-700;
+    @apply my-4 border-l-4 border-ink-500 bg-neutral-100 px-4 py-2 text-neutral-800;
+  }
+
+  .visual-editor blockquote blockquote {
+    @apply my-3 border-l-4 border-ink-700/60 bg-white/70 text-neutral-800;
+  }
+
+  .visual-editor blockquote[data-callout] {
+    @apply rounded-md border-l-4 bg-white shadow-sm;
+  }
+
+  .visual-editor blockquote[data-callout="note"] {
+    @apply border-l-ink-500 bg-ink-50;
+  }
+
+  .visual-editor blockquote[data-callout="warning"] {
+    @apply border-l-amber-500 bg-amber-50 text-amber-950;
+  }
+
+  .visual-editor blockquote[data-callout="info"] {
+    @apply border-l-sky-500 bg-sky-50 text-sky-950;
+  }
+
+  .visual-editor blockquote[data-callout="success"] {
+    @apply border-l-emerald-500 bg-emerald-50 text-emerald-950;
   }
 
   .visual-editor code {
     @apply rounded bg-ink-50 px-1.5 py-0.5 font-mono text-sm text-ink-900;
   }
 
+  .visual-editor mark {
+    @apply rounded px-1;
+    background: #fef08a;
+  }
+
   .visual-editor pre {
-    @apply my-4 overflow-x-auto rounded-md border border-ink-100 bg-ink-50 p-4;
+    @apply relative my-4 overflow-x-auto rounded-md border border-ink-100 bg-ink-50 p-4 pt-7;
+  }
+
+  .visual-editor .code-copy-button {
+    @apply absolute left-3 top-2 rounded border border-ink-100 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900;
+  }
+
+  .visual-editor pre code[data-language]:not([data-language=""])::before {
+    content: attr(data-language);
+    @apply absolute right-3 top-2 rounded bg-white px-2 py-0.5 text-[11px] font-medium uppercase text-neutral-500;
   }
 
   .visual-editor pre code {
     @apply bg-transparent p-0;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  .visual-editor .syntax-keyword {
+    @apply font-semibold text-ink-700;
+  }
+
+  .visual-editor .syntax-string {
+    @apply text-emerald-700;
+  }
+
+  .visual-editor .syntax-number {
+    @apply text-sky-700;
   }
 
   .visual-editor table {
@@ -238,15 +332,25 @@ input {
 
   .visual-editor th,
   .visual-editor td {
-    @apply border border-ink-100 px-3 py-2 text-left align-top;
+    @apply border border-neutral-400 px-3 py-2 text-left align-top;
   }
 
   .visual-editor th {
-    @apply bg-ink-50 font-semibold;
+    @apply bg-neutral-100 font-semibold;
+  }
+
+  .visual-editor th[data-align="center"],
+  .visual-editor td[data-align="center"] {
+    text-align: center;
+  }
+
+  .visual-editor th[data-align="right"],
+  .visual-editor td[data-align="right"] {
+    text-align: right;
   }
 
   .visual-editor hr {
-    @apply my-6 border-0 border-t border-ink-100;
+    @apply my-6 border-0 border-t-2 border-neutral-500;
   }
 
   .visual-editor a {
@@ -255,6 +359,34 @@ input {
 
   .visual-editor img {
     @apply my-4 max-w-full rounded-md border border-ink-100;
+  }
+
+  .visual-editor img[width] {
+    height: auto;
+  }
+
+  .visual-editor .math-node {
+    @apply rounded bg-ink-50 px-1.5 py-0.5 font-serif text-ink-900;
+  }
+
+  .visual-editor .math-node[data-math-display="block"] {
+    @apply my-4 block overflow-x-auto border border-ink-100 bg-white px-4 py-3 text-center text-lg;
+  }
+
+  .visual-editor .math-invalid {
+    @apply border border-red-200 bg-red-50 font-mono text-sm text-red-700;
+  }
+
+  .visual-editor .math-frac {
+    @apply inline-flex flex-col items-center px-1 align-middle text-sm leading-tight;
+  }
+
+  .visual-editor .math-frac > span:first-child {
+    @apply border-b border-current px-1;
+  }
+
+  .visual-editor .math-sqrt::before {
+    content: "√";
   }
 
   button:disabled {

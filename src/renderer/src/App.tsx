@@ -2,6 +2,8 @@ import {
   type CSSProperties,
   type ClipboardEvent,
   type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
   forwardRef,
   useEffect,
@@ -11,6 +13,9 @@ import {
   useState
 } from "react";
 import {
+  AlignCenter,
+  AlignLeft,
+  AlignRight,
   AlertTriangle,
   BookOpenText,
   Bold,
@@ -20,6 +25,7 @@ import {
   Code2,
   Copy,
   Edit3,
+  Eraser,
   FileText,
   FilePlus2,
   Folder,
@@ -33,6 +39,7 @@ import {
   Heading4,
   Heading5,
   Heading6,
+  Highlighter,
   Image,
   Italic,
   Link,
@@ -41,6 +48,8 @@ import {
   ListFilter,
   ListOrdered,
   Minus,
+  PaintBucket,
+  Palette,
   PanelLeft,
   PanelRightClose,
   Quote,
@@ -65,8 +74,16 @@ import type {
 } from "../../shared/ipc";
 import {
   applyMarkdownEditorCommand,
+  applySlashCommandAtSelection,
   editorDomToMarkdown,
+  exitEditorBlockFromElement,
+  exitCurrentEditorBlock,
+  handleListKeyAtSelection,
   insertPlainTextAtSelection,
+  insertCodeIndentAtSelection,
+  isSelectionInsideCodeBlock,
+  moveTableSelection,
+  normalizeEmptyBlockAtSelection,
   type MarkdownEditorCommand,
   type MarkdownEditorCommandOptions,
   markdownToHtml
@@ -90,30 +107,118 @@ type ToolbarCommand = {
   id: MarkdownEditorCommand;
   label: string;
   icon: ReactNode;
-  group: "block" | "inline" | "insert";
+  group:
+    | "headings"
+    | "blocks"
+    | "lists"
+    | "inline"
+    | "colors"
+    | "align"
+    | "code"
+    | "table"
+    | "links"
+    | "media"
+    | "math"
+    | "insert";
 };
 
+type ColorCommandId = Extract<
+  MarkdownEditorCommand,
+  "highlight" | "text-color" | "background-color"
+>;
+
+const commonColors = [
+  "#111827",
+  "#6b7280",
+  "#dc2626",
+  "#ea580c",
+  "#d97706",
+  "#16a34a",
+  "#0d9488",
+  "#2563eb",
+  "#4f46e5",
+  "#9333ea",
+  "#db2777",
+  "#fef08a",
+  "#dbeafe",
+  "#dcfce7",
+  "#fee2e2",
+  "#ffffff"
+];
+
 const toolbarPlaceholders: ToolbarCommand[] = [
-  { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "block" },
-  { id: "heading-2", label: "H2", icon: <Heading2 size={16} />, group: "block" },
-  { id: "heading-3", label: "H3", icon: <Heading3 size={16} />, group: "block" },
-  { id: "heading-4", label: "H4", icon: <Heading4 size={16} />, group: "block" },
-  { id: "heading-5", label: "H5", icon: <Heading5 size={16} />, group: "block" },
-  { id: "heading-6", label: "H6", icon: <Heading6 size={16} />, group: "block" },
-  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "block" },
-  { id: "unordered-list", label: "List", icon: <List size={16} />, group: "block" },
-  { id: "ordered-list", label: "Numbered list", icon: <ListOrdered size={16} />, group: "block" },
-  { id: "task-list", label: "Task list", icon: <ListChecks size={16} />, group: "block" },
+  { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "headings" },
+  { id: "heading-2", label: "H2", icon: <Heading2 size={16} />, group: "headings" },
+  { id: "heading-3", label: "H3", icon: <Heading3 size={16} />, group: "headings" },
+  { id: "heading-4", label: "H4", icon: <Heading4 size={16} />, group: "headings" },
+  { id: "heading-5", label: "H5", icon: <Heading5 size={16} />, group: "headings" },
+  { id: "heading-6", label: "H6", icon: <Heading6 size={16} />, group: "headings" },
+  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },
+  { id: "callout-info", label: "Info callout", icon: <BookOpenText size={16} />, group: "blocks" },
+  { id: "callout-success", label: "Success callout", icon: <Check size={16} />, group: "blocks" },
+  { id: "unordered-list", label: "List", icon: <List size={16} />, group: "lists" },
+  { id: "ordered-list", label: "Numbered list", icon: <ListOrdered size={16} />, group: "lists" },
+  { id: "task-list", label: "Task list", icon: <ListChecks size={16} />, group: "lists" },
   { id: "bold", label: "B", icon: <Bold size={16} />, group: "inline" },
   { id: "italic", label: "I", icon: <Italic size={16} />, group: "inline" },
   { id: "strikethrough", label: "Strikethrough", icon: <Strikethrough size={16} />, group: "inline" },
   { id: "inline-code", label: "Code", icon: <Code2 size={16} />, group: "inline" },
-  { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "insert" },
-  { id: "table", label: "Table", icon: <Table2 size={16} />, group: "insert" },
-  { id: "link", label: "Link", icon: <Link size={16} />, group: "insert" },
-  { id: "image", label: "Image", icon: <Image size={16} />, group: "insert" },
+  { id: "clear-format", label: "Clear formatting", icon: <Eraser size={16} />, group: "inline" },
+  { id: "highlight", label: "Highlight", icon: <Highlighter size={16} />, group: "colors" },
+  { id: "text-color", label: "Text color", icon: <Palette size={16} />, group: "colors" },
+  { id: "background-color", label: "Background color", icon: <PaintBucket size={16} />, group: "colors" },
+  { id: "align-left", label: "Align left", icon: <AlignLeft size={16} />, group: "align" },
+  { id: "align-center", label: "Align center", icon: <AlignCenter size={16} />, group: "align" },
+  { id: "align-right", label: "Align right", icon: <AlignRight size={16} />, group: "align" },
+  { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
+  { id: "table", label: "Table", icon: <Table2 size={16} />, group: "table" },
+  { id: "table-add-row", label: "Add table row", icon: <Table2 size={16} />, group: "table" },
+  { id: "table-delete-row", label: "Delete table row", icon: <Table2 size={16} />, group: "table" },
+  { id: "table-add-column", label: "Add table column", icon: <Table2 size={16} />, group: "table" },
+  { id: "table-delete-column", label: "Delete table column", icon: <Table2 size={16} />, group: "table" },
+  { id: "table-align-left", label: "Align table left", icon: <AlignLeft size={16} />, group: "table" },
+  { id: "table-align-center", label: "Align table center", icon: <AlignCenter size={16} />, group: "table" },
+  { id: "table-align-right", label: "Align table right", icon: <AlignRight size={16} />, group: "table" },
+  { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
+  { id: "link-edit", label: "Edit link", icon: <Link size={16} />, group: "links" },
+  { id: "link-remove", label: "Remove link", icon: <X size={16} />, group: "links" },
+  { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
+  { id: "image-resize", label: "Resize image", icon: <Image size={16} />, group: "media" },
+  { id: "inline-math", label: "Inline math", icon: <Hash size={16} />, group: "math" },
+  { id: "block-math", label: "Block math", icon: <Hash size={16} />, group: "math" },
+  { id: "math-edit", label: "Edit math", icon: <Hash size={16} />, group: "math" },
   { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
 ];
+
+function getToolbarGroups(commands: ToolbarCommand[]) {
+  return commands.reduce<Array<{ name: ToolbarCommand["group"]; commands: ToolbarCommand[] }>>(
+    (groups, command) => {
+      const currentGroup = groups[groups.length - 1];
+
+      if (currentGroup?.name === command.group) {
+        currentGroup.commands.push(command);
+      } else {
+        groups.push({
+          name: command.group,
+          commands: [command]
+        });
+      }
+
+      return groups;
+    },
+    []
+  );
+}
+
+function isColorCommand(commandId: MarkdownEditorCommand): commandId is ColorCommandId {
+  return (
+    commandId === "highlight" ||
+    commandId === "text-color" ||
+    commandId === "background-color"
+  );
+}
 
 export function App() {
   const [phase, setPhase] = useState("phase-9-toolbar-editing-commands");
@@ -137,6 +242,10 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [activeColorCommand, setActiveColorCommand] = useState<ColorCommandId | null>(null);
+  const [activeToolbarCommands, setActiveToolbarCommands] = useState<
+    Set<MarkdownEditorCommand>
+  >(() => new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -295,6 +404,8 @@ export function App() {
     setSelectedNoteContent(null);
     setEditorMarkdown("");
     setLastSavedMarkdown("");
+    setActiveToolbarCommands(new Set());
+    setActiveColorCommand(null);
   }
 
   async function openNote(notePath: string) {
@@ -345,6 +456,15 @@ export function App() {
       return;
     }
 
+    if (isColorCommand(command.id)) {
+      setActiveColorCommand((currentCommand) =>
+        currentCommand === command.id ? null : command.id
+      );
+      return;
+    }
+
+    setActiveColorCommand(null);
+
     const options: MarkdownEditorCommandOptions = {};
 
     if (command.id === "link") {
@@ -369,8 +489,53 @@ export function App() {
       options.alt = window.prompt("Image description") ?? undefined;
     }
 
+    if (command.id === "link-edit") {
+      const url = window.prompt("New link URL");
+
+      if (!url) {
+        return;
+      }
+
+      options.url = url;
+      options.label = window.prompt("New link text") ?? undefined;
+    }
+
+    if (command.id === "image-resize") {
+      const width = window.prompt("Image width in pixels", "480");
+
+      if (!width) {
+        return;
+      }
+
+      options.width = width;
+    }
+
+    if (
+      command.id === "inline-math" ||
+      command.id === "block-math" ||
+      command.id === "math-edit"
+    ) {
+      const equation = window.prompt("LaTeX math", "x^2 + y^2 = z^2");
+
+      if (!equation) {
+        return;
+      }
+
+      options.equation = equation;
+    }
+
     editorHandleRef.current?.runCommand(command.id, options);
     setStatusMessage(`Applied ${command.label}`);
+  }
+
+  function applyPaletteColor(color: string) {
+    if (!activeColorCommand) {
+      return;
+    }
+
+    editorHandleRef.current?.runCommand(activeColorCommand, { color });
+    setActiveColorCommand(null);
+    setStatusMessage(`Applied ${activeColorCommand.replace(/-/g, " ")}`);
   }
 
   async function createNote() {
@@ -680,7 +845,7 @@ export function App() {
   }
 
   return (
-    <main className="grid min-h-screen grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
+    <main className="grid h-screen overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
       <header className="flex min-w-0 items-center justify-between border-b border-ink-100 bg-white px-4">
         <div className="flex items-center gap-3">
           <button type="button" aria-label="Toggle sidebar" className="icon-button">
@@ -1031,21 +1196,25 @@ export function App() {
           </div>
 
           <div
-            className="flex h-11 items-center gap-1 overflow-x-auto border-b border-ink-100 px-4"
+            className="markdown-toolbar"
             aria-label="Markdown toolbar"
           >
-            {toolbarPlaceholders.map((command, commandIndex) => {
-              const previousCommand = toolbarPlaceholders[commandIndex - 1];
-              const showSeparator =
-                previousCommand !== undefined &&
-                previousCommand.group !== command.group;
-
-              return (
-                <div key={command.id} className="flex items-center gap-1">
-                  {showSeparator ? <span className="toolbar-separator" /> : null}
+            {getToolbarGroups(toolbarPlaceholders).map((group) => (
+              <div
+                key={group.name}
+                className="toolbar-group"
+                aria-label={`${group.name} tools`}
+              >
+                {group.commands.map((command) => (
                   <button
+                    key={command.id}
                     type="button"
-                    className="toolbar-button"
+                    className={`toolbar-button ${
+                      activeToolbarCommands.has(command.id) ||
+                      activeColorCommand === command.id
+                        ? "toolbar-button-active"
+                        : ""
+                    }`}
                     aria-label={command.label}
                     title={command.label}
                     onMouseDown={(event) => event.preventDefault()}
@@ -1054,10 +1223,31 @@ export function App() {
                   >
                     {command.icon}
                   </button>
-                </div>
-              );
-            })}
+                ))}
+              </div>
+            ))}
           </div>
+
+          {activeColorCommand ? (
+            <div
+              className="color-palette"
+              aria-label={`${activeColorCommand.replace(/-/g, " ")} palette`}
+            >
+              {commonColors.map((color) => (
+                <button
+                  key={color}
+                  type="button"
+                  className="color-swatch"
+                  style={{ "--swatch-color": color } as CSSProperties}
+                  aria-label={color}
+                  title={color}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={() => applyPaletteColor(color)}
+                  disabled={!selectedNoteContent || isBusy}
+                />
+              ))}
+            </div>
+          ) : null}
 
           {selectedNoteContent ? (
             <article className="min-h-0 flex-1 overflow-y-auto p-8">
@@ -1070,6 +1260,7 @@ export function App() {
                   setEditorMarkdown(nextMarkdown);
                   setStatusMessage("Editing");
                 }}
+                onSelectionFormatChange={setActiveToolbarCommands}
               />
             </article>
           ) : (
@@ -1103,6 +1294,7 @@ type VisualMarkdownEditorProps = {
   markdown: string;
   disabled: boolean;
   onChange: (markdown: string) => void;
+  onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
 };
 
 type VisualMarkdownEditorHandle = {
@@ -1115,9 +1307,13 @@ type VisualMarkdownEditorHandle = {
 const VisualMarkdownEditor = forwardRef<
   VisualMarkdownEditorHandle,
   VisualMarkdownEditorProps
->(function VisualMarkdownEditor({ markdown, disabled, onChange }, ref) {
+>(function VisualMarkdownEditor(
+  { markdown, disabled, onChange, onSelectionFormatChange },
+  ref
+) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const lastRenderedMarkdown = useRef("");
+  const savedSelectionRange = useRef<Range | null>(null);
 
   useEffect(() => {
     if (!editorRef.current || lastRenderedMarkdown.current === markdown) {
@@ -1128,6 +1324,18 @@ const VisualMarkdownEditor = forwardRef<
     lastRenderedMarkdown.current = markdown;
   }, [markdown]);
 
+  useEffect(() => {
+    function handleSelectionChange() {
+      rememberEditorSelection();
+    }
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  });
+
   useImperativeHandle(ref, () => ({
     runCommand(command, options) {
       if (!editorRef.current || disabled) {
@@ -1135,16 +1343,167 @@ const VisualMarkdownEditor = forwardRef<
       }
 
       editorRef.current.focus();
+      if (!restoreEditorSelection()) {
+        placeCaretAtEditorEnd(editorRef.current);
+      }
       applyMarkdownEditorCommand(command, options);
       syncMarkdownFromEditor(editorRef.current);
     }
   }));
+
+  function rememberEditorSelection() {
+    const editorElement = editorRef.current;
+    const selection = window.getSelection();
+
+    if (!editorElement || !selection || selection.rangeCount === 0) {
+      onSelectionFormatChange(new Set());
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (editorElement.contains(range.commonAncestorContainer)) {
+      savedSelectionRange.current = range.cloneRange();
+      onSelectionFormatChange(collectActiveCommands(editorElement));
+    } else {
+      onSelectionFormatChange(new Set());
+    }
+  }
+
+  function restoreEditorSelection() {
+    const selection = window.getSelection();
+    const range = savedSelectionRange.current;
+
+    if (!selection || !range) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  function placeCaretAtEditorEnd(editorElement: HTMLDivElement) {
+    const range = document.createRange();
+    const selection = window.getSelection();
+
+    range.selectNodeContents(editorElement);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  function collectActiveCommands(editorElement: HTMLDivElement) {
+    const activeCommands = new Set<MarkdownEditorCommand>();
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+      return activeCommands;
+    }
+
+    const anchorNode = selection.anchorNode;
+    const element =
+      anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement;
+
+    if (!element || !editorElement.contains(element)) {
+      return activeCommands;
+    }
+
+    if (document.queryCommandState("bold")) {
+      activeCommands.add("bold");
+    }
+
+    if (document.queryCommandState("italic")) {
+      activeCommands.add("italic");
+    }
+
+    if (document.queryCommandState("strikeThrough")) {
+      activeCommands.add("strikethrough");
+    }
+
+    const heading = element.closest("h1,h2,h3,h4,h5,h6");
+    if (heading) {
+      activeCommands.add(`heading-${heading.tagName.slice(1)}` as MarkdownEditorCommand);
+    }
+
+    if (element.closest("blockquote")) {
+      activeCommands.add("blockquote");
+    }
+
+    if (element.closest("ul")) {
+      activeCommands.add("unordered-list");
+    }
+
+    if (element.closest("ol")) {
+      activeCommands.add("ordered-list");
+    }
+
+    if (element.closest("li[data-task='true']")) {
+      activeCommands.add("task-list");
+    }
+
+    if (element.closest("pre")) {
+      activeCommands.add("code-block");
+    } else if (element.closest("code")) {
+      activeCommands.add("inline-code");
+    }
+
+    if (element.closest("a")) {
+      activeCommands.add("link");
+    }
+
+    if (element.closest("table")) {
+      activeCommands.add("table");
+    }
+
+    if (element.closest("img")) {
+      activeCommands.add("image");
+    }
+
+    const mathElement = element.closest("[data-math]");
+    if (mathElement instanceof HTMLElement) {
+      activeCommands.add(
+        mathElement.dataset.mathDisplay === "block" ? "block-math" : "inline-math"
+      );
+    }
+
+    const mark = element.closest("mark");
+    if (mark) {
+      activeCommands.add("highlight");
+    }
+
+    const styledElement = element.closest("span[style],mark[style]") as HTMLElement | null;
+    if (styledElement?.style.color) {
+      activeCommands.add("text-color");
+    }
+
+    if (styledElement?.style.backgroundColor) {
+      activeCommands.add("background-color");
+    }
+
+    const alignedElement = element.closest(
+      "[style*='text-align']"
+    ) as HTMLElement | null;
+    const textAlign = alignedElement?.style.textAlign;
+    if (textAlign === "left") {
+      activeCommands.add("align-left");
+    }
+    if (textAlign === "center") {
+      activeCommands.add("align-center");
+    }
+    if (textAlign === "right") {
+      activeCommands.add("align-right");
+    }
+
+    return activeCommands;
+  }
 
   function syncMarkdownFromEditor(editorElement: HTMLDivElement) {
     const nextMarkdown = editorDomToMarkdown(editorElement);
 
     lastRenderedMarkdown.current = nextMarkdown;
     onChange(nextMarkdown);
+    rememberEditorSelection();
   }
 
   function handleInput(event: FormEvent<HTMLDivElement>) {
@@ -1155,6 +1514,137 @@ const VisualMarkdownEditor = forwardRef<
     event.preventDefault();
     insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
     handleInput(event);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Backspace") {
+      if (isSelectionInsideCodeBlock()) {
+        return;
+      }
+
+      const didNormalizeBlock = normalizeEmptyBlockAtSelection();
+
+      if (didNormalizeBlock && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      const didExitBlock = exitCurrentEditorBlock();
+
+      if (didExitBlock && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if (event.key === "Tab") {
+      const didInsertCodeIndent = insertCodeIndentAtSelection();
+      const didMoveTableCell = !didInsertCodeIndent
+        ? moveTableSelection(!event.shiftKey)
+        : false;
+      const didHandleList = !didInsertCodeIndent && !didMoveTableCell
+        ? handleListKeyAtSelection(event.key, event.shiftKey)
+        : false;
+
+      if ((didInsertCodeIndent || didMoveTableCell || didHandleList) && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (isSelectionInsideCodeBlock()) {
+        return;
+      }
+
+      const didHandleList = handleListKeyAtSelection(event.key, event.shiftKey);
+
+      if (didHandleList && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      if (didHandleList) {
+        return;
+      }
+    }
+
+    if (event.key !== " " && event.key !== "Enter") {
+      return;
+    }
+
+    const command = applySlashCommandAtSelection();
+
+    if (!command || !editorRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    syncMarkdownFromEditor(editorRef.current);
+  }
+
+  function handleMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (!event.altKey) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement) || !target.closest("pre,blockquote")) {
+      return;
+    }
+
+    const didExitBlock = exitEditorBlockFromElement(target);
+
+    if (didExitBlock && editorRef.current) {
+      event.preventDefault();
+      syncMarkdownFromEditor(editorRef.current);
+    }
+  }
+
+  function handleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (target instanceof HTMLButtonElement && target.dataset.codeCopy === "true") {
+      const code = target.closest("pre")?.querySelector("code")?.textContent ?? "";
+
+      event.preventDefault();
+      void navigator.clipboard?.writeText(code);
+      return;
+    }
+
+    if (target instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      void window.inknest.links.openExternal({ url: target.href });
+      return;
+    }
+
+    if (target instanceof HTMLImageElement || target instanceof HTMLElement && target.dataset.math) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+
+      range.selectNode(target);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
+    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
+      return;
+    }
+
+    window.setTimeout(() => {
+      if (editorRef.current) {
+        syncMarkdownFromEditor(editorRef.current);
+      }
+    }, 0);
   }
 
   return (
@@ -1168,6 +1658,11 @@ const VisualMarkdownEditor = forwardRef<
       aria-multiline="true"
       data-placeholder="Start writing..."
       onInput={handleInput}
+      onClick={handleClick}
+      onKeyDown={handleKeyDown}
+      onKeyUp={rememberEditorSelection}
+      onMouseUp={rememberEditorSelection}
+      onMouseDown={handleMouseDown}
       onPaste={handlePaste}
     />
   );
