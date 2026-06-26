@@ -1,9 +1,10 @@
 # ARCH.md - InkNest Architecture
 
 This document describes the architecture established by Phase 0, Phase 1,
-Phase 2, and Phase 3 of `PLAN.md`. It covers the repository baseline, the first
-running app shell, the secure Electron boundary, and the static application
-layout that future workspace, note, search, and editor behavior will fill in.
+Phase 2, Phase 3, and Phase 4 of `PLAN.md`. It covers the repository baseline,
+the first running app shell, the secure Electron boundary, the static
+application layout, and the workspace selection flow that future note, search,
+and editor behavior will build on.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -285,6 +286,7 @@ window.inknest = {
   },
   workspace: {
     getActive(),
+    choose(),
     select(path)
   },
   notes: {
@@ -439,7 +441,116 @@ APIs directly.
 layout regions, required empty states, status placeholders, and no direct
 renderer access to Electron or Node.js filesystem modules.
 
-## Architecture Direction After Phase 3
+## Phase 4 Architecture: Workspace Selection And Startup Restore
+
+Phase 4 makes the workspace switcher real while keeping one active workspace at
+a time. The renderer still has no direct filesystem access; it asks the preload
+bridge for workspace actions and the main process owns native dialogs,
+persistence, and path checks. The app info milestone is
+`phase-4-workspace-selection`.
+
+### Workspace Contract
+
+Workspace state is represented by `WorkspaceInfo` in `src/shared/ipc.ts`:
+
+```ts
+type WorkspaceInfo = {
+  path: string | null;
+  name: string | null;
+  status: "none" | "ready" | "missing" | "permission-denied";
+  message: string;
+  recentWorkspaces: string[];
+  lastWorkspacePath: string | null;
+};
+```
+
+The status lets the renderer distinguish a clean first run from a missing saved
+folder or a folder that still exists but cannot be accessed. The message is
+safe to show directly in the UI.
+
+### IPC Channels
+
+Phase 4 uses these workspace channels:
+
+- `workspace:get-active` returns the active or restored workspace state.
+- `workspace:choose` opens the native folder picker.
+- `workspace:select` activates a specific path, mainly for recent workspaces
+  and tests.
+
+The preload surface mirrors those channels as:
+
+```ts
+window.inknest.workspace.getActive();
+window.inknest.workspace.choose();
+window.inknest.workspace.select(path);
+```
+
+### Main-Process Services
+
+Workspace persistence lives in `src/main/services/settings-store.ts`. It stores
+`settings.json` under Electron's `app.getPath("userData")`, not in the selected
+workspace. Settings currently include:
+
+- `theme`
+- `lastWorkspacePath`
+- `recentWorkspaces`
+
+Workspace inspection lives in `src/main/services/workspace-service.ts`. It
+checks that a selected path exists, is a directory, and is readable and writable
+before it becomes the active workspace. Failed startup restores keep
+`activeWorkspace.path` as `null` and return either `missing` or
+`permission-denied` for the renderer prompt.
+
+### Startup Flow
+
+```text
+App starts
+  -> Electron app is ready
+  -> registerIpcHandlers() creates one active workspace state
+  -> restoreLastWorkspace() reads settings.json
+  -> saved workspace is inspected
+  -> activeWorkspace.path is set only when the folder is accessible
+  -> BrowserWindow opens
+  -> renderer asks window.inknest.workspace.getActive()
+  -> UI shows the active workspace, a missing-permission prompt, or first-run state
+```
+
+### Selection Flow
+
+```text
+User clicks Choose workspace
+  -> renderer calls window.inknest.workspace.choose()
+  -> main process opens dialog.showOpenDialog({ openDirectory, createDirectory })
+  -> selected folder is inspected
+  -> settings.json saves lastWorkspacePath and recentWorkspaces
+  -> renderer receives WorkspaceInfo and updates the workspace switcher/status bar
+```
+
+Recent workspace rows call `workspace.select(path)` and go through the same
+inspection and persistence path as the native picker.
+
+### Renderer Behavior
+
+`src/renderer/src/App.tsx` now hydrates the static layout with workspace state.
+It shows:
+
+- the current workspace name and path when ready
+- a first-run prompt when no workspace has been selected
+- a missing-workspace prompt when the previous folder is gone
+- a permission prompt when the previous folder cannot be accessed
+- recent workspaces when settings contain remembered paths
+
+Folder and note scanning remain deferred to later phases. Phase 4 only chooses,
+remembers, restores, and validates the workspace root.
+
+### Tests
+
+`tests/phase4.test.mjs` verifies the shared contract, persisted settings store,
+startup restore flow, native folder picker channel, renderer prompts, and this
+architecture section. `npm run check` remains the lightweight validation
+command.
+
+## Architecture Direction After Phase 4
 
 Future work should preserve the current split:
 

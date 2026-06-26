@@ -3,6 +3,8 @@ import { invalidPayload, workspaceRequired } from "./errors";
 
 export type ActiveWorkspaceState = {
   path: string | null;
+  restoreStatus: "none" | "ready" | "missing" | "permission-denied";
+  restoreMessage: string;
 };
 
 export function assertPlainObject(value: unknown): asserts value is Record<string, unknown> {

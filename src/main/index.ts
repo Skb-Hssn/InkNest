@@ -2,6 +2,10 @@ import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
 import { registerIpcHandlers } from "./ipc";
 
+if (process.env.INKNEST_USER_DATA_DIR) {
+  app.setPath("userData", path.resolve(process.env.INKNEST_USER_DATA_DIR));
+}
+
 if (process.platform === "linux") {
   app.disableHardwareAcceleration();
   app.commandLine.appendSwitch("disable-gpu");
@@ -47,8 +51,9 @@ function createMainWindow() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
-  registerIpcHandlers();
-  createMainWindow();
+  void registerIpcHandlers().then(() => {
+    createMainWindow();
+  });
 
   app.on("activate", () => {
     if (BrowserWindow.getAllWindows().length === 0) {
