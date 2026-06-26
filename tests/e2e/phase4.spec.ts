@@ -38,6 +38,9 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       return window.inknest.workspace.select(workspacePath);
     }, workspaceDir);
     const settings = await window.evaluate(() => window.inknest.settings.get());
+    const activeWorkspace = await window.evaluate(() =>
+      window.inknest.workspace.getActive()
+    );
 
     expect(selectedWorkspace).toEqual({
       ok: true,
@@ -58,7 +61,7 @@ test("phase 4 selects a workspace and persists it in settings", async ({
         recentWorkspaces: [workspaceDir]
       }
     });
-    await expect(window.getByText(workspaceDir).first()).toBeVisible();
+    expect(activeWorkspace).toEqual(selectedWorkspace);
   } finally {
     await app.close();
   }

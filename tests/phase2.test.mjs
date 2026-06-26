@@ -44,6 +44,7 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "settings:save",
     "workspace:choose",
     "workspace:get-active",
+    "workspace:scan",
     "workspace:select"
   ].sort());
 
@@ -89,7 +90,7 @@ test("phase 2 validates payloads, URLs, and workspace paths", async () => {
   assert.match(validationSource, /Path is outside the active workspace/);
   assert.match(validationSource, /path\.relative\(workspaceRoot, resolvedPath\)/);
   assert.match(linksSource, /shell\.openExternal/);
-  assert.match(notesSource, /assertWorkspacePath/);
+  assert.match(notesSource, /assertActiveWorkspace/);
 });
 
 test("phase 2 handlers reject invalid payloads through result envelopes", async () => {

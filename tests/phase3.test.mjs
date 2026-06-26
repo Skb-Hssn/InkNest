@@ -18,7 +18,7 @@ function assertIncludesAll(source, expectedValues) {
 test("phase 3 app info reports the static layout milestone", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
-  assert.match(appHandlerSource, /phase-4-workspace-selection/);
+  assert.match(appHandlerSource, /phase-5-workspace-file-model/);
 });
 
 test("phase 3 renderer defines the permanent three-column app layout", async () => {
@@ -152,7 +152,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "note list column",
     "editor area",
     "status bar",
-    "phase-4-workspace-selection",
+    "phase-5-workspace-file-model",
     "tests/phase3.test.mjs"
   ]);
 });

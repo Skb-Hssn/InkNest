@@ -1,19 +1,30 @@
 import { ipcChannels, type NoteSummary } from "../../shared/ipc";
-import { assertPlainObject, assertString, assertWorkspacePath, type ActiveWorkspaceState } from "./validation";
+import {
+  readMarkdownNote,
+  scanMarkdownNotes
+} from "../services/note-service";
+import {
+  assertActiveWorkspace,
+  assertPlainObject,
+  assertString,
+  type ActiveWorkspaceState
+} from "./validation";
 import { registerIpcHandler } from "./register";
 
 export function registerNoteHandlers(activeWorkspace: ActiveWorkspaceState) {
-  registerIpcHandler<NoteSummary[]>(ipcChannels.notes.list, () => []);
+  registerIpcHandler<NoteSummary[]>(ipcChannels.notes.list, () => {
+    return scanMarkdownNotes(assertActiveWorkspace(activeWorkspace));
+  });
 
   registerIpcHandler<{ path: string; markdown: string }>(
     ipcChannels.notes.read,
     (payload) => {
       assertPlainObject(payload);
 
-      return {
-        path: assertWorkspacePath(assertString(payload.path, "path"), activeWorkspace),
-        markdown: ""
-      };
+      return readMarkdownNote(
+        assertActiveWorkspace(activeWorkspace),
+        assertString(payload.path, "path")
+      );
     }
   );
 }

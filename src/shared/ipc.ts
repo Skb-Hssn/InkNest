@@ -15,7 +15,7 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-4-workspace-selection";
+  phase: "phase-5-workspace-file-model";
 };
 
 export type WorkspaceStatus =
@@ -37,6 +37,25 @@ export type NoteSummary = {
   id: string;
   title: string;
   path: string;
+  folderPath: string;
+};
+
+export type FolderSummary = {
+  name: string;
+  path: string;
+};
+
+export type WorkspaceMetadata = {
+  metadataPath: string;
+  assetsPath: string;
+  trashPath: string;
+};
+
+export type WorkspaceFileModel = {
+  workspace: WorkspaceInfo;
+  folders: FolderSummary[];
+  notes: NoteSummary[];
+  metadata: WorkspaceMetadata;
 };
 
 export type AppSettings = {
@@ -60,7 +79,8 @@ export const ipcChannels = {
   workspace: {
     getActive: "workspace:get-active",
     choose: "workspace:choose",
-    select: "workspace:select"
+    select: "workspace:select",
+    scan: "workspace:scan"
   },
   notes: {
     list: "notes:list",

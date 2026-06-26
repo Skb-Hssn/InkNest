@@ -5,6 +5,7 @@ import type {
   NoteSummary,
   OpenExternalLinkPayload,
   SaveSettingsPayload,
+  WorkspaceFileModel,
   WorkspaceInfo
 } from "./ipc";
 
@@ -16,6 +17,7 @@ export type InkNestApi = {
     getActive: () => Promise<IpcResult<WorkspaceInfo>>;
     choose: () => Promise<IpcResult<WorkspaceInfo>>;
     select: (path: string) => Promise<IpcResult<WorkspaceInfo>>;
+    scan: () => Promise<IpcResult<WorkspaceFileModel>>;
   };
   notes: {
     list: () => Promise<IpcResult<NoteSummary[]>>;
