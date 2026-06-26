@@ -5,6 +5,7 @@ import {
   Check,
   ChevronDown,
   Copy,
+  Edit3,
   FileText,
   FilePlus2,
   Folder,
@@ -234,6 +235,65 @@ export function App() {
       await refreshWorkspace();
       setSelectedFolderPath(result.data.path);
       setStatusMessage("Folder created");
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+
+    setIsBusy(false);
+  }
+
+  async function renameFolder(folder: FolderSummary) {
+    const name = window.prompt("Rename folder", folder.name)?.trim();
+
+    if (!name) {
+      return;
+    }
+
+    setActiveMoveNotePath(null);
+    setIsBusy(true);
+    const result = await window.inknest.folders.rename({
+      path: folder.path,
+      name
+    });
+
+    if (result.ok) {
+      await refreshWorkspace();
+      setSelectedFolderPath(result.data.path);
+      setStatusMessage("Folder renamed");
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+
+    setIsBusy(false);
+  }
+
+  async function deleteFolder(folder: FolderSummary) {
+    if (!window.confirm(`Delete folder "${folder.name}" and all of its contents?`)) {
+      return;
+    }
+
+    setActiveMoveNotePath(null);
+    setIsBusy(true);
+    const result = await window.inknest.folders.delete({
+      path: folder.path,
+      confirmed: true
+    });
+
+    if (result.ok) {
+      if (selectedFolderPath === folder.path || selectedFolderPath.startsWith(`${folder.path}/`)) {
+        setSelectedFolderPath(".");
+      }
+
+      if (
+        selectedNote?.folderPath === folder.path ||
+        selectedNote?.folderPath.startsWith(`${folder.path}/`)
+      ) {
+        setSelectedNotePath(null);
+        setSelectedNoteContent(null);
+      }
+
+      await refreshWorkspace();
+      setStatusMessage("Folder deleted");
     } else {
       setWorkspaceError(result.error.message);
     }
@@ -534,18 +594,46 @@ export function App() {
             <div className="px-3 py-3">
               <div className="space-y-1" aria-label="Folder tree">
                 {folders.map((folder) => (
-                  <button
+                  <div
                     key={folder.path}
-                    type="button"
-                    className={`tree-row ${
+                    className={`tree-row group ${
                       folder.path === selectedFolderPath ? "tree-row-active" : ""
                     }`}
-                    onClick={() => setSelectedFolderPath(folder.path)}
-                    disabled={!hasWorkspace}
                   >
-                    <Folder size={15} />
-                    <span className="truncate">{folder.name}</span>
-                  </button>
+                    <button
+                      type="button"
+                      className="tree-open-area"
+                      onClick={() => setSelectedFolderPath(folder.path)}
+                      disabled={!hasWorkspace}
+                    >
+                      <Folder size={15} />
+                      <span className="truncate">{folder.name}</span>
+                    </button>
+                    {folder.path !== "." ? (
+                      <span className="folder-actions">
+                        <button
+                          type="button"
+                          aria-label="Rename folder"
+                          title="Rename folder"
+                          className="icon-button folder-action-button"
+                          onClick={() => void renameFolder(folder)}
+                          disabled={!hasWorkspace || isBusy}
+                        >
+                          <Edit3 size={13} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Delete folder"
+                          title="Delete folder"
+                          className="icon-button folder-action-button danger"
+                          onClick={() => void deleteFolder(folder)}
+                          disabled={!hasWorkspace || isBusy}
+                        >
+                          <Trash2 size={13} />
+                        </button>
+                      </span>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             </div>

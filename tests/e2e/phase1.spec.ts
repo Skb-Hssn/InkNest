@@ -26,13 +26,19 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
     const window = await app.firstWindow();
 
     await expect(window).toHaveTitle("InkNest");
-    await expect(window.getByRole("heading", { name: "InkNest" })).toBeVisible();
     await expect(
-      window.getByRole("button", { name: "No workspace Local Markdown folder" })
+      window.getByRole("heading", { name: "InkNest", exact: true })
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: /No workspace Local Markdown/ })
     ).toBeVisible();
     await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
-    await expect(window.getByRole("heading", { name: "Folders" })).toBeVisible();
-    await expect(window.getByRole("heading", { name: "Notes" })).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "Folders", exact: true })
+    ).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "Notes", exact: true })
+    ).toBeVisible();
     await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
     await expect(window.getByText("No search results")).toBeVisible();

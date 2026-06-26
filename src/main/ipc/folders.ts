@@ -1,5 +1,10 @@
 import { ipcChannels, type FolderSummary } from "../../shared/ipc";
-import { createWorkspaceFolder } from "../services/folder-service";
+import {
+  createWorkspaceFolder,
+  deleteWorkspaceFolder,
+  renameWorkspaceFolder
+} from "../services/folder-service";
+import { invalidPayload } from "./errors";
 import {
   assertActiveWorkspace,
   assertPlainObject,
@@ -18,6 +23,32 @@ export function registerFolderHandlers(activeWorkspace: ActiveWorkspaceState) {
       assertOptionalString(payload.name, "name") ?? "New Folder"
     );
   });
+
+  registerIpcHandler<FolderSummary>(ipcChannels.folders.rename, (payload) => {
+    assertPlainObject(payload);
+
+    return renameWorkspaceFolder(
+      assertActiveWorkspace(activeWorkspace),
+      assertString(payload.path, "path"),
+      assertString(payload.name, "name")
+    );
+  });
+
+  registerIpcHandler<{ deleted: true; path: string }>(
+    ipcChannels.folders.delete,
+    (payload) => {
+      assertPlainObject(payload);
+
+      if (payload.confirmed !== true) {
+        throw invalidPayload("Folder delete requires confirmation.");
+      }
+
+      return deleteWorkspaceFolder(
+        assertActiveWorkspace(activeWorkspace),
+        assertString(payload.path, "path")
+      );
+    }
+  );
 }
 
 function assertOptionalString(value: unknown, fieldName: string) {

@@ -64,11 +64,23 @@ input {
   }
 
   .tree-row {
-    @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-60;
+    @apply grid h-8 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-2 text-sm text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900;
   }
 
   .tree-row-active {
     @apply bg-ink-50 font-medium text-ink-900;
+  }
+
+  .tree-open-area {
+    @apply flex min-w-0 items-center gap-2 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .folder-actions {
+    @apply flex items-center gap-1;
+  }
+
+  .folder-action-button {
+    @apply h-6 w-6 bg-white/80;
   }
 
   .recent-workspace-row {

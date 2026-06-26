@@ -72,6 +72,8 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
     "RenameNotePayload",
     "MoveNotePayload",
     "CreateFolderPayload",
+    "RenameFolderPayload",
+    "DeleteFolderPayload",
     "PermanentlyDeleteNotePayload",
     'create: "notes:create"',
     'rename: "notes:rename"',
@@ -81,13 +83,17 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
     'listTrash: "notes:list-trash"',
     'restore: "notes:restore"',
     'permanentlyDelete: "notes:permanently-delete"',
-    'create: "folders:create"'
+    'create: "folders:create"',
+    'rename: "folders:rename"',
+    'delete: "folders:delete"'
   ]);
   assert.match(sharedPreload, /create:\s*\(payload\?: CreateNotePayload\)/);
   assert.match(sharedPreload, /permanentlyDelete:/);
   assert.match(sharedPreload, /folders:\s*\{/);
   assert.match(preloadSource, /ipcChannels\.notes\.permanentlyDelete/);
   assert.match(preloadSource, /ipcChannels\.folders\.create/);
+  assert.match(preloadSource, /ipcChannels\.folders\.rename/);
+  assert.match(preloadSource, /ipcChannels\.folders\.delete/);
   assert.match(appHandlerSource, /phase-6-note-crud/);
 });
 
@@ -117,6 +123,8 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
   assertIncludesAll(appSource, [
     "createNote",
     "createFolder",
+    "renameFolder",
+    "deleteFolder",
     "openNote",
     "renameNote",
     "duplicateNote",
@@ -126,6 +134,8 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "permanentlyDeleteNote",
     "window.inknest.notes.create",
     "window.inknest.folders.create",
+    "window.inknest.folders.rename",
+    "window.inknest.folders.delete",
     "window.inknest.notes.rename",
     "window.inknest.notes.duplicate",
     "window.inknest.notes.move",
@@ -140,6 +150,9 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "note-action-button",
     "move-menu",
     "Move note to folder",
+    "Rename folder",
+    "Delete folder",
+    "folder-actions",
     "event.key === \"Enter\"",
     "note-preview"
   ]);
@@ -152,6 +165,8 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
   assert.match(stylesSource, /\.note-actions/);
   assert.match(stylesSource, /group-hover:opacity-100/);
   assert.match(stylesSource, /\.move-menu/);
+  assert.match(stylesSource, /\.folder-actions/);
+  assert.match(stylesSource, /\.folder-action-button/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.doesNotMatch(appSource, /ipcRenderer|showOpenDialog/);
 });
@@ -232,6 +247,72 @@ test("phase 6 note service performs create, rename, duplicate, move, trash, rest
     assert.deepEqual(activeNotes.map((note) => note.path), [
       "Archive/Renamed Copy.md"
     ]);
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+    await harness.cleanup();
+  }
+});
+
+test("phase 6 folder service performs create, rename, and delete safely", async () => {
+  const harness = await createServiceHarness();
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "inknest-phase6-folders-"));
+
+  try {
+    const {
+      createWorkspaceFolder,
+      deleteWorkspaceFolder,
+      renameWorkspaceFolder,
+      scanWorkspaceFolders
+    } = await harness.requireService("src/main/services/folder-service.js");
+
+    const created = await createWorkspaceFolder(workspaceRoot, ".", "Projects");
+    const duplicate = await createWorkspaceFolder(workspaceRoot, ".", "Projects");
+    const nested = await createWorkspaceFolder(
+      workspaceRoot,
+      duplicate.path,
+      "Drafts"
+    );
+
+    assert.deepEqual(created, {
+      name: "Projects",
+      path: "Projects"
+    });
+    assert.deepEqual(duplicate, {
+      name: "Projects 2",
+      path: "Projects 2"
+    });
+    assert.deepEqual(nested, {
+      name: "Drafts",
+      path: "Projects 2/Drafts"
+    });
+
+    const renamed = await renameWorkspaceFolder(
+      workspaceRoot,
+      "Projects 2",
+      "Archive"
+    );
+    assert.deepEqual(renamed, {
+      name: "Archive",
+      path: "Archive"
+    });
+    assert.equal(existsSync(path.join(workspaceRoot, "Archive", "Drafts")), true);
+
+    await assert.rejects(
+      () => renameWorkspaceFolder(workspaceRoot, ".", "Nope"),
+      /Workspace root cannot be renamed or deleted/
+    );
+
+    const deleted = await deleteWorkspaceFolder(workspaceRoot, "Archive");
+    assert.deepEqual(deleted, {
+      deleted: true,
+      path: "Archive"
+    });
+    assert.equal(existsSync(path.join(workspaceRoot, "Archive")), false);
+
+    assert.deepEqual(
+      (await scanWorkspaceFolders(workspaceRoot)).map((folder) => folder.path),
+      ["Projects"]
+    );
   } finally {
     await rm(workspaceRoot, { recursive: true, force: true });
     await harness.cleanup();

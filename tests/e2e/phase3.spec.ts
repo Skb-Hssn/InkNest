@@ -30,20 +30,24 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     const window = await app.firstWindow();
 
     await expect(window).toHaveTitle("InkNest");
-    await expect(window.getByRole("heading", { name: "InkNest" })).toBeVisible();
     await expect(
-      window.getByRole("button", {
-        name: "No workspace Local Markdown folder"
-      })
+      window.getByRole("heading", { name: "InkNest", exact: true })
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: /No workspace Local Markdown/ })
     ).toBeVisible();
     await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
-    await expect(window.getByRole("heading", { name: "Folders" })).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "Folders", exact: true })
+    ).toBeVisible();
     await expect(window.getByText("No workspace selected")).toBeVisible();
     await expect(window.getByText("No search results")).toBeVisible();
     await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
 
-    await expect(window.getByRole("heading", { name: "Notes" })).toBeVisible();
-    await expect(window.getByText("Workspace root")).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "Notes", exact: true })
+    ).toBeVisible();
+    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
     await expect(window.getByText("No notes here")).toBeVisible();
     await expect(window.getByText("Trash is empty.")).toBeVisible();
 

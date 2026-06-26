@@ -104,7 +104,7 @@ export async function renameWorkspaceFolder(
   name: string
 ): Promise<FolderSummary> {
   const root = resolveInsideWorkspace(workspaceRoot);
-  const sourcePath = resolveUserFolderPath(root, folderPath);
+  const sourcePath = await resolveUserFolderPath(root, folderPath);
   const relativeFolderPath = toWorkspaceRelativePath(root, sourcePath);
   const parentPath = path.dirname(relativeFolderPath);
   const targetName = await createAvailableFolderNameExcluding(
@@ -130,7 +130,7 @@ export async function deleteWorkspaceFolder(
   folderPath: string
 ) {
   const root = resolveInsideWorkspace(workspaceRoot);
-  const targetPath = resolveUserFolderPath(root, folderPath);
+  const targetPath = await resolveUserFolderPath(root, folderPath);
   const relativePath = toWorkspaceRelativePath(root, targetPath);
 
   await rm(targetPath, { recursive: true, force: false });
