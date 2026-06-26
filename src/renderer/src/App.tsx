@@ -1,5 +1,6 @@
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ClipboardEvent,
   type FormEvent,
   type KeyboardEvent,
@@ -22,6 +23,8 @@ import {
   Check,
   ChevronDown,
   ChevronRight,
+  CircleMinus,
+  CirclePlus,
   Code2,
   Copy,
   Edit3,
@@ -60,7 +63,9 @@ import {
   SlidersHorizontal,
   SquarePen,
   Strikethrough,
-  Table2,
+  TableColumnsSplit,
+  TableProperties,
+  TableRowsSplit,
   Trash2,
   X
 } from "lucide-react";
@@ -78,12 +83,14 @@ import {
   editorDomToMarkdown,
   exitEditorBlockFromElement,
   exitCurrentEditorBlock,
+  exitInlineAtomAtSelection,
   handleListKeyAtSelection,
   insertPlainTextAtSelection,
   insertCodeIndentAtSelection,
   isSelectionInsideCodeBlock,
   moveTableSelection,
   normalizeEmptyBlockAtSelection,
+  updateCodeBlockLanguageFromSelect,
   type MarkdownEditorCommand,
   type MarkdownEditorCommandOptions,
   markdownToHtml
@@ -118,7 +125,6 @@ type ToolbarCommand = {
     | "table"
     | "links"
     | "media"
-    | "math"
     | "insert";
 };
 
@@ -126,6 +132,27 @@ type ColorCommandId = Extract<
   MarkdownEditorCommand,
   "highlight" | "text-color" | "background-color"
 >;
+
+type LinkDialogState = {
+  text: string;
+  url: string;
+  isEditing: boolean;
+  position: {
+    left: number;
+    top: number;
+  };
+  error?: string;
+};
+
+type LinkDialogDetails = {
+  text: string;
+  url: string;
+  isEditing: boolean;
+  position?: {
+    left: number;
+    top: number;
+  };
+};
 
 const commonColors = [
   "#111827",
@@ -145,6 +172,38 @@ const commonColors = [
   "#fee2e2",
   "#ffffff"
 ];
+
+const defaultColorSelections: Record<ColorCommandId, string | null> = {
+  highlight: null,
+  "text-color": null,
+  "background-color": null
+};
+
+function tableActionIcon(baseIcon: ReactNode, badgeIcon: ReactNode) {
+  return (
+    <span className="toolbar-composite-icon">
+      {baseIcon}
+      <span className="toolbar-composite-badge">{badgeIcon}</span>
+    </span>
+  );
+}
+
+const addRowIcon = tableActionIcon(
+  <TableRowsSplit size={16} />,
+  <CirclePlus size={10} />
+);
+const deleteRowIcon = tableActionIcon(
+  <TableRowsSplit size={16} />,
+  <CircleMinus size={10} />
+);
+const addColumnIcon = tableActionIcon(
+  <TableColumnsSplit size={16} />,
+  <CirclePlus size={10} />
+);
+const deleteColumnIcon = tableActionIcon(
+  <TableColumnsSplit size={16} />,
+  <CircleMinus size={10} />
+);
 
 const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "headings" },
@@ -173,22 +232,16 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "align-center", label: "Align center", icon: <AlignCenter size={16} />, group: "align" },
   { id: "align-right", label: "Align right", icon: <AlignRight size={16} />, group: "align" },
   { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
-  { id: "table", label: "Table", icon: <Table2 size={16} />, group: "table" },
-  { id: "table-add-row", label: "Add table row", icon: <Table2 size={16} />, group: "table" },
-  { id: "table-delete-row", label: "Delete table row", icon: <Table2 size={16} />, group: "table" },
-  { id: "table-add-column", label: "Add table column", icon: <Table2 size={16} />, group: "table" },
-  { id: "table-delete-column", label: "Delete table column", icon: <Table2 size={16} />, group: "table" },
+  { id: "table", label: "Insert table", icon: <TableProperties size={16} />, group: "table" },
+  { id: "table-add-row", label: "Add table row", icon: addRowIcon, group: "table" },
+  { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
+  { id: "table-add-column", label: "Add table column", icon: addColumnIcon, group: "table" },
+  { id: "table-delete-column", label: "Delete table column", icon: deleteColumnIcon, group: "table" },
   { id: "table-align-left", label: "Align table left", icon: <AlignLeft size={16} />, group: "table" },
   { id: "table-align-center", label: "Align table center", icon: <AlignCenter size={16} />, group: "table" },
   { id: "table-align-right", label: "Align table right", icon: <AlignRight size={16} />, group: "table" },
   { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
-  { id: "link-edit", label: "Edit link", icon: <Link size={16} />, group: "links" },
-  { id: "link-remove", label: "Remove link", icon: <X size={16} />, group: "links" },
   { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
-  { id: "image-resize", label: "Resize image", icon: <Image size={16} />, group: "media" },
-  { id: "inline-math", label: "Inline math", icon: <Hash size={16} />, group: "math" },
-  { id: "block-math", label: "Block math", icon: <Hash size={16} />, group: "math" },
-  { id: "math-edit", label: "Edit math", icon: <Hash size={16} />, group: "math" },
   { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
 ];
 
@@ -220,6 +273,37 @@ function isColorCommand(commandId: MarkdownEditorCommand): commandId is ColorCom
   );
 }
 
+function getReadableTextColor(hexColor: string) {
+  const normalizedColor = hexColor.replace("#", "");
+
+  if (normalizedColor.length !== 6) {
+    return "#111827";
+  }
+
+  const red = Number.parseInt(normalizedColor.slice(0, 2), 16);
+  const green = Number.parseInt(normalizedColor.slice(2, 4), 16);
+  const blue = Number.parseInt(normalizedColor.slice(4, 6), 16);
+  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
+
+  return brightness > 145 ? "#111827" : "#ffffff";
+}
+
+function getViewportPopoverPosition(left: number, top: number) {
+  const popoverWidth = 320;
+  const popoverHeight = 220;
+  const viewportWidth = window.innerWidth || popoverWidth;
+  const viewportHeight = window.innerHeight || popoverHeight;
+
+  return {
+    left: Math.max(12, Math.min(left, viewportWidth - popoverWidth - 12)),
+    top: Math.max(12, Math.min(top, viewportHeight - popoverHeight - 12))
+  };
+}
+
+function fileNameFromPath(path: string) {
+  return path.split(/[\\/]/).pop() ?? "Image";
+}
+
 export function App() {
   const [phase, setPhase] = useState("phase-9-toolbar-editing-commands");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
@@ -243,6 +327,9 @@ export function App() {
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
   const [activeColorCommand, setActiveColorCommand] = useState<ColorCommandId | null>(null);
+  const [colorPopoverPosition, setColorPopoverPosition] = useState({ left: 16, top: 44 });
+  const [colorSelections, setColorSelections] = useState(defaultColorSelections);
+  const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
   >(() => new Set());
@@ -451,12 +538,27 @@ export function App() {
     setIsBusy(false);
   }
 
-  function runToolbarCommand(command: ToolbarCommand) {
+  async function runToolbarCommand(
+    command: ToolbarCommand,
+    event?: ReactMouseEvent<HTMLButtonElement>
+  ) {
     if (!selectedNoteContent || isBusy) {
       return;
     }
 
     if (isColorCommand(command.id)) {
+      const button = event?.currentTarget;
+      const toolbarShell = button?.closest(".toolbar-shell");
+
+      if (button && toolbarShell) {
+        const buttonRect = button.getBoundingClientRect();
+        const shellRect = toolbarShell.getBoundingClientRect();
+        setColorPopoverPosition({
+          left: buttonRect.left - shellRect.left,
+          top: buttonRect.bottom - shellRect.top + 6
+        });
+      }
+
       setActiveColorCommand((currentCommand) =>
         currentCommand === command.id ? null : command.id
       );
@@ -465,56 +567,47 @@ export function App() {
 
     setActiveColorCommand(null);
 
+    if (command.id === "link") {
+      const buttonRect = event?.currentTarget.getBoundingClientRect();
+      const linkDetails = editorHandleRef.current?.getLinkDetails();
+
+      openLinkDialog({
+        text: linkDetails?.text ?? "",
+        url: linkDetails?.url ?? "",
+        isEditing: linkDetails?.isEditing ?? false,
+        position: getViewportPopoverPosition(
+          buttonRect?.left ?? 24,
+          buttonRect ? buttonRect.bottom + 8 : 120
+        )
+      });
+      return;
+    }
+
+    if (command.id === "code-block") {
+      editorHandleRef.current?.runCommand("code-block");
+      setStatusMessage("Inserted code block");
+      return;
+    }
+
     const options: MarkdownEditorCommandOptions = {};
 
-    if (command.id === "link") {
-      const url = window.prompt("Link URL");
-
-      if (!url) {
-        return;
-      }
-
-      options.url = url;
-      options.label = window.prompt("Text to display") ?? undefined;
-    }
-
     if (command.id === "image") {
-      const src = window.prompt("Image URL or local path");
+      const result = await window.inknest.dialogs.selectImage();
 
-      if (!src) {
+      if (!result.ok) {
+        setStatusMessage("Image picker failed");
         return;
       }
 
-      options.src = src;
-      options.alt = window.prompt("Image description") ?? undefined;
-    }
-
-    if (command.id === "link-edit") {
-      const url = window.prompt("New link URL");
-
-      if (!url) {
+      if (result.data.canceled) {
         return;
       }
 
-      options.url = url;
-      options.label = window.prompt("New link text") ?? undefined;
+      options.src = result.data.dataUrl;
+      options.alt = fileNameFromPath(result.data.path);
     }
 
-    if (command.id === "image-resize") {
-      const width = window.prompt("Image width in pixels", "480");
-
-      if (!width) {
-        return;
-      }
-
-      options.width = width;
-    }
-
-    if (
-      command.id === "inline-math" ||
-      command.id === "block-math" ||
-      command.id === "math-edit"
-    ) {
+    if (command.id === "math-edit") {
       const equation = window.prompt("LaTeX math", "x^2 + y^2 = z^2");
 
       if (!equation) {
@@ -528,14 +621,95 @@ export function App() {
     setStatusMessage(`Applied ${command.label}`);
   }
 
+  function openLinkDialog(details: LinkDialogDetails) {
+    setActiveColorCommand(null);
+    setLinkDialog({
+      text: details.text,
+      url: details.url,
+      isEditing: details.isEditing,
+      position: details.position ?? getViewportPopoverPosition(24, 120)
+    });
+  }
+
+  function submitLinkDialog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!linkDialog) {
+      return;
+    }
+
+    const text = linkDialog.text.trim();
+    const url = linkDialog.url.trim();
+
+    if (!text || !url) {
+      setLinkDialog({
+        ...linkDialog,
+        error: "Enter both text and link."
+      });
+      return;
+    }
+
+    editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
+      label: text,
+      url
+    });
+    setStatusMessage(linkDialog.isEditing ? "Updated link" : "Inserted link");
+    setLinkDialog(null);
+  }
+
+  function removeLinkFromDialog() {
+    if (!linkDialog?.isEditing) {
+      return;
+    }
+
+    editorHandleRef.current?.runCommand("link-remove");
+    setStatusMessage("Removed link");
+    setLinkDialog(null);
+  }
+
   function applyPaletteColor(color: string) {
     if (!activeColorCommand) {
       return;
     }
 
     editorHandleRef.current?.runCommand(activeColorCommand, { color });
+    setColorSelections((currentSelections) => ({
+      ...currentSelections,
+      [activeColorCommand]: color
+    }));
     setActiveColorCommand(null);
     setStatusMessage(`Applied ${activeColorCommand.replace(/-/g, " ")}`);
+  }
+
+  function resetPaletteColor() {
+    if (!activeColorCommand) {
+      return;
+    }
+
+    editorHandleRef.current?.runCommand(activeColorCommand, { reset: true });
+    setColorSelections((currentSelections) => ({
+      ...currentSelections,
+      [activeColorCommand]: defaultColorSelections[activeColorCommand]
+    }));
+    setActiveColorCommand(null);
+    setStatusMessage(`Reset ${activeColorCommand.replace(/-/g, " ")}`);
+  }
+
+  function getToolbarButtonStyle(commandId: MarkdownEditorCommand): CSSProperties | undefined {
+    if (!isColorCommand(commandId)) {
+      return undefined;
+    }
+
+    const color = colorSelections[commandId];
+
+    if (!color) {
+      return undefined;
+    }
+
+    return {
+      "--toolbar-command-color": color,
+      "--toolbar-command-text-color": getReadableTextColor(color)
+    } as CSSProperties;
   }
 
   async function createNote() {
@@ -1195,58 +1369,147 @@ export function App() {
             </div>
           </div>
 
-          <div
-            className="markdown-toolbar"
-            aria-label="Markdown toolbar"
-          >
-            {getToolbarGroups(toolbarPlaceholders).map((group) => (
-              <div
-                key={group.name}
-                className="toolbar-group"
-                aria-label={`${group.name} tools`}
-              >
-                {group.commands.map((command) => (
-                  <button
-                    key={command.id}
-                    type="button"
-                    className={`toolbar-button ${
-                      activeToolbarCommands.has(command.id) ||
-                      activeColorCommand === command.id
-                        ? "toolbar-button-active"
-                        : ""
-                    }`}
-                    aria-label={command.label}
-                    title={command.label}
-                    onMouseDown={(event) => event.preventDefault()}
-                    onClick={() => runToolbarCommand(command)}
-                    disabled={!selectedNoteContent || isBusy}
-                  >
-                    {command.icon}
-                  </button>
-                ))}
-              </div>
-            ))}
-          </div>
-
-          {activeColorCommand ? (
+          <div className="toolbar-shell">
             <div
-              className="color-palette"
-              aria-label={`${activeColorCommand.replace(/-/g, " ")} palette`}
+              className="markdown-toolbar"
+              aria-label="Markdown toolbar"
             >
-              {commonColors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className="color-swatch"
-                  style={{ "--swatch-color": color } as CSSProperties}
-                  aria-label={color}
-                  title={color}
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={() => applyPaletteColor(color)}
-                  disabled={!selectedNoteContent || isBusy}
-                />
+              {getToolbarGroups(toolbarPlaceholders).map((group) => (
+                <div
+                  key={group.name}
+                  className="toolbar-group"
+                  aria-label={`${group.name} tools`}
+                >
+                  {group.commands.map((command) => {
+                    const isActive =
+                      activeToolbarCommands.has(command.id) ||
+                      activeColorCommand === command.id;
+                    const isSelectedColorTool = isColorCommand(command.id) && isActive;
+
+                    return (
+                      <button
+                        key={command.id}
+                        type="button"
+                        className={`toolbar-button ${
+                          isActive ? "toolbar-button-active" : ""
+                        } ${isSelectedColorTool ? "toolbar-button-color-selected" : ""}`}
+                        style={getToolbarButtonStyle(command.id)}
+                        aria-label={command.label}
+                        title={command.label}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => runToolbarCommand(command, event)}
+                        disabled={!selectedNoteContent || isBusy}
+                      >
+                        {command.icon}
+                      </button>
+                    );
+                  })}
+                </div>
               ))}
             </div>
+
+            {activeColorCommand ? (
+              <div
+                className="toolbar-popover color-palette"
+                style={{
+                  "--toolbar-popover-left": `${colorPopoverPosition.left}px`,
+                  "--toolbar-popover-top": `${colorPopoverPosition.top}px`
+                } as CSSProperties}
+                aria-label={`${activeColorCommand.replace(/-/g, " ")} palette`}
+              >
+                <div className="color-swatch-grid">
+                  {commonColors.map((color) => (
+                    <button
+                      key={color}
+                      type="button"
+                      className="color-swatch"
+                      style={{ "--swatch-color": color } as CSSProperties}
+                      aria-label={color}
+                      title={color}
+                      onMouseDown={(event) => event.preventDefault()}
+                      onClick={() => applyPaletteColor(color)}
+                      disabled={!selectedNoteContent || isBusy}
+                    />
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className="color-reset-button"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={resetPaletteColor}
+                  disabled={!selectedNoteContent || isBusy}
+                >
+                  Reset
+                </button>
+              </div>
+            ) : null}
+          </div>
+
+          {linkDialog ? (
+            <form
+              className="link-popover"
+              style={{
+                "--link-popover-left": `${linkDialog.position.left}px`,
+                "--link-popover-top": `${linkDialog.position.top}px`
+              } as CSSProperties}
+              onSubmit={submitLinkDialog}
+            >
+              <label className="link-popover-field">
+                <span>Text</span>
+                <input
+                  type="text"
+                  value={linkDialog.text}
+                  onChange={(event) =>
+                    setLinkDialog({
+                      ...linkDialog,
+                      text: event.target.value,
+                      error: undefined
+                    })
+                  }
+                  autoFocus
+                />
+              </label>
+              <label className="link-popover-field">
+                <span>Link</span>
+                <input
+                  type="text"
+                  inputMode="url"
+                  value={linkDialog.url}
+                  onChange={(event) =>
+                    setLinkDialog({
+                      ...linkDialog,
+                      url: event.target.value,
+                      error: undefined
+                    })
+                  }
+                  placeholder="https://example.com"
+                />
+              </label>
+              {linkDialog.error ? (
+                <p className="link-popover-error">{linkDialog.error}</p>
+              ) : null}
+              <div className="link-popover-actions">
+                {linkDialog.isEditing ? (
+                  <button
+                    type="button"
+                    className="link-popover-remove"
+                    onClick={removeLinkFromDialog}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="link-popover-secondary"
+                  onClick={() => setLinkDialog(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="link-popover-primary">
+                  Apply
+                </button>
+              </div>
+            </form>
           ) : null}
 
           {selectedNoteContent ? (
@@ -1261,6 +1524,7 @@ export function App() {
                   setStatusMessage("Editing");
                 }}
                 onSelectionFormatChange={setActiveToolbarCommands}
+                onLinkDialogRequest={openLinkDialog}
               />
             </article>
           ) : (
@@ -1295,6 +1559,7 @@ type VisualMarkdownEditorProps = {
   disabled: boolean;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
+  onLinkDialogRequest: (details: LinkDialogDetails) => void;
 };
 
 type VisualMarkdownEditorHandle = {
@@ -1302,13 +1567,18 @@ type VisualMarkdownEditorHandle = {
     command: MarkdownEditorCommand,
     options?: MarkdownEditorCommandOptions
   ) => void;
+  getLinkDetails: () => {
+    text: string;
+    url: string;
+    isEditing: boolean;
+  };
 };
 
 const VisualMarkdownEditor = forwardRef<
   VisualMarkdownEditorHandle,
   VisualMarkdownEditorProps
 >(function VisualMarkdownEditor(
-  { markdown, disabled, onChange, onSelectionFormatChange },
+  { markdown, disabled, onChange, onSelectionFormatChange, onLinkDialogRequest },
   ref
 ) {
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -1336,6 +1606,62 @@ const VisualMarkdownEditor = forwardRef<
     };
   });
 
+  function getSelectionElement() {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const anchorNode = selection.anchorNode;
+    return anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement ?? null;
+  }
+
+  function getSelectedOrNearbyLink() {
+    const editorElement = editorRef.current;
+    const element = getSelectionElement();
+    const link = element?.closest("a");
+
+    if (!(link instanceof HTMLAnchorElement) || !editorElement?.contains(link)) {
+      return null;
+    }
+
+    return link;
+  }
+
+  function getLinkDetailsFromSelection() {
+    const editorElement = editorRef.current;
+
+    if (!editorElement || disabled) {
+      return {
+        text: "",
+        url: "",
+        isEditing: false
+      };
+    }
+
+    editorElement.focus();
+    if (!restoreEditorSelection()) {
+      placeCaretAtEditorEnd(editorElement);
+    }
+
+    const link = getSelectedOrNearbyLink();
+
+    if (link) {
+      return {
+        text: link.textContent ?? "",
+        url: link.getAttribute("href") ?? "",
+        isEditing: true
+      };
+    }
+
+    return {
+      text: window.getSelection()?.toString() ?? "",
+      url: "",
+      isEditing: false
+    };
+  }
+
   useImperativeHandle(ref, () => ({
     runCommand(command, options) {
       if (!editorRef.current || disabled) {
@@ -1348,6 +1674,9 @@ const VisualMarkdownEditor = forwardRef<
       }
       applyMarkdownEditorCommand(command, options);
       syncMarkdownFromEditor(editorRef.current);
+    },
+    getLinkDetails() {
+      return getLinkDetailsFromSelection();
     }
   }));
 
@@ -1510,6 +1839,19 @@ const VisualMarkdownEditor = forwardRef<
     syncMarkdownFromEditor(event.currentTarget);
   }
 
+  function handleChange(event: FormEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (
+      target instanceof HTMLSelectElement &&
+      target.dataset.codeLanguage === "true" &&
+      editorRef.current
+    ) {
+      updateCodeBlockLanguageFromSelect(target);
+      syncMarkdownFromEditor(editorRef.current);
+    }
+  }
+
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
     insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
@@ -1533,9 +1875,21 @@ const VisualMarkdownEditor = forwardRef<
     }
 
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      const didExitBlock = exitCurrentEditorBlock();
+      const didExitInlineAtom = exitInlineAtomAtSelection();
+      const didExitBlock = didExitInlineAtom ? false : exitCurrentEditorBlock();
 
-      if (didExitBlock && editorRef.current) {
+      if ((didExitInlineAtom || didExitBlock) && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === "ArrowRight") {
+      const didExitInlineAtom = exitInlineAtomAtSelection();
+
+      if (didExitInlineAtom && editorRef.current) {
         event.preventDefault();
         syncMarkdownFromEditor(editorRef.current);
       }
@@ -1610,6 +1964,78 @@ const VisualMarkdownEditor = forwardRef<
     }
   }
 
+  function selectImageForResize(image: HTMLImageElement) {
+    let frame = image.closest(".image-resize-frame") as HTMLSpanElement | null;
+
+    if (!frame) {
+      frame = document.createElement("span");
+      frame.className = "image-resize-frame";
+      frame.contentEditable = "false";
+      frame.dataset.imageResizeFrame = "true";
+      image.insertAdjacentElement("beforebegin", frame);
+      frame.append(image);
+    }
+
+    const imageWidth = image.getAttribute("width") ?? image.style.width.replace("px", "");
+    const width = Number.parseInt(imageWidth, 10) || Math.round(image.getBoundingClientRect().width) || 320;
+
+    frame.style.width = `${width}px`;
+    frame.classList.add("image-resize-frame-active");
+    image.style.width = "100%";
+    image.style.height = "auto";
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNode(frame);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedSelectionRange.current = range.cloneRange();
+
+    if (editorRef.current) {
+      onSelectionFormatChange(collectActiveCommands(editorRef.current));
+    }
+  }
+
+  function syncImageResizeFrames() {
+    if (!editorRef.current) {
+      return false;
+    }
+
+    let didResize = false;
+
+    for (const frame of Array.from(editorRef.current.querySelectorAll(".image-resize-frame"))) {
+      if (!(frame instanceof HTMLElement)) {
+        continue;
+      }
+
+      const image = frame.querySelector("img");
+
+      if (!(image instanceof HTMLImageElement)) {
+        continue;
+      }
+
+      const width = Math.round(frame.getBoundingClientRect().width);
+
+      if (width > 0 && image.getAttribute("width") !== String(width)) {
+        image.setAttribute("width", String(width));
+        image.style.width = "100%";
+        image.style.height = "auto";
+        didResize = true;
+      }
+    }
+
+    return didResize;
+  }
+
+  function handleMouseUp() {
+    if (syncImageResizeFrames() && editorRef.current) {
+      syncMarkdownFromEditor(editorRef.current);
+      return;
+    }
+
+    rememberEditorSelection();
+  }
+
   function handleClick(event: MouseEvent<HTMLDivElement>) {
     const target = event.target;
 
@@ -1621,17 +2047,28 @@ const VisualMarkdownEditor = forwardRef<
       return;
     }
 
-    if (target instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
+    const linkTarget = target instanceof HTMLElement ? target.closest("a") : null;
+
+    if (linkTarget instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      void window.inknest.links.openExternal({ url: target.href });
+      void window.inknest.links.openExternal({ url: linkTarget.href });
       return;
     }
 
-    if (target instanceof HTMLImageElement || target instanceof HTMLElement && target.dataset.math) {
+    if (
+      target instanceof HTMLImageElement ||
+      (target instanceof HTMLElement && target.closest("[data-math]"))
+    ) {
       const selection = window.getSelection();
       const range = document.createRange();
+      const selectableTarget =
+        target instanceof HTMLImageElement ? target : target.closest("[data-math]");
 
-      range.selectNode(target);
+      if (!selectableTarget) {
+        return;
+      }
+
+      range.selectNode(selectableTarget);
       selection?.removeAllRanges();
       selection?.addRange(range);
     }
@@ -1647,6 +2084,43 @@ const VisualMarkdownEditor = forwardRef<
     }, 0);
   }
 
+  function handleDoubleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    if (target instanceof HTMLImageElement) {
+      event.preventDefault();
+      selectImageForResize(target);
+      return;
+    }
+
+    const link = target.closest("a");
+
+    if (!(link instanceof HTMLAnchorElement) || !editorRef.current?.contains(link)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(link);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedSelectionRange.current = range.cloneRange();
+    onSelectionFormatChange(collectActiveCommands(editorRef.current));
+
+    onLinkDialogRequest({
+      text: link.textContent ?? "",
+      url: link.getAttribute("href") ?? "",
+      isEditing: true,
+      position: getViewportPopoverPosition(event.clientX, event.clientY + 8)
+    });
+  }
+
   return (
     <div
       ref={editorRef}
@@ -1658,10 +2132,12 @@ const VisualMarkdownEditor = forwardRef<
       aria-multiline="true"
       data-placeholder="Start writing..."
       onInput={handleInput}
+      onChange={handleChange}
       onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
       onKeyDown={handleKeyDown}
       onKeyUp={rememberEditorSelection}
-      onMouseUp={rememberEditorSelection}
+      onMouseUp={handleMouseUp}
       onMouseDown={handleMouseDown}
       onPaste={handlePaste}
     />

@@ -54,6 +54,7 @@ export type MarkdownEditorCommandOptions = {
   language?: string;
   width?: string;
   equation?: string;
+  reset?: boolean;
 };
 
 export function markdownToHtml(markdown: string) {
@@ -280,16 +281,31 @@ export function applyMarkdownEditorCommand(
   }
 
   if (command === "highlight") {
+    if (options.reset) {
+      removeInlineStyleAtSelection("background-color", "mark");
+      return;
+    }
+
     applyInlineStyleAtSelection("background-color", options.color ?? "#fef08a", "mark");
     return;
   }
 
   if (command === "text-color") {
+    if (options.reset) {
+      removeInlineStyleAtSelection("color");
+      return;
+    }
+
     applyInlineStyleAtSelection("color", options.color ?? "#0f766e");
     return;
   }
 
   if (command === "background-color") {
+    if (options.reset) {
+      removeInlineStyleAtSelection("background-color");
+      return;
+    }
+
     applyInlineStyleAtSelection("background-color", options.color ?? "#dbeafe");
     return;
   }
@@ -324,7 +340,7 @@ export function applyMarkdownEditorCommand(
   }
 
   if (command === "table") {
-    insertHtmlAtSelection(
+    insertTableAtSelection(
       [
         "<table><tbody>",
         "<tr><th>Column 1</th><th>Column 2</th></tr>",
@@ -412,12 +428,12 @@ export function applyMarkdownEditorCommand(
   }
 
   if (command === "inline-math") {
-    insertHtmlAtSelection(mathToHtml(options.equation?.trim() || "x = y", false));
+    insertHtmlAtSelection(`${mathToHtml(options.equation?.trim() || "x = y", false)} `);
     return;
   }
 
   if (command === "block-math") {
-    insertHtmlAtSelection(mathToHtml(options.equation?.trim() || "x = y", true));
+    insertHtmlAtSelection(`${mathToHtml(options.equation?.trim() || "x = y", true)}<p><br></p>`);
     return;
   }
 
@@ -480,6 +496,34 @@ export function exitEditorBlockFromElement(element: Element | null | undefined) 
   return true;
 }
 
+export function exitInlineAtomAtSelection() {
+  const element = getSelectionElement();
+  const inlineAtom = element?.closest("code,[data-math-display='inline'],mark,span[style]");
+
+  if (!(inlineAtom instanceof HTMLElement) || inlineAtom.closest("pre")) {
+    return false;
+  }
+
+  const spacer = document.createTextNode(" ");
+  inlineAtom.insertAdjacentElement("afterend", document.createElement("span"));
+  const placeholder = inlineAtom.nextElementSibling;
+
+  if (!placeholder) {
+    return false;
+  }
+
+  placeholder.replaceWith(spacer);
+  const range = document.createRange();
+  const selection = window.getSelection();
+
+  range.setStart(spacer, spacer.textContent?.length ?? 0);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+
+  return true;
+}
+
 export function normalizeEmptyBlockAtSelection() {
   const selection = window.getSelection();
 
@@ -527,13 +571,90 @@ export function handleListKeyAtSelection(key: string, shiftKey: boolean) {
     return true;
   }
 
+  if (key === "Enter" && listItem.dataset.task === "true" && !isVisiblyEmpty(listItem)) {
+    insertTaskListItemAfter(listItem);
+    return true;
+  }
+
   if (key === "Enter" && isVisiblyEmpty(listItem)) {
-    document.execCommand("outdent");
-    document.execCommand("formatBlock", false, "p");
+    exitEmptyListItem(listItem);
     return true;
   }
 
   return false;
+}
+
+function insertTaskListItemAfter(listItem: HTMLLIElement) {
+  const nextItem = document.createElement("li");
+  const checkbox = document.createElement("input");
+  const textAnchor = document.createTextNode("\u200b");
+
+  nextItem.dataset.task = "true";
+  checkbox.type = "checkbox";
+  nextItem.append(checkbox, document.createTextNode(" "), textAnchor);
+  listItem.insertAdjacentElement("afterend", nextItem);
+
+  const range = document.createRange();
+  const selection = window.getSelection();
+
+  range.setStart(textAnchor, textAnchor.textContent?.length ?? 0);
+  range.collapse(true);
+  selection?.removeAllRanges();
+  selection?.addRange(range);
+}
+
+function exitEmptyListItem(listItem: HTMLLIElement) {
+  const currentList = listItem.parentElement;
+
+  if (!(currentList instanceof HTMLOListElement || currentList instanceof HTMLUListElement)) {
+    return;
+  }
+
+  const parentListItem = currentList.parentElement?.closest("li");
+
+  if (parentListItem instanceof HTMLLIElement) {
+    const parentList = parentListItem.parentElement;
+    const nextItem = document.createElement("li");
+
+    nextItem.append(document.createElement("br"));
+    parentListItem.insertAdjacentElement("afterend", nextItem);
+    listItem.remove();
+
+    if (currentList.children.length === 0) {
+      currentList.remove();
+    }
+
+    if (parentList instanceof HTMLOListElement) {
+      normalizeOrderedListStarts(parentList);
+    }
+
+    placeCaretInside(nextItem);
+    return;
+  }
+
+  const paragraph = document.createElement("p");
+  paragraph.append(document.createElement("br"));
+  currentList.insertAdjacentElement("afterend", paragraph);
+  listItem.remove();
+
+  if (currentList.children.length === 0) {
+    currentList.remove();
+  }
+
+  placeCaretInside(paragraph);
+}
+
+function normalizeOrderedListStarts(list: HTMLOListElement) {
+  const orderedLists = Array.from(list.parentElement?.children ?? []).filter(
+    (element): element is HTMLOListElement => element instanceof HTMLOListElement
+  );
+
+  let nextStart = 1;
+
+  for (const orderedList of orderedLists) {
+    orderedList.start = nextStart;
+    nextStart += orderedList.querySelectorAll(":scope > li").length;
+  }
 }
 
 export function moveTableSelection(forward: boolean) {
@@ -640,9 +761,13 @@ function blockNodeToMarkdown(node: Node): string {
   }
 
   if (tagName === "ul" || tagName === "ol") {
+    const startIndex = node instanceof HTMLOListElement ? node.start - 1 : 0;
+
     return Array.from(node.children)
       .filter((child) => child.tagName.toLowerCase() === "li")
-      .map((child, childIndex) => listItemToMarkdown(child as HTMLElement, tagName, childIndex))
+      .map((child, childIndex) =>
+        listItemToMarkdown(child as HTMLElement, tagName, startIndex + childIndex)
+      )
       .join("\n");
   }
 
@@ -796,7 +921,54 @@ function getSelectedText() {
 }
 
 function insertHtmlAtSelection(html: string) {
-  document.execCommand("insertHTML", false, html);
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return null;
+  }
+
+  const template = document.createElement("template");
+  template.innerHTML = html;
+  const fragment = template.content;
+  const lastInsertedNode = fragment.lastChild;
+  const range = selection.getRangeAt(0);
+
+  range.deleteContents();
+  range.insertNode(fragment);
+
+  if (lastInsertedNode) {
+    range.setStartAfter(lastInsertedNode);
+    range.collapse(true);
+    selection.removeAllRanges();
+    selection.addRange(range);
+  }
+
+  return lastInsertedNode;
+}
+
+function insertTableAtSelection(html: string) {
+  const selectionElement = getSelectionElement();
+  const currentTable = selectionElement?.closest("table");
+
+  if (currentTable instanceof HTMLTableElement) {
+    const template = document.createElement("template");
+    template.innerHTML = html;
+    const table = template.content.firstElementChild;
+
+    if (!(table instanceof HTMLTableElement)) {
+      return;
+    }
+
+    currentTable.insertAdjacentElement("afterend", table);
+    placeCaretInside(table.querySelector("th,td") ?? table);
+    return;
+  }
+
+  const insertedNode = insertHtmlAtSelection(html);
+
+  if (insertedNode instanceof HTMLTableElement) {
+    placeCaretInside(insertedNode.querySelector("th,td") ?? insertedNode);
+  }
 }
 
 function applyInlineStyleAtSelection(
@@ -824,6 +996,98 @@ function applyInlineStyleAtSelection(
   range.selectNodeContents(wrapper);
   selection.removeAllRanges();
   selection.addRange(range);
+}
+
+function removeInlineStyleAtSelection(
+  property: "color" | "background-color",
+  preferredTagName?: "mark"
+) {
+  const selection = window.getSelection();
+
+  if (!selection || selection.rangeCount === 0) {
+    return;
+  }
+
+  const range = selection.getRangeAt(0);
+  const commonAncestor =
+    range.commonAncestorContainer instanceof HTMLElement
+      ? range.commonAncestorContainer
+      : range.commonAncestorContainer.parentElement;
+  const candidates = new Set<HTMLElement>();
+  const selectionElement = getSelectionElement();
+  const closestStyledElement = selectionElement?.closest(
+    preferredTagName === "mark" ? "mark" : "span[style],mark[style]"
+  );
+
+  if (closestStyledElement instanceof HTMLElement) {
+    candidates.add(closestStyledElement);
+  }
+
+  for (const ancestor of getStyledAncestorChain(selectionElement)) {
+    candidates.add(ancestor);
+  }
+
+  if (commonAncestor) {
+    if (commonAncestor instanceof HTMLElement && range.intersectsNode(commonAncestor)) {
+      candidates.add(commonAncestor);
+    }
+
+    for (const element of Array.from(commonAncestor.querySelectorAll("span[style],mark"))) {
+      if (range.intersectsNode(element)) {
+        candidates.add(element as HTMLElement);
+      }
+    }
+  }
+
+  for (const element of candidates) {
+    if (preferredTagName === "mark" && element.tagName.toLowerCase() !== "mark") {
+      continue;
+    }
+
+    element.style.removeProperty(property);
+
+    const tagName = element.tagName.toLowerCase();
+    const hasInlineStyle = Boolean(element.getAttribute("style"));
+    const shouldUnwrapMark =
+      tagName === "mark" &&
+      (preferredTagName === "mark" || property === "background-color" || !hasInlineStyle);
+
+    if (shouldUnwrapMark || (tagName === "span" && !hasInlineStyle)) {
+      unwrapElement(element);
+    }
+  }
+}
+
+function getStyledAncestorChain(element: Element | null | undefined) {
+  const ancestors: HTMLElement[] = [];
+  let currentElement = element?.parentElement;
+
+  while (currentElement && !currentElement.isContentEditable) {
+    if (
+      currentElement instanceof HTMLElement &&
+      currentElement.matches("span[style],mark[style]")
+    ) {
+      ancestors.push(currentElement);
+    }
+
+    currentElement = currentElement.parentElement;
+  }
+
+  return ancestors;
+}
+
+function unwrapElement(element: HTMLElement) {
+  const parent = element.parentNode;
+
+  if (!parent) {
+    return;
+  }
+
+  while (element.firstChild) {
+    parent.insertBefore(element.firstChild, element);
+  }
+
+  element.remove();
 }
 
 function getSelectionElement() {
@@ -890,8 +1154,31 @@ function removeFormattingAtSelection() {
     return;
   }
 
-  document.execCommand("removeFormat");
-  document.execCommand("unlink");
+  const range = selection.getRangeAt(0);
+  const fragment = range.extractContents();
+  const startMarker = document.createTextNode("");
+  const endMarker = document.createTextNode("");
+
+  stripFormattingFromFragment(fragment);
+  fragment.prepend(startMarker);
+  fragment.append(endMarker);
+  range.insertNode(fragment);
+
+  const nextRange = document.createRange();
+  nextRange.setStartAfter(startMarker);
+  nextRange.setEndBefore(endMarker);
+  selection.removeAllRanges();
+  selection.addRange(nextRange);
+  startMarker.remove();
+  endMarker.remove();
+}
+
+function stripFormattingFromFragment(fragment: DocumentFragment) {
+  for (const element of Array.from(
+    fragment.querySelectorAll("strong,b,em,i,s,strike,del,code,mark,span,a")
+  )) {
+    unwrapElement(element as HTMLElement);
+  }
 }
 
 function getSelectedOrNearbyImage() {
@@ -927,7 +1214,12 @@ function editMathAtSelection(equation: string | undefined) {
   const mathElement = getSelectionElement()?.closest("[data-math]");
   const nextEquation = equation?.trim();
 
-  if (!(mathElement instanceof HTMLElement) || !nextEquation) {
+  if (!nextEquation) {
+    return;
+  }
+
+  if (!(mathElement instanceof HTMLElement)) {
+    insertHtmlAtSelection(`${mathToHtml(nextEquation, false)} `);
     return;
   }
 
@@ -981,36 +1273,117 @@ function blockquoteMarkdownToHtml(quoteLines: string[]) {
   return `<blockquote data-callout="${type}">${markdownToHtml(body)}</blockquote>`;
 }
 
+const codeBlockLanguages = [
+  { value: "", label: "Plain text" },
+  { value: "javascript", label: "JavaScript" },
+  { value: "typescript", label: "TypeScript" },
+  { value: "tsx", label: "TSX" },
+  { value: "html", label: "HTML" },
+  { value: "css", label: "CSS" },
+  { value: "json", label: "JSON" },
+  { value: "python", label: "Python" },
+  { value: "bash", label: "Bash" },
+  { value: "markdown", label: "Markdown" }
+];
+
 function codeBlockToHtml(code: string, language: string) {
   const safeLanguage = escapeAttribute(language);
-  return `<pre><button type="button" class="code-copy-button" contenteditable="false" data-code-copy="true">Copy</button><code data-language="${safeLanguage}" class="language-${safeLanguage}">${highlightCode(
+  return `<pre>${codeLanguageSelectToHtml(language)}<button type="button" class="code-copy-button" contenteditable="false" data-code-copy="true">Copy</button><code data-language="${safeLanguage}" class="language-${safeLanguage}">${highlightCode(
     code,
     language
   )}</code></pre>`;
 }
 
+function codeLanguageSelectToHtml(language: string) {
+  const normalizedLanguage = language.trim().toLowerCase();
+  const hasKnownLanguage = codeBlockLanguages.some(
+    (codeLanguage) => codeLanguage.value === normalizedLanguage
+  );
+  const selectedLanguage = hasKnownLanguage ? normalizedLanguage : "";
+
+  return `<select class="code-language-select" contenteditable="false" data-code-language="true" aria-label="Code block language">${codeBlockLanguages
+    .map(
+      (codeLanguage) =>
+        `<option value="${escapeAttribute(codeLanguage.value)}"${codeLanguage.value === selectedLanguage ? " selected" : ""}>${escapeHtml(codeLanguage.label)}</option>`
+    )
+    .join("")}</select>`;
+}
+
+export function updateCodeBlockLanguageFromSelect(select: HTMLSelectElement) {
+  const pre = select.closest("pre");
+  const code = pre?.querySelector("code");
+
+  if (!pre || !code) {
+    return false;
+  }
+
+  const language = select.value.trim();
+  const codeText = code.textContent ?? "";
+
+  code.dataset.language = language;
+  code.className = language ? `language-${language}` : "language-";
+  code.innerHTML = highlightCode(codeText, language);
+
+  return true;
+}
+
 function highlightCode(code: string, language: string) {
   const safeCode = escapeHtml(code);
+  const normalizedLanguage = language.toLowerCase();
 
   if (!language.trim()) {
     return safeCode;
   }
 
-  if (/^(js|jsx|ts|tsx|javascript|typescript)$/.test(language.toLowerCase())) {
+  if (/^(js|jsx|ts|tsx|javascript|typescript)$/.test(normalizedLanguage)) {
     return safeCode
       .replace(
-        /\b(const|let|var|function|return|if|else|for|while|class|import|export|from|type|interface|async|await)\b/g,
+        /\b(const|let|var|function|return|if|else|for|while|class|import|export|from|type|interface|async|await|new|try|catch|throw|extends|implements)\b/g,
         '<span class="syntax-keyword">$1</span>'
       )
       .replace(/(&quot;.*?&quot;|'.*?'|`.*?`)/g, '<span class="syntax-string">$1</span>')
+      .replace(/\/\/.*$/gm, '<span class="syntax-comment">$&</span>')
       .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="syntax-number">$1</span>');
   }
 
-  if (/^(html|xml)$/.test(language.toLowerCase())) {
+  if (/^(html|xml)$/.test(normalizedLanguage)) {
     return safeCode.replace(
-      /(&lt;\/?[\w-]+|\/?&gt;)/g,
+      /(&lt;\/?[\w-]+|\/?&gt;|[\w-]+(?==))/g,
       '<span class="syntax-keyword">$1</span>'
     );
+  }
+
+  if (/^(css|scss)$/.test(normalizedLanguage)) {
+    return safeCode
+      .replace(/([.#]?[\w-]+)(\s*\{)/g, '<span class="syntax-keyword">$1</span>$2')
+      .replace(/([\w-]+)(\s*:)/g, '<span class="syntax-attribute">$1</span>$2')
+      .replace(/(:\s*)([^;{}]+)/g, '$1<span class="syntax-string">$2</span>');
+  }
+
+  if (/^(json)$/.test(normalizedLanguage)) {
+    return safeCode
+      .replace(/(&quot;[^&]+&quot;)(\s*:)/g, '<span class="syntax-attribute">$1</span>$2')
+      .replace(/(:\s*)(&quot;.*?&quot;)/g, '$1<span class="syntax-string">$2</span>')
+      .replace(/\b(true|false|null)\b/g, '<span class="syntax-keyword">$1</span>')
+      .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="syntax-number">$1</span>');
+  }
+
+  if (/^(py|python)$/.test(normalizedLanguage)) {
+    return safeCode
+      .replace(
+        /\b(def|class|return|if|elif|else|for|while|in|import|from|as|try|except|with|lambda|True|False|None|async|await)\b/g,
+        '<span class="syntax-keyword">$1</span>'
+      )
+      .replace(/(&quot;.*?&quot;|'.*?')/g, '<span class="syntax-string">$1</span>')
+      .replace(/#.*$/gm, '<span class="syntax-comment">$&</span>')
+      .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="syntax-number">$1</span>');
+  }
+
+  if (/^(sh|bash|zsh|shell)$/.test(normalizedLanguage)) {
+    return safeCode
+      .replace(/\b(cd|ls|echo|export|npm|git|pnpm|yarn|if|then|else|fi|for|do|done)\b/g, '<span class="syntax-keyword">$1</span>')
+      .replace(/(&quot;.*?&quot;|'.*?')/g, '<span class="syntax-string">$1</span>')
+      .replace(/#.*$/gm, '<span class="syntax-comment">$&</span>');
   }
 
   return safeCode;
@@ -1036,8 +1409,10 @@ function inlineMarkdownToHtml(markdown: string) {
     tokens.push(mathToHtml(String(equation), false));
     return `\u0000${tokens.length - 1}\u0000`;
   });
-  source = source.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, src) => {
-    tokens.push(`<img src="${src}" alt="${alt}">`);
+  source = source.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => {
+    tokens.push(
+      `<img src="${escapeAttribute(String(src))}" alt="${escapeAttribute(String(alt))}">`
+    );
     return `\u0000${tokens.length - 1}\u0000`;
   });
   source = source.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
@@ -1052,38 +1427,48 @@ function inlineMarkdownToHtml(markdown: string) {
   return source.replace(/\u0000(\d+)\u0000/g, (_, tokenIndex) => tokens[Number(tokenIndex)]);
 }
 
-function restoreLimitedInlineHtml(source: string, tokens: string[]) {
+function restoreLimitedInlineHtml(source: string, _tokens: string[]) {
   let nextSource = source;
 
   nextSource = nextSource.replace(
-    /&lt;mark&gt;([\s\S]*?)&lt;\/mark&gt;/g,
-    (_, content) => {
-      tokens.push(`<mark>${content}</mark>`);
-      return `\u0000${tokens.length - 1}\u0000`;
-    }
+    /&lt;mark&gt;/g,
+    "<mark>"
   );
 
   nextSource = nextSource.replace(
-    /&lt;mark style=&quot;background-color:\s*([^;&]+);?&quot;&gt;([\s\S]*?)&lt;\/mark&gt;/g,
-    (_, color, content) => {
-      tokens.push(
-        `<mark style="background-color: ${escapeAttribute(String(color).trim())}">${content}</mark>`
-      );
-      return `\u0000${tokens.length - 1}\u0000`;
-    }
+    /&lt;mark style=&quot;(background-color:\s*(?:#[\da-fA-F]{3,8}|rgb\([^)]+\));?)&quot;&gt;/g,
+    (_, style) => `<mark style="${sanitizeInlineColorStyle(String(style))}">`
   );
 
   nextSource = nextSource.replace(
-    /&lt;span style=&quot;((?:color|background-color):\s*[^;&]+(?:;\s*)?(?:(?:color|background-color):\s*[^;&]+;?\s*)?)&quot;&gt;([\s\S]*?)&lt;\/span&gt;/g,
-    (_, style, content) => {
-      tokens.push(
-        `<span style="${escapeAttribute(String(style).trim())}">${content}</span>`
-      );
-      return `\u0000${tokens.length - 1}\u0000`;
-    }
+    /&lt;\/mark&gt;/g,
+    "</mark>"
+  );
+
+  nextSource = nextSource.replace(
+    /&lt;span style=&quot;((?:(?:color|background-color):\s*(?:#[\da-fA-F]{3,8}|rgb\([^)]+\));?\s*){1,2})&quot;&gt;/g,
+    (_, style) => `<span style="${sanitizeInlineColorStyle(String(style))}">`
+  );
+
+  nextSource = nextSource.replace(
+    /&lt;\/span&gt;/g,
+    "</span>"
   );
 
   return nextSource;
+}
+
+function sanitizeInlineColorStyle(style: string) {
+  return style
+    .split(";")
+    .map((declaration) => declaration.trim())
+    .filter((declaration) =>
+      /^(color|background-color):\s*(#[\da-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/.test(
+        declaration
+      )
+    )
+    .map(escapeAttribute)
+    .join("; ");
 }
 
 function restoreLimitedImageHtml(source: string, tokens: string[]) {
@@ -1145,6 +1530,10 @@ function renderMathExpression(equation: string) {
   );
   rendered = rendered.replace(/\\sqrt\{([^{}]+)\}/g, '<span class="math-sqrt">$1</span>');
   rendered = rendered.replace(
+    /\\(sin|cos|tan|log|ln|lim|max|min)\b/g,
+    '<span class="math-fn">$1</span>'
+  );
+  rendered = rendered.replace(
     /\^(\{([^{}]+)\}|[A-Za-z0-9+-]+)/g,
     (_, __, grouped, plain) => `<sup>${grouped ?? plain}</sup>`
   );
@@ -1153,7 +1542,7 @@ function renderMathExpression(equation: string) {
     (_, __, grouped, plain) => `<sub>${grouped ?? plain}</sub>`
   );
   rendered = rendered.replace(
-    /\\(alpha|beta|gamma|delta|theta|lambda|mu|pi|sigma|omega)\b/g,
+    /\\([A-Za-z]+)\b/g,
     (_, symbol) => mathSymbols[symbol] ?? symbol
   );
 
@@ -1165,12 +1554,70 @@ const mathSymbols: Record<string, string> = {
   beta: "β",
   gamma: "γ",
   delta: "δ",
+  epsilon: "ε",
+  zeta: "ζ",
+  eta: "η",
   theta: "θ",
+  iota: "ι",
+  kappa: "κ",
   lambda: "λ",
   mu: "μ",
+  nu: "ν",
+  xi: "ξ",
+  omicron: "ο",
   pi: "π",
+  rho: "ρ",
   sigma: "σ",
-  omega: "ω"
+  tau: "τ",
+  upsilon: "υ",
+  phi: "φ",
+  chi: "χ",
+  psi: "ψ",
+  omega: "ω",
+  Gamma: "Γ",
+  Delta: "Δ",
+  Theta: "Θ",
+  Lambda: "Λ",
+  Xi: "Ξ",
+  Pi: "Π",
+  Sigma: "Σ",
+  Phi: "Φ",
+  Psi: "Ψ",
+  Omega: "Ω",
+  pm: "±",
+  times: "×",
+  div: "÷",
+  cdot: "·",
+  le: "≤",
+  leq: "≤",
+  ge: "≥",
+  geq: "≥",
+  neq: "≠",
+  approx: "≈",
+  equiv: "≡",
+  infty: "∞",
+  sum: "∑",
+  prod: "∏",
+  int: "∫",
+  partial: "∂",
+  nabla: "∇",
+  rightarrow: "→",
+  to: "→",
+  leftarrow: "←",
+  Rightarrow: "⇒",
+  Leftarrow: "⇐",
+  leftrightarrow: "↔",
+  forall: "∀",
+  exists: "∃",
+  in: "∈",
+  notin: "∉",
+  subset: "⊂",
+  subseteq: "⊆",
+  cup: "∪",
+  cap: "∩",
+  land: "∧",
+  lor: "∨",
+  emptyset: "∅"
 };
 
 function htmlAlignedBlockToHtml(markdown: string) {

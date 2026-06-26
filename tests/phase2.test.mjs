@@ -82,6 +82,7 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
 
 test("phase 2 preload only invokes approved channels", async () => {
   const preloadSource = await readText("src/preload/index.ts");
+  const dialogsSource = await readText("src/main/ipc/dialogs.ts");
 
   assert.match(preloadSource, /contextBridge\.exposeInMainWorld\("inknest"/);
   assert.match(preloadSource, /ipcRenderer\.invoke/);
@@ -90,6 +91,10 @@ test("phase 2 preload only invokes approved channels", async () => {
   assert.doesNotMatch(preloadSource, /ipcRenderer\.once/);
   assert.doesNotMatch(preloadSource, /exposeInMainWorld\("[^"]*ipc/i);
   assert.doesNotMatch(preloadSource, /shell\.openExternal/);
+  assert.match(dialogsSource, /dialog\.showOpenDialog/);
+  assert.match(dialogsSource, /readFile\(selectedPath\)/);
+  assert.match(dialogsSource, /dataUrl:\s*`data:\$\{mimeType\};base64/);
+  assert.match(dialogsSource, /extensions:\s*\["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"\]/);
 });
 
 test("phase 2 validates payloads, URLs, and workspace paths", async () => {

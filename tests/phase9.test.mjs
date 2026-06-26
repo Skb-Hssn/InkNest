@@ -33,12 +33,40 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "markdown-toolbar",
     "toolbar-group",
     "toolbar-button-active",
+    "toolbar-button-color-selected",
+    "toolbar-shell",
+    "toolbar-popover",
     "commonColors",
+    "defaultColorSelections",
+    "highlight: null",
+    '"text-color": null',
+    '"background-color": null',
+    "colorSelections",
+    "colorPopoverPosition",
+    "getToolbarButtonStyle",
+    "LinkDialogState",
+    "linkDialog",
+    "openLinkDialog",
+    "submitLinkDialog",
+    "removeLinkFromDialog",
+    "getLinkDetails",
+    "onLinkDialogRequest",
     "activeColorCommand",
     "activeToolbarCommands",
+    "tableActionIcon",
+    "TableRowsSplit",
+    "TableColumnsSplit",
+    "TableProperties",
+    "CirclePlus",
+    "CircleMinus",
+    "toolbar-composite-icon",
+    "toolbar-composite-badge",
     "color-palette",
+    "color-swatch-grid",
     "color-swatch",
+    "color-reset-button",
     "applyPaletteColor",
+    "resetPaletteColor",
     "getToolbarGroups",
     "runToolbarCommand",
     "onMouseDown={(event) => event.preventDefault()}",
@@ -69,6 +97,7 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "align-right",
     "code-block",
     "table",
+    "Insert table",
     "table-add-row",
     "table-delete-row",
     "table-add-column",
@@ -76,17 +105,13 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "table-align-left",
     "table-align-center",
     "table-align-right",
-    "link-edit",
-    "link-remove",
-    "image-resize",
-    "inline-math",
-    "block-math",
-    "math-edit",
+    'id: "link"',
+    "link-popover",
+    "link-popover-field",
+    "link-popover-primary",
+    "link-popover-remove",
+    "window.inknest.dialogs.selectImage",
     "divider",
-    "Link URL",
-    "Image URL or local path",
-    "New link URL",
-    "Image width in pixels",
     "LaTeX math"
   ]);
   assertIncludesAll(stylesSource, [
@@ -94,10 +119,25 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     ".toolbar-group",
     ".toolbar-button",
     ".toolbar-button-active",
+    ".toolbar-composite-icon",
+    ".toolbar-composite-badge",
+    ".toolbar-button-color-selected",
+    ".toolbar-shell",
+    ".toolbar-popover",
     ".color-palette",
+    ".color-swatch-grid",
     ".color-swatch",
+    ".color-reset-button",
+    ".link-popover",
+    ".link-popover-field",
+    ".link-popover-actions",
+    ".link-popover-primary",
+    ".link-popover-secondary",
+    ".link-popover-remove",
+    ".code-language-select",
     ".toolbar-separator"
   ]);
+  assert.doesNotMatch(appSource, /label: "Edit link"|label: "Remove link"/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.doesNotMatch(appSource, /ipcRenderer|showOpenDialog/);
 });
@@ -108,6 +148,7 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
   assertIncludesAll(editorSource, [
     "MarkdownEditorCommand",
     "MarkdownEditorCommandOptions",
+    "reset?: boolean",
     "applyMarkdownEditorCommand",
     "applySlashCommandAtSelection",
     '"/heading": "heading-1"',
@@ -124,15 +165,21 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     'document.execCommand("bold")',
     'document.execCommand("strikeThrough")',
     "applyInlineStyleAtSelection",
+    "removeInlineStyleAtSelection",
+    "unwrapElement",
     '"background-color", options.color ?? "#fef08a", "mark"',
     '"color", options.color ?? "#0f766e"',
     '"background-color", options.color ?? "#dbeafe"',
     'document.execCommand("justifyCenter")',
     'document.execCommand("insertUnorderedList")',
     'document.execCommand(shiftKey ? "outdent" : "indent")',
-    'document.execCommand("removeFormat")',
-    'document.execCommand("unlink")',
+    "stripFormattingFromFragment",
+    "range.extractContents()",
+    "fragment.prepend(startMarker)",
     'data-task="true"',
+    "insertTaskListItemAfter",
+    "exitEmptyListItem",
+    "normalizeOrderedListStarts",
     "normalizeEmptyBlockAtSelection",
     "handleListKeyAtSelection",
     "moveTableSelection",
@@ -141,30 +188,43 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     "addTableColumnAtSelection",
     "deleteTableColumnAtSelection",
     "alignTableColumnAtSelection",
+    "insertTableAtSelection",
+    "currentTable.insertAdjacentElement(\"afterend\", table)",
+    "template.content",
     "tableAlignmentSeparator",
     "parseTableAlignment",
     "listMarkdownToHtml",
     "blockquoteMarkdownToHtml",
     "data-callout",
     "codeBlockToHtml",
+    "codeBlockLanguages",
+    "codeLanguageSelectToHtml",
+    "Code block language",
+    "updateCodeBlockLanguageFromSelect",
     "data-code-copy",
+    "data-code-language",
     "highlightCode",
     "data-language",
     "language-",
     "syntax-keyword",
+    "syntax-comment",
+    "syntax-attribute",
     "isSelectionInsideCodeBlock",
     "insertCodeIndentAtSelection",
+    "exitInlineAtomAtSelection",
     "exitCurrentEditorBlock",
     "exitEditorBlockFromElement",
     "<table><tbody>",
     "htmlAlignedBlockToHtml",
     "restoreLimitedInlineHtml",
+    "sanitizeInlineColorStyle",
+    "rgb\\(",
     "mark style",
     "restoreLimitedImageHtml",
     "editLinkAtSelection",
     "removeLinkAtSelection",
-    "resizeImageAtSelection",
     "editMathAtSelection",
+    "insertHtmlAtSelection(`${mathToHtml(nextEquation, false)} `)",
     "mathToHtml",
     "validateMath",
     "renderMathExpression",
@@ -193,10 +253,12 @@ test("phase 9 editor supports callouts, nested quotes, code language, and block 
   assertIncludesAll(appSource, [
     'event.key === "Enter"',
     "event.ctrlKey || event.metaKey",
+    "const didExitInlineAtom = exitInlineAtomAtSelection()",
     "exitCurrentEditorBlock()",
     "exitEditorBlockFromElement(target)",
     "event.altKey",
-    'id: "code-block"'
+    'id: "code-block"',
+    "updateCodeBlockLanguageFromSelect(target)"
   ]);
   assertIncludesAll(stylesSource, [
     ".visual-editor blockquote blockquote",
@@ -204,10 +266,12 @@ test("phase 9 editor supports callouts, nested quotes, code language, and block 
     "blockquote[data-callout=\"warning\"]",
     "blockquote[data-callout=\"info\"]",
     "blockquote[data-callout=\"success\"]",
-    "code[data-language]:not([data-language=\"\"])::before",
+    ".visual-editor pre .code-language-select",
     ".syntax-keyword",
     ".syntax-string",
-    ".syntax-number"
+    ".syntax-number",
+    ".syntax-comment",
+    ".syntax-attribute"
   ]);
 });
 
@@ -233,6 +297,12 @@ test("phase 9 editor supports list keyboard behavior and table editing", async (
   assertIncludesAll(stylesSource, [
     ".visual-editor li > ul",
     ".visual-editor li > ol",
+    ".visual-editor ul ul",
+    ".visual-editor ul ul ul",
+    ".visual-editor ul li",
+    "leading-6",
+    ".visual-editor li[data-task=\"true\"]",
+    "list-style: none",
     "th[data-align=\"center\"]",
     "td[data-align=\"right\"]"
   ]);
@@ -245,10 +315,19 @@ test("phase 9 editor supports links, images, and math while editing", async () =
 
   assertIncludesAll(appSource, [
     "window.inknest.links.openExternal",
-    "target instanceof HTMLAnchorElement",
+    "target.closest(\"a\")",
+    "linkTarget.href",
     "event.ctrlKey || event.metaKey",
+    "handleDoubleClick",
+    "onDoubleClick={handleDoubleClick}",
+    "range.selectNodeContents(link)",
+    "link.getAttribute(\"href\")",
     "target instanceof HTMLImageElement",
-    "target.dataset.math",
+    "options.src = result.data.dataUrl",
+    "selectImageForResize(target)",
+    "syncImageResizeFrames",
+    "image-resize-frame",
+    "target.closest(\"[data-math]\")",
     "x^2 + y^2 = z^2"
   ]);
   assertIncludesAll(editorSource, [
@@ -260,14 +339,21 @@ test("phase 9 editor supports links, images, and math while editing", async () =
     "width=\"${width}\"",
     "\\\\frac",
     "\\\\sqrt",
-    "mathSymbols"
+    "\\\\(sin|cos|tan|log|ln|lim|max|min)",
+    "mathSymbols",
+    "rightarrow",
+    "emptyset"
   ]);
   assertIncludesAll(stylesSource, [
     ".visual-editor img[width]",
+    ".visual-editor .image-resize-frame",
+    ".visual-editor .image-resize-frame-active",
+    "resize: both",
     ".visual-editor .math-node",
     ".visual-editor .math-invalid",
     ".visual-editor .math-frac",
-    ".visual-editor .math-sqrt::before"
+    ".visual-editor .math-sqrt::before",
+    ".visual-editor .math-fn"
   ]);
 });
 
@@ -278,21 +364,28 @@ test("phase 9 editor supports code-friendly behavior and clearing formatting", a
 
   assertIncludesAll(appSource, [
     "insertCodeIndentAtSelection()",
+    'event.key === "ArrowRight"',
+    "exitInlineAtomAtSelection()",
     "isSelectionInsideCodeBlock()",
     'target.dataset.codeCopy === "true"',
     "navigator.clipboard?.writeText(code)"
   ]);
   assertIncludesAll(editorSource, [
     "codeBlockToHtml",
-    "<pre><button",
+    "code,[data-math-display='inline'],mark,span[style]",
+    "<pre>${codeLanguageSelectToHtml(language)}<button",
     "contenteditable=\"false\"",
     "data-code-copy=\"true\"",
     "codeText.replace(/\\n$/, \"\")",
+    "normalizedLanguage",
     "insertPlainTextAtSelection(\"  \")",
     "removeFormattingAtSelection"
   ]);
   assertIncludesAll(stylesSource, [
     ".visual-editor .code-copy-button",
+    "cursor-pointer",
+    "bg-neutral-100",
+    "text-ink-900",
     "white-space: pre",
     "tab-size: 2"
   ]);

@@ -104,6 +104,18 @@ export type OpenExternalLinkPayload = {
   url: string;
 };
 
+export type SelectImageResult =
+  | {
+      canceled: true;
+      path: null;
+      dataUrl: null;
+    }
+  | {
+      canceled: false;
+      path: string;
+      dataUrl: string;
+    };
+
 export type CreateNotePayload = {
   title?: string;
   folderPath?: string;
