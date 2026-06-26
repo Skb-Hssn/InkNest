@@ -1,5 +1,6 @@
 import { app, BrowserWindow, Menu } from "electron";
 import path from "node:path";
+import { registerIpcHandlers } from "./ipc";
 
 if (process.platform === "linux") {
   app.disableHardwareAcceleration();
@@ -46,6 +47,7 @@ function createMainWindow() {
 
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
+  registerIpcHandlers();
   createMainWindow();
 
   app.on("activate", () => {

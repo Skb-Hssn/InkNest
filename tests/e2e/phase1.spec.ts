@@ -41,7 +41,7 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
   }
 });
 
-test("phase 1 exposes the narrow preload API in the renderer", async () => {
+test("phase 2 exposes the narrow async preload API in the renderer", async () => {
   const app = await electron.launch({
     args: electronLaunchArgs,
     env: {
@@ -53,15 +53,48 @@ test("phase 1 exposes the narrow preload API in the renderer", async () => {
   try {
     const window = await app.firstWindow();
 
-    const appInfo = await window.evaluate(() => window.inknest.getAppInfo());
+    const appInfo = await window.evaluate(() => window.inknest.app.getInfo());
+    const activeWorkspace = await window.evaluate(() =>
+      window.inknest.workspace.getActive()
+    );
+    const invalidSettings = await window.evaluate(() =>
+      window.inknest.settings.save({ theme: "midnight" as never })
+    );
+    const unsafeLink = await window.evaluate(() =>
+      window.inknest.links.openExternal({ url: "file:///tmp/example.md" })
+    );
     const rendererNodeAccess = await window.evaluate(() => ({
       hasRequire: "require" in window,
       hasProcess: "process" in window
     }));
 
     expect(appInfo).toEqual({
-      name: "InkNest",
-      phase: "phase-1-shell"
+      ok: true,
+      data: {
+        name: "InkNest",
+        phase: "phase-2-secure-boundary"
+      }
+    });
+    expect(activeWorkspace).toEqual({
+      ok: true,
+      data: {
+        path: null,
+        name: null
+      }
+    });
+    expect(invalidSettings).toEqual({
+      ok: false,
+      error: {
+        code: "INVALID_PAYLOAD",
+        message: "theme must be system, light, or dark."
+      }
+    });
+    expect(unsafeLink).toEqual({
+      ok: false,
+      error: {
+        code: "INVALID_PAYLOAD",
+        message: "Only http and https links can be opened."
+      }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,

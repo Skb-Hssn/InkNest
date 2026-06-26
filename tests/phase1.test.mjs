@@ -60,16 +60,16 @@ test("main process creates a secure InkNest browser window", async () => {
   assert.match(mainSource, /loadFile\(path\.join\(__dirname,\s*"(\.\.\/)?renderer\/index\.html"\)\)/);
 });
 
-test("preload exposes only the narrow phase 1 API", async () => {
+test("preload exposes only the narrow InkNest API", async () => {
   const preloadSource = await readText("src/preload/index.ts");
   const sharedSource = await readText("src/shared/preload.ts");
   const windowTypes = await readText("src/renderer/src/types/window.d.ts");
 
   assert.match(preloadSource, /contextBridge\.exposeInMainWorld\("inknest"/);
-  assert.match(preloadSource, /getAppInfo:\s*\(\)\s*=>/);
-  assert.doesNotMatch(preloadSource, /ipcRenderer/);
+  assert.match(preloadSource, /ipcRenderer\.invoke\(ipcChannels\.app\.getInfo\)/);
+  assert.doesNotMatch(preloadSource, /require\("fs"\)|from "node:fs"|from "fs"/);
   assert.match(sharedSource, /type InkNestApi/);
-  assert.match(sharedSource, /getAppInfo:\s*\(\)\s*=>\s*AppInfo/);
+  assert.match(sharedSource, /getInfo:\s*\(\)\s*=>\s*Promise<IpcResult<AppInfo>>/);
   assert.match(windowTypes, /inknest:\s*InkNestApi/);
 });
 
