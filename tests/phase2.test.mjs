@@ -1,0 +1,61 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import test from "node:test";
+
+async function readText(relativePath) {
+  return readFile(new URL(`../${relativePath}`, import.meta.url), "utf8");
+}
+
+test("phase 2 registers grouped main-process IPC handlers", async () => {
+  const mainSource = await readText("src/main/index.ts");
+  const indexSource = await readText("src/main/ipc/index.ts");
+  const registerSource = await readText("src/main/ipc/register.ts");
+
+  assert.match(mainSource, /registerIpcHandlers\(\)/);
+  assert.match(indexSource, /registerWorkspaceHandlers/);
+  assert.match(indexSource, /registerNoteHandlers/);
+  assert.match(indexSource, /registerSettingsHandlers/);
+  assert.match(indexSource, /registerLinkHandlers/);
+  assert.match(indexSource, /registerDialogHandlers/);
+  assert.match(indexSource, /registerExportHandlers/);
+  assert.match(registerSource, /ipcMain\.handle/);
+  assert.match(registerSource, /IpcResult<T>/);
+  assert.match(registerSource, /INVALID_PAYLOAD|INTERNAL_ERROR/);
+});
+
+test("phase 2 shared contract exposes narrow channel groups", async () => {
+  const sharedIpc = await readText("src/shared/ipc.ts");
+  const sharedPreload = await readText("src/shared/preload.ts");
+  const preloadSource = await readText("src/preload/index.ts");
+
+  for (const group of [
+    "workspace",
+    "notes",
+    "settings",
+    "links",
+    "dialogs",
+    "export"
+  ]) {
+    assert.match(sharedIpc, new RegExp(`${group}:`));
+    assert.match(sharedPreload, new RegExp(`${group}:\\s*\\{`));
+    assert.match(preloadSource, new RegExp(`${group}:\\s*\\{`));
+  }
+
+  assert.doesNotMatch(preloadSource, /from "node:fs"|from "fs"|process\./);
+  assert.doesNotMatch(sharedPreload, /any/);
+});
+
+test("phase 2 validates payloads, URLs, and workspace paths", async () => {
+  const validationSource = await readText("src/main/ipc/validation.ts");
+  const linksSource = await readText("src/main/ipc/links.ts");
+  const notesSource = await readText("src/main/ipc/notes.ts");
+
+  assert.match(validationSource, /assertPlainObject/);
+  assert.match(validationSource, /assertSafeExternalUrl/);
+  assert.match(validationSource, /url\.protocol !== "https:"/);
+  assert.match(validationSource, /url\.protocol !== "http:"/);
+  assert.match(validationSource, /Path is outside the active workspace/);
+  assert.match(validationSource, /path\.relative\(workspaceRoot, resolvedPath\)/);
+  assert.match(linksSource, /shell\.openExternal/);
+  assert.match(notesSource, /assertWorkspacePath/);
+});

@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import {
   FilePlus2,
   FolderPlus,
@@ -9,9 +10,24 @@ import {
 } from "lucide-react";
 
 const workspaceName = "No workspace";
-const appInfo = window.inknest?.getAppInfo();
 
 export function App() {
+  const [phase, setPhase] = useState("phase-2-secure-boundary");
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.inknest.app.getInfo().then((result) => {
+      if (isMounted && result.ok) {
+        setPhase(result.data.phase);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
   return (
     <main className="grid min-h-screen grid-rows-[56px_minmax(0,1fr)_32px] bg-ink-50 text-ink-900">
       <header className="flex items-center justify-between border-b border-ink-100 bg-white px-4">
@@ -132,7 +148,7 @@ export function App() {
 
       <footer className="flex items-center justify-between border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
         <span>0 words</span>
-        <span>{appInfo?.phase ?? "phase-1-shell"}</span>
+        <span>{phase}</span>
       </footer>
     </main>
   );
