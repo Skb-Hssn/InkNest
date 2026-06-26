@@ -41,7 +41,9 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(window.getByText("Folder tree placeholder")).toBeVisible();
 
     await expect(window.getByRole("heading", { name: "Notes" })).toBeVisible();
-    await expect(window.getByText("No folder selected")).toBeVisible();
+    await expect(
+      window.getByRole("heading", { name: "No folder selected" })
+    ).toBeVisible();
     await expect(window.getByText("Note list placeholder")).toBeVisible();
     await expect(window.getByText("Meeting notes")).toBeVisible();
 
@@ -72,11 +74,17 @@ test("phase 3 exposes visible static controls for future interactions", async ()
     await expect(window.getByRole("button", { name: "More editor actions" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
 
-    await expect(window.getByRole("button", { name: "New note" }).first()).toBeVisible();
-    await expect(window.getByRole("button", { name: "New folder" }).first()).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: "New note", exact: true }).first()
+    ).toBeVisible();
+    await expect(
+      window.getByRole("button", { name: "New folder", exact: true }).first()
+    ).toBeVisible();
 
     for (const action of ["H1", "B", "I", "List", "Link", "Image"]) {
-      await expect(window.getByRole("button", { name: action })).toBeVisible();
+      await expect(
+        window.getByRole("button", { name: action, exact: true })
+      ).toBeVisible();
     }
   } finally {
     await app.close();
