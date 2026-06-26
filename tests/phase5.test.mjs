@@ -66,7 +66,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-7-folder-organization",
+    "phase-8-visual-markdown-editor",
     "FolderSummary",
     "WorkspaceMetadata",
     "WorkspaceFileModel",
@@ -75,7 +75,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   ]);
   assert.match(sharedPreload, /scan:\s*\(\)\s*=>\s*Promise<IpcResult<WorkspaceFileModel>>/);
   assert.match(preloadSource, /ipcChannels\.workspace\.scan/);
-  assert.match(appHandlerSource, /phase-7-folder-organization/);
+  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
 });
 
 test("phase 5 path utilities prevent traversal and sanitize filenames", async () => {

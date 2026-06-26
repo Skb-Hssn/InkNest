@@ -59,7 +59,7 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
       window.getByText("Open or create a Markdown note to inspect its saved content here.")
     ).toBeVisible();
     await expect(window.getByText("Open a local Markdown folder to begin")).toBeVisible();
-    await expect(window.getByText("Saved - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
   } finally {
     await app.close();
   }
@@ -111,14 +111,14 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-7-folder-organization"
+        phase: "phase-8-visual-markdown-editor"
       }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,
       hasProcess: false
     });
-    await expect(window.getByText("phase-7-folder-organization")).toBeVisible();
+    await expect(window.getByText("phase-8-visual-markdown-editor")).toBeVisible();
   } finally {
     await app.close();
   }

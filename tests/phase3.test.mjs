@@ -18,7 +18,7 @@ function assertIncludesAll(source, expectedValues) {
 test("phase 3 app info reports the static layout milestone", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
-  assert.match(appHandlerSource, /phase-7-folder-organization/);
+  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
 });
 
 test("phase 3 renderer defines the permanent three-column app layout", async () => {
@@ -104,7 +104,7 @@ test("phase 3 editor area contains file, toolbar, note, and status placeholders"
     "No note selected",
     "Open or create a Markdown note to inspect its saved content here.",
     "Open a local Markdown folder to begin",
-    "Saved - {wordCount} words - {characterCount} characters"
+    "{saveStatusLabel} - {wordCount} words - {characterCount} characters"
   ]);
 });
 
@@ -150,7 +150,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "note list column",
     "editor area",
     "status bar",
-    "phase-7-folder-organization",
+    "phase-8-visual-markdown-editor",
     "tests/phase3.test.mjs"
   ]);
 });

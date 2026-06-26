@@ -1,4 +1,13 @@
-import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
+import {
+  type CSSProperties,
+  type ClipboardEvent,
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useMemo,
+  useRef,
+  useState
+} from "react";
 import {
   AlertTriangle,
   BookOpenText,
@@ -18,6 +27,7 @@ import {
   PanelLeft,
   PanelRightClose,
   RotateCcw,
+  Save,
   Search,
   Settings,
   SlidersHorizontal,
@@ -33,6 +43,11 @@ import type {
   WorkspaceFileModel,
   WorkspaceInfo
 } from "../../shared/ipc";
+import {
+  editorDomToMarkdown,
+  insertPlainTextAtSelection,
+  markdownToHtml
+} from "./markdown-editor";
 
 const initialWorkspace: WorkspaceInfo = {
   path: null,
@@ -58,13 +73,15 @@ const toolbarPlaceholders = [
 ] as const;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-7-folder-organization");
+  const [phase, setPhase] = useState("phase-8-visual-markdown-editor");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
   const [selectedFolderPath, setSelectedFolderPath] = useState(".");
   const [selectedNotePath, setSelectedNotePath] = useState<string | null>(null);
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
+  const [editorMarkdown, setEditorMarkdown] = useState("");
+  const [lastSavedMarkdown, setLastSavedMarkdown] = useState("");
   const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const [activeMoveNotePath, setActiveMoveNotePath] = useState<string | null>(null);
   const [activeMoveFolderPath, setActiveMoveFolderPath] = useState<string | null>(null);
@@ -117,10 +134,16 @@ export function App() {
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
-  const wordCount = selectedNoteContent?.markdown.trim()
-    ? selectedNoteContent.markdown.trim().split(/\s+/).length
+  const isDirty = selectedNoteContent !== null && editorMarkdown !== lastSavedMarkdown;
+  const saveStatusLabel = selectedNoteContent
+    ? isDirty
+      ? "Unsaved changes"
+      : "Saved"
+    : "No note";
+  const wordCount = editorMarkdown.trim()
+    ? editorMarkdown.trim().split(/\s+/).length
     : 0;
-  const characterCount = selectedNoteContent?.markdown.length ?? 0;
+  const characterCount = editorMarkdown.length;
   const workspaceName = workspace.name ?? "No workspace";
   const workspacePath =
     workspace.path ??
@@ -195,8 +218,7 @@ export function App() {
 
     if (result.ok) {
       setWorkspace(result.data);
-      setSelectedNotePath(null);
-      setSelectedNoteContent(null);
+      clearSelectedNote();
       if (result.data.status === "ready") {
         await refreshWorkspace();
       }
@@ -215,14 +237,20 @@ export function App() {
 
     if (result.ok) {
       setWorkspace(result.data);
-      setSelectedNotePath(null);
-      setSelectedNoteContent(null);
+      clearSelectedNote();
       await refreshWorkspace();
     } else {
       setWorkspaceError(result.error.message);
     }
 
     setIsBusy(false);
+  }
+
+  function clearSelectedNote() {
+    setSelectedNotePath(null);
+    setSelectedNoteContent(null);
+    setEditorMarkdown("");
+    setLastSavedMarkdown("");
   }
 
   async function openNote(notePath: string) {
@@ -233,9 +261,36 @@ export function App() {
     if (result.ok) {
       setSelectedNotePath(result.data.path);
       setSelectedNoteContent(result.data);
+      setEditorMarkdown(result.data.markdown);
+      setLastSavedMarkdown(result.data.markdown);
       setStatusMessage("Note opened");
     } else {
       setWorkspaceError(result.error.message);
+    }
+
+    setIsBusy(false);
+  }
+
+  async function saveCurrentNote() {
+    if (!selectedNoteContent || !isDirty) {
+      return;
+    }
+
+    setIsBusy(true);
+    const result = await window.inknest.notes.save({
+      path: selectedNoteContent.path,
+      markdown: editorMarkdown
+    });
+
+    if (result.ok) {
+      setSelectedNoteContent(result.data);
+      setEditorMarkdown(result.data.markdown);
+      setLastSavedMarkdown(result.data.markdown);
+      await refreshWorkspace();
+      setStatusMessage("Saved");
+    } else {
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Save failed");
     }
 
     setIsBusy(false);
@@ -316,8 +371,7 @@ export function App() {
       setFolderNameDraft("");
 
       if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        setSelectedNotePath(null);
-        setSelectedNoteContent(null);
+        clearSelectedNote();
       }
 
       await refreshWorkspace();
@@ -361,8 +415,7 @@ export function App() {
         selectedNote?.folderPath === folder.path ||
         selectedNote?.folderPath.startsWith(`${folder.path}/`)
       ) {
-        setSelectedNotePath(null);
-        setSelectedNoteContent(null);
+        clearSelectedNote();
       }
 
       await refreshWorkspace();
@@ -386,8 +439,7 @@ export function App() {
 
     if (result.ok) {
       if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        setSelectedNotePath(null);
-        setSelectedNoteContent(null);
+        clearSelectedNote();
       }
 
       await refreshWorkspace();
@@ -503,8 +555,7 @@ export function App() {
 
     if (result.ok) {
       if (note.path === selectedNotePath) {
-        setSelectedNotePath(null);
-        setSelectedNoteContent(null);
+        clearSelectedNote();
       }
       await refreshWorkspace();
       setStatusMessage("Note moved to trash");
@@ -885,10 +936,21 @@ export function App() {
                 {selectedNote?.path ?? "No file selected"}
               </p>
             </div>
-            <span className="status-pill">
-              <Check size={13} />
-              {statusMessage}
-            </span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => void saveCurrentNote()}
+                disabled={!selectedNoteContent || !isDirty || isBusy}
+              >
+                <Save size={15} />
+                <span>Save</span>
+              </button>
+              <span className="status-pill">
+                <Check size={13} />
+                {statusMessage} - {saveStatusLabel}
+              </span>
+            </div>
           </div>
 
           <div className="flex h-11 items-center gap-1 border-b border-ink-100 px-4">
@@ -901,7 +963,15 @@ export function App() {
 
           {selectedNoteContent ? (
             <article className="min-h-0 flex-1 overflow-y-auto p-8">
-              <pre className="note-preview">{selectedNoteContent.markdown}</pre>
+              <VisualMarkdownEditor
+                key={selectedNoteContent.path}
+                markdown={editorMarkdown}
+                disabled={isBusy}
+                onChange={(nextMarkdown) => {
+                  setEditorMarkdown(nextMarkdown);
+                  setStatusMessage("Editing");
+                }}
+              />
             </article>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8">
@@ -923,10 +993,62 @@ export function App() {
         <span className="truncate">{workspacePath}</span>
         <span>{phase}</span>
         <span className="justify-self-end">
-          Saved - {wordCount} words - {characterCount} characters
+          {saveStatusLabel} - {wordCount} words - {characterCount} characters
         </span>
       </footer>
     </main>
+  );
+}
+
+type VisualMarkdownEditorProps = {
+  markdown: string;
+  disabled: boolean;
+  onChange: (markdown: string) => void;
+};
+
+function VisualMarkdownEditor({
+  markdown,
+  disabled,
+  onChange
+}: VisualMarkdownEditorProps) {
+  const editorRef = useRef<HTMLDivElement | null>(null);
+  const lastRenderedMarkdown = useRef("");
+
+  useEffect(() => {
+    if (!editorRef.current || lastRenderedMarkdown.current === markdown) {
+      return;
+    }
+
+    editorRef.current.innerHTML = markdownToHtml(markdown);
+    lastRenderedMarkdown.current = markdown;
+  }, [markdown]);
+
+  function handleInput(event: FormEvent<HTMLDivElement>) {
+    const nextMarkdown = editorDomToMarkdown(event.currentTarget);
+
+    lastRenderedMarkdown.current = nextMarkdown;
+    onChange(nextMarkdown);
+  }
+
+  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+    event.preventDefault();
+    insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
+    handleInput(event);
+  }
+
+  return (
+    <div
+      ref={editorRef}
+      className="visual-editor"
+      contentEditable={!disabled}
+      suppressContentEditableWarning
+      aria-label="Visual Markdown editor"
+      role="textbox"
+      aria-multiline="true"
+      data-placeholder="Start writing..."
+      onInput={handleInput}
+      onPaste={handlePaste}
+    />
   );
 }
 

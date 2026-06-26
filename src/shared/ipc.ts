@@ -15,7 +15,7 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-7-folder-organization";
+  phase: "phase-8-visual-markdown-editor";
 };
 
 export type WorkspaceStatus =
@@ -123,6 +123,11 @@ export type MoveNotePayload = {
   folderPath: string;
 };
 
+export type SaveNotePayload = {
+  path: string;
+  markdown: string;
+};
+
 export type DeleteNotePayload = {
   path: string;
 };
@@ -153,6 +158,7 @@ export const ipcChannels = {
     rename: "notes:rename",
     duplicate: "notes:duplicate",
     move: "notes:move",
+    save: "notes:save",
     delete: "notes:delete",
     listTrash: "notes:list-trash",
     restore: "notes:restore",

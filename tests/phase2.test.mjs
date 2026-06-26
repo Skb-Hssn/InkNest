@@ -52,6 +52,7 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "notes:read",
     "notes:rename",
     "notes:restore",
+    "notes:save",
     "settings:get",
     "settings:save",
     "workspace:choose",

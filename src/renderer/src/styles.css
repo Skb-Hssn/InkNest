@@ -160,8 +160,97 @@ input {
     @apply grid grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1 rounded-md border border-ink-100 bg-white p-2;
   }
 
-  .note-preview {
-    @apply m-0 whitespace-pre-wrap break-words rounded-md border border-ink-100 bg-ink-50 p-5 font-mono text-sm leading-7 text-ink-900;
+  .visual-editor {
+    @apply min-h-full w-full rounded-md border border-ink-100 bg-white px-8 py-7 text-base leading-7 text-ink-900 outline-none transition focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+  }
+
+  .visual-editor:empty::before {
+    content: attr(data-placeholder);
+    @apply text-neutral-400;
+  }
+
+  .visual-editor h1 {
+    @apply mb-4 mt-2 text-3xl font-semibold leading-tight;
+  }
+
+  .visual-editor h2 {
+    @apply mb-3 mt-6 text-2xl font-semibold leading-tight;
+  }
+
+  .visual-editor h3 {
+    @apply mb-2 mt-5 text-xl font-semibold leading-tight;
+  }
+
+  .visual-editor h4,
+  .visual-editor h5,
+  .visual-editor h6 {
+    @apply mb-2 mt-4 text-lg font-semibold leading-tight;
+  }
+
+  .visual-editor p {
+    @apply my-3;
+  }
+
+  .visual-editor ul,
+  .visual-editor ol {
+    @apply my-3 pl-6;
+  }
+
+  .visual-editor ul {
+    @apply list-disc;
+  }
+
+  .visual-editor ol {
+    @apply list-decimal;
+  }
+
+  .visual-editor li {
+    @apply my-1 pl-1;
+  }
+
+  .visual-editor input[type="checkbox"] {
+    @apply mr-2 align-middle;
+  }
+
+  .visual-editor blockquote {
+    @apply my-4 border-l-4 border-ink-100 bg-ink-50 px-4 py-2 text-neutral-700;
+  }
+
+  .visual-editor code {
+    @apply rounded bg-ink-50 px-1.5 py-0.5 font-mono text-sm text-ink-900;
+  }
+
+  .visual-editor pre {
+    @apply my-4 overflow-x-auto rounded-md border border-ink-100 bg-ink-50 p-4;
+  }
+
+  .visual-editor pre code {
+    @apply bg-transparent p-0;
+  }
+
+  .visual-editor table {
+    @apply my-4 w-full border-collapse text-sm;
+  }
+
+  .visual-editor th,
+  .visual-editor td {
+    @apply border border-ink-100 px-3 py-2 text-left align-top;
+  }
+
+  .visual-editor th {
+    @apply bg-ink-50 font-semibold;
+  }
+
+  .visual-editor hr {
+    @apply my-6 border-0 border-t border-ink-100;
+  }
+
+  .visual-editor a {
+    @apply text-ink-700 underline underline-offset-2;
+  }
+
+  .visual-editor img {
+    @apply my-4 max-w-full rounded-md border border-ink-100;
   }
 
   button:disabled {
