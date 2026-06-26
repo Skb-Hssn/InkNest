@@ -15,12 +15,22 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-2-secure-boundary";
+  phase: "phase-4-workspace-selection";
 };
+
+export type WorkspaceStatus =
+  | "none"
+  | "ready"
+  | "missing"
+  | "permission-denied";
 
 export type WorkspaceInfo = {
   path: string | null;
   name: string | null;
+  status: WorkspaceStatus;
+  message: string;
+  recentWorkspaces: string[];
+  lastWorkspacePath: string | null;
 };
 
 export type NoteSummary = {
@@ -31,6 +41,8 @@ export type NoteSummary = {
 
 export type AppSettings = {
   theme: "system" | "light" | "dark";
+  lastWorkspacePath: string | null;
+  recentWorkspaces: string[];
 };
 
 export type SaveSettingsPayload = {
@@ -47,6 +59,7 @@ export const ipcChannels = {
   },
   workspace: {
     getActive: "workspace:get-active",
+    choose: "workspace:choose",
     select: "workspace:select"
   },
   notes: {

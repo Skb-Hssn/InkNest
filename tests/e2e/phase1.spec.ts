@@ -11,11 +11,13 @@ const electronLaunchArgs = [
   "--ozone-platform=x11"
 ];
 
-test("phase 1 opens an InkNest renderer window with the workspace shell", async () => {
+test("phase 1 opens an InkNest renderer window with the workspace shell", async ({
+}, testInfo) => {
   const app = await electron.launch({
     args: electronLaunchArgs,
     env: {
       ...process.env,
+      INKNEST_USER_DATA_DIR: testInfo.outputPath("user-data"),
       ELECTRON_RUN_AS_NODE: undefined
     }
   });
@@ -26,7 +28,7 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
     await expect(window).toHaveTitle("InkNest");
     await expect(window.getByRole("heading", { name: "InkNest" })).toBeVisible();
     await expect(
-      window.getByRole("button", { name: "Choose workspace Local Markdown folder" })
+      window.getByRole("button", { name: "No workspace Local Markdown folder" })
     ).toBeVisible();
     await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "Folders" })).toBeVisible();
@@ -42,11 +44,13 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
   }
 });
 
-test("phase 2 exposes the narrow async preload API in the renderer", async () => {
+test("phase 2 exposes the narrow async preload API in the renderer", async ({
+}, testInfo) => {
   const app = await electron.launch({
     args: electronLaunchArgs,
     env: {
       ...process.env,
+      INKNEST_USER_DATA_DIR: testInfo.outputPath("user-data"),
       ELECTRON_RUN_AS_NODE: undefined
     }
   });
@@ -73,14 +77,18 @@ test("phase 2 exposes the narrow async preload API in the renderer", async () =>
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-3-static-layout"
+        phase: "phase-4-workspace-selection"
       }
     });
     expect(activeWorkspace).toEqual({
       ok: true,
       data: {
         path: null,
-        name: null
+        name: null,
+        status: "none",
+        message: "Choose a local Markdown folder to begin.",
+        recentWorkspaces: [],
+        lastWorkspacePath: null
       }
     });
     expect(invalidSettings).toEqual({

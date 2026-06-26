@@ -8,6 +8,7 @@ const inknestApi: InkNestApi = {
   },
   workspace: {
     getActive: () => ipcRenderer.invoke(ipcChannels.workspace.getActive),
+    choose: () => ipcRenderer.invoke(ipcChannels.workspace.choose),
     select: (path) => ipcRenderer.invoke(ipcChannels.workspace.select, { path })
   },
   notes: {

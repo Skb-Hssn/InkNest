@@ -14,6 +14,7 @@ export type InkNestApi = {
   };
   workspace: {
     getActive: () => Promise<IpcResult<WorkspaceInfo>>;
+    choose: () => Promise<IpcResult<WorkspaceInfo>>;
     select: (path: string) => Promise<IpcResult<WorkspaceInfo>>;
   };
   notes: {

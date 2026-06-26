@@ -11,18 +11,20 @@ const electronLaunchArgs = [
   "--ozone-platform=x11"
 ];
 
-async function launchInkNest() {
+async function launchInkNest(userDataDir) {
   return electron.launch({
     args: electronLaunchArgs,
     env: {
       ...process.env,
+      INKNEST_USER_DATA_DIR: userDataDir,
       ELECTRON_RUN_AS_NODE: undefined
     }
   });
 }
 
-test("phase 3 renders the static workspace, notes, editor, and status layout", async () => {
-  const app = await launchInkNest();
+test("phase 3 renders the static workspace, notes, editor, and status layout", async ({
+}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
 
   try {
     const window = await app.firstWindow();
@@ -31,7 +33,7 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(window.getByRole("heading", { name: "InkNest" })).toBeVisible();
     await expect(
       window.getByRole("button", {
-        name: "Choose workspace Local Markdown folder"
+        name: "No workspace Local Markdown folder"
       })
     ).toBeVisible();
     await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
@@ -61,8 +63,9 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
   }
 });
 
-test("phase 3 exposes visible static controls for future interactions", async () => {
-  const app = await launchInkNest();
+test("phase 3 exposes visible static controls for future interactions", async ({
+}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
 
   try {
     const window = await app.firstWindow();
@@ -91,8 +94,9 @@ test("phase 3 exposes visible static controls for future interactions", async ()
   }
 });
 
-test("phase 3 renderer receives the static layout phase through preload", async () => {
-  const app = await launchInkNest();
+test("phase 3 renderer receives the static layout phase through preload", async ({
+}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
 
   try {
     const window = await app.firstWindow();
@@ -106,14 +110,14 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-3-static-layout"
+        phase: "phase-4-workspace-selection"
       }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,
       hasProcess: false
     });
-    await expect(window.getByText("phase-3-static-layout")).toBeVisible();
+    await expect(window.getByText("phase-4-workspace-selection")).toBeVisible();
   } finally {
     await app.close();
   }

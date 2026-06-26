@@ -18,7 +18,7 @@ function assertIncludesAll(source, expectedValues) {
 test("phase 3 app info reports the static layout milestone", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
-  assert.match(appHandlerSource, /phase-3-static-layout/);
+  assert.match(appHandlerSource, /phase-4-workspace-selection/);
 });
 
 test("phase 3 renderer defines the permanent three-column app layout", async () => {
@@ -59,7 +59,7 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "Filter folders",
     "No workspace selected",
     "No search results",
-    "Choose a workspace to show folders stored on disk.",
+    "Choose a local Markdown folder to begin.",
     "Search results will appear here after a workspace is indexed.",
     "Folder tree placeholder",
     "Folder tree preview",
@@ -116,8 +116,9 @@ test("phase 3 renderer stays static and uses the preload boundary only", async (
   const sharedIpcSource = await readText("src/shared/ipc.ts");
 
   assert.match(appSource, /window\.inknest\.app\.getInfo\(\)/);
+  assert.match(appSource, /window\.inknest\.workspace\.getActive\(\)/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
-  assert.doesNotMatch(appSource, /window\.inknest\.(workspace|notes|settings|links|dialogs|export)\./);
+  assert.doesNotMatch(appSource, /window\.inknest\.(notes|settings|links|dialogs|export)\./);
   assert.doesNotMatch(appSource, /ipcRenderer|shell\.openExternal/);
   assert.doesNotMatch(sharedIpcSource, /phase-3/);
 });
@@ -129,6 +130,7 @@ test("phase 3 styles define reusable controls with stable dimensions", async () 
   assertIncludesAll(stylesSource, [
     ".secondary-button",
     ".tree-row",
+    ".recent-workspace-row",
     ".note-row",
     ".toolbar-button",
     ".status-pill",
@@ -150,8 +152,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "note list column",
     "editor area",
     "status bar",
-    "phase-3-static-layout",
-    "Phase 3 does not add new IPC channels",
+    "phase-4-workspace-selection",
     "tests/phase3.test.mjs"
   ]);
 });

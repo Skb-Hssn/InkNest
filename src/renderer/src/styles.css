@@ -59,6 +59,10 @@ input {
     @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-neutral-500 opacity-75;
   }
 
+  .recent-workspace-row {
+    @apply flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-neutral-700 transition hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
   .note-row {
     @apply block w-full rounded-md border border-ink-100 bg-white px-3 py-3 text-left text-sm text-neutral-500 opacity-75;
   }

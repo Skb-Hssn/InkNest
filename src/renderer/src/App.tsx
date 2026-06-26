@@ -1,5 +1,6 @@
 import { type ReactNode, useEffect, useState } from "react";
 import {
+  AlertTriangle,
   BookOpenText,
   Check,
   ChevronDown,
@@ -8,6 +9,7 @@ import {
   FileText,
   FilePlus2,
   Folder,
+  FolderOpen,
   FolderPlus,
   Hash,
   ListFilter,
@@ -19,9 +21,16 @@ import {
   SlidersHorizontal,
   SquarePen
 } from "lucide-react";
+import type { WorkspaceInfo } from "../../shared/ipc";
 
-const workspaceName = "No workspace";
-const workspacePath = "Open a local Markdown folder to begin";
+const initialWorkspace: WorkspaceInfo = {
+  path: null,
+  name: null,
+  status: "none",
+  message: "Choose a local Markdown folder to begin.",
+  recentWorkspaces: [],
+  lastWorkspacePath: null
+};
 
 const folderPlaceholders = [
   "Inbox",
@@ -39,7 +48,10 @@ const toolbarPlaceholders = [
 ] as const;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-3-static-layout");
+  const [phase, setPhase] = useState("phase-4-workspace-selection");
+  const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null);
+  const [isChoosingWorkspace, setIsChoosingWorkspace] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -50,10 +62,58 @@ export function App() {
       }
     });
 
+    window.inknest.workspace.getActive().then((result) => {
+      if (isMounted && result.ok) {
+        setWorkspace(result.data);
+      }
+    });
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  async function chooseWorkspace() {
+    setIsChoosingWorkspace(true);
+    setWorkspaceError(null);
+
+    const result = await window.inknest.workspace.choose();
+
+    if (result.ok) {
+      setWorkspace(result.data);
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+
+    setIsChoosingWorkspace(false);
+  }
+
+  async function reopenWorkspace(workspacePath: string) {
+    setWorkspaceError(null);
+    const result = await window.inknest.workspace.select(workspacePath);
+
+    if (result.ok) {
+      setWorkspace(result.data);
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+  }
+
+  const workspaceName = workspace.name ?? "No workspace";
+  const workspacePath =
+    workspace.path ??
+    workspace.lastWorkspacePath ??
+    "Open a local Markdown folder to begin";
+  const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
+  const workspacePromptTitle =
+    workspace.status === "missing"
+      ? "Previous workspace missing"
+      : workspace.status === "permission-denied"
+        ? "Workspace access needed"
+        : "No workspace selected";
+  const workspacePromptDescription = hasWorkspace
+    ? "Folders will appear here after the workspace file model is added."
+    : workspace.message;
 
   return (
     <main className="grid min-h-screen grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
@@ -93,16 +153,21 @@ export function App() {
       <section className="grid min-h-0 grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]">
         <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
-            <button type="button" className="workspace-button">
+            <button
+              type="button"
+              className="workspace-button"
+              onClick={chooseWorkspace}
+              disabled={isChoosingWorkspace}
+            >
               <span className="flex h-7 w-7 items-center justify-center rounded-md bg-ink-700 text-white">
-                <BookOpenText size={15} />
+                <FolderOpen size={15} />
               </span>
               <span className="min-w-0">
                 <span className="block truncate text-sm font-medium">
-                  Choose workspace
+                  {isChoosingWorkspace ? "Choosing workspace" : workspaceName}
                 </span>
                 <span className="block truncate text-xs text-neutral-500">
-                  Local Markdown folder
+                  {hasWorkspace ? workspace.path : "Local Markdown folder"}
                 </span>
               </span>
               <ChevronDown className="ml-auto text-neutral-400" size={16} />
@@ -145,11 +210,60 @@ export function App() {
           <div className="min-h-0 flex-1 overflow-y-auto">
             <div className="border-b border-ink-100 px-4 py-4">
               <EmptyState
-                icon={<Folder size={18} />}
-                title="No workspace selected"
-                description="Choose a workspace to show folders stored on disk."
+                icon={
+                  workspace.status === "missing" ||
+                  workspace.status === "permission-denied" ? (
+                    <AlertTriangle size={18} />
+                  ) : (
+                    <Folder size={18} />
+                  )
+                }
+                title={workspacePromptTitle}
+                description={workspacePromptDescription}
               />
+              <button
+                type="button"
+                className="secondary-button mt-3 w-full justify-center"
+                onClick={chooseWorkspace}
+                disabled={isChoosingWorkspace}
+              >
+                <FolderOpen size={16} />
+                <span>Choose workspace</span>
+              </button>
+              {workspaceError ? (
+                <p className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                  {workspaceError}
+                </p>
+              ) : null}
             </div>
+
+            {workspace.recentWorkspaces.length > 0 ? (
+              <div className="border-b border-ink-100 px-3 py-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
+                  Recent workspaces
+                </p>
+                <div className="space-y-1">
+                  {workspace.recentWorkspaces.map((recentPath) => (
+                    <button
+                      key={recentPath}
+                      type="button"
+                      className="recent-workspace-row"
+                      onClick={() => void reopenWorkspace(recentPath)}
+                    >
+                      <BookOpenText size={15} />
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">
+                          {recentPath.split(/[\\/]/).pop() ?? recentPath}
+                        </span>
+                        <span className="block truncate text-xs text-neutral-500">
+                          {recentPath}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="px-3 py-3">
               <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
