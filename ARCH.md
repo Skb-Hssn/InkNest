@@ -1,9 +1,9 @@
 # ARCH.md - InkNest Architecture
 
-This document describes the architecture established by Phase 0, Phase 1, and
-Phase 2 of `PLAN.md`. It covers the repository baseline, the first running app
-shell, and the secure Electron boundary that renderer code must use before
-workspace selection, note storage, and filesystem features are implemented.
+This document describes the architecture established by Phase 0, Phase 1,
+Phase 2, and Phase 3 of `PLAN.md`. It covers the repository baseline, the first
+running app shell, the secure Electron boundary, and the static application
+layout that future workspace, note, search, and editor behavior will fill in.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -361,7 +361,85 @@ checks, Node tests, and TypeScript validation. `npm run test:e2e` builds the app
 and runs Playwright/Electron tests; depending on the host sandbox, Electron may
 need to run outside restricted filesystem or process sandboxing.
 
-## Architecture Direction After Phase 2
+## Phase 3 Architecture: Static Application Layout
+
+Phase 3 turns the early renderer shell into the permanent note-taking layout.
+It is still static: workspace selection, file scanning, note CRUD, search, and
+editor persistence are intentionally deferred to later phases.
+
+### Renderer Layout
+
+The Phase 3 renderer lives in `src/renderer/src/App.tsx` and is organized as a
+desktop note app surface:
+
+```text
+top bar
+  app identity
+  workspace name
+  new note, new folder, settings controls
+
+left sidebar
+  workspace switcher
+  search input
+  new note and new folder controls
+  folder tree area
+  no-workspace empty state
+  no-search-results empty state
+
+note list column
+  selected-folder label
+  sort and new-note controls
+  no-folder empty state
+  note list placeholder rows
+
+editor area
+  note title and file path placeholder
+  save status placeholder
+  visual editor toolbar placeholder
+  no-note empty state
+
+status bar
+  workspace path placeholder
+  current phase marker
+  save, word count, and character count placeholders
+```
+
+### Styling
+
+Reusable static-shell controls are defined in `src/renderer/src/styles.css`:
+
+- `.secondary-button`
+- `.tree-row`
+- `.note-row`
+- `.toolbar-button`
+- `.status-pill`
+
+The layout remains quiet and work-focused, with stable column sizes and visible
+controls for common actions. Later phases should preserve this structure while
+replacing placeholder rows and empty states with real workspace and note data.
+
+### Phase 3 Data Flow
+
+```text
+App starts
+  -> React renderer initializes static placeholders
+  -> renderer asks window.inknest.app.getInfo()
+  -> preload invokes ipcChannels.app.getInfo
+  -> main-process handler returns phase-3-static-layout
+  -> status bar displays the current phase marker
+```
+
+Phase 3 does not add new IPC channels. It continues to respect the Phase 2 rule
+that renderer code must not import Electron, Node.js modules, or filesystem
+APIs directly.
+
+### Tests
+
+`tests/phase3.test.mjs` verifies that the renderer contains the permanent
+layout regions, required empty states, status placeholders, and no direct
+renderer access to Electron or Node.js filesystem modules.
+
+## Architecture Direction After Phase 3
 
 Future work should preserve the current split:
 
