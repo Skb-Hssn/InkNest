@@ -33,17 +33,7 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "markdown-toolbar",
     "toolbar-group",
     "toolbar-button-active",
-    "toolbar-button-color-selected",
     "toolbar-shell",
-    "toolbar-popover",
-    "commonColors",
-    "defaultColorSelections",
-    "highlight: null",
-    '"text-color": null',
-    '"background-color": null',
-    "colorSelections",
-    "colorPopoverPosition",
-    "getToolbarButtonStyle",
     "LinkDialogState",
     "linkDialog",
     "openLinkDialog",
@@ -51,7 +41,6 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "removeLinkFromDialog",
     "getLinkDetails",
     "onLinkDialogRequest",
-    "activeColorCommand",
     "activeToolbarCommands",
     "tableActionIcon",
     "TableRowsSplit",
@@ -61,12 +50,6 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "CircleMinus",
     "toolbar-composite-icon",
     "toolbar-composite-badge",
-    "color-palette",
-    "color-swatch-grid",
-    "color-swatch",
-    "color-reset-button",
-    "applyPaletteColor",
-    "resetPaletteColor",
     "getToolbarGroups",
     "runToolbarCommand",
     "onMouseDown={(event) => event.preventDefault()}",
@@ -89,12 +72,6 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "strikethrough",
     "inline-code",
     "clear-format",
-    "highlight",
-    "text-color",
-    "background-color",
-    "align-left",
-    "align-center",
-    "align-right",
     "code-block",
     "table",
     "Insert table",
@@ -102,9 +79,6 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "table-delete-row",
     "table-add-column",
     "table-delete-column",
-    "table-align-left",
-    "table-align-center",
-    "table-align-right",
     'id: "link"',
     "link-popover",
     "link-popover-field",
@@ -114,6 +88,18 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     "divider",
     "LaTeX math"
   ]);
+  assert.ok(
+    appSource.indexOf('id: "bold"') < appSource.indexOf('id: "heading-1"'),
+    "Expected common inline formatting tools to appear before headings"
+  );
+  assert.ok(
+    appSource.indexOf('id: "link"') < appSource.indexOf('id: "code-block"'),
+    "Expected link and media tools to appear before code and table tools"
+  );
+  assert.ok(
+    appSource.indexOf('id: "code-block"') < appSource.indexOf('id: "callout-note"'),
+    "Expected code and table tools to appear before callout tools"
+  );
   assertIncludesAll(stylesSource, [
     ".markdown-toolbar",
     ".toolbar-group",
@@ -121,13 +107,7 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     ".toolbar-button-active",
     ".toolbar-composite-icon",
     ".toolbar-composite-badge",
-    ".toolbar-button-color-selected",
     ".toolbar-shell",
-    ".toolbar-popover",
-    ".color-palette",
-    ".color-swatch-grid",
-    ".color-swatch",
-    ".color-reset-button",
     ".link-popover",
     ".link-popover-field",
     ".link-popover-actions",
@@ -138,6 +118,18 @@ test("phase 9 renderer exposes real toolbar commands", async () => {
     ".toolbar-separator"
   ]);
   assert.doesNotMatch(appSource, /label: "Edit link"|label: "Remove link"/);
+  assert.doesNotMatch(
+    appSource,
+    /highlight|text-color|background-color|activeColorCommand|colorSelections|color-palette/
+  );
+  assert.doesNotMatch(
+    stylesSource,
+    /toolbar-button-color-selected|color-palette|color-swatch|color-reset-button/
+  );
+  assert.doesNotMatch(
+    appSource,
+    /align-left|align-center|align-right|table-align-left|table-align-center|table-align-right|AlignLeft|AlignCenter|AlignRight/
+  );
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.doesNotMatch(appSource, /ipcRenderer|showOpenDialog/);
 });
@@ -148,7 +140,6 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
   assertIncludesAll(editorSource, [
     "MarkdownEditorCommand",
     "MarkdownEditorCommandOptions",
-    "reset?: boolean",
     "applyMarkdownEditorCommand",
     "applySlashCommandAtSelection",
     '"/heading": "heading-1"',
@@ -164,13 +155,7 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     'document.execCommand("formatBlock", false, `h${command.at(-1)}`)',
     'document.execCommand("bold")',
     'document.execCommand("strikeThrough")',
-    "applyInlineStyleAtSelection",
-    "removeInlineStyleAtSelection",
     "unwrapElement",
-    '"background-color", options.color ?? "#fef08a", "mark"',
-    '"color", options.color ?? "#0f766e"',
-    '"background-color", options.color ?? "#dbeafe"',
-    'document.execCommand("justifyCenter")',
     'document.execCommand("insertUnorderedList")',
     'document.execCommand(shiftKey ? "outdent" : "indent")',
     "stripFormattingFromFragment",
@@ -187,15 +172,18 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     "deleteTableRowAtSelection",
     "addTableColumnAtSelection",
     "deleteTableColumnAtSelection",
-    "alignTableColumnAtSelection",
     "insertTableAtSelection",
     "currentTable.insertAdjacentElement(\"afterend\", table)",
     "template.content",
-    "tableAlignmentSeparator",
-    "parseTableAlignment",
     "listMarkdownToHtml",
     "blockquoteMarkdownToHtml",
     "data-callout",
+    "calloutElementToMarkdown",
+    "quoteMarkdownLines",
+    "blockElementChildrenToMarkdown",
+    "<p><br></p>",
+    "quoteLines.slice(1)",
+    'body ? markdownToHtml(body, options) : "<p><br></p>"',
     "codeBlockToHtml",
     "codeBlockLanguages",
     "codeLanguageSelectToHtml",
@@ -214,12 +202,16 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     "exitInlineAtomAtSelection",
     "exitCurrentEditorBlock",
     "exitEditorBlockFromElement",
+    'if (tagName === "blockquote")',
+    'if (tagName === "table")',
+    "return calloutElementToMarkdown(node, calloutType)",
+    "return tableElementToMarkdown(node)",
     "<table><tbody>",
-    "htmlAlignedBlockToHtml",
-    "restoreLimitedInlineHtml",
-    "sanitizeInlineColorStyle",
-    "rgb\\(",
-    "mark style",
+    'const separator = header.map(() => "---")',
+    "tableCellToMarkdown",
+    "escapeTableCellMarkdown",
+    ".replace(/(?<!\\\\)\\|/g, \"\\\\|\")",
+    "Array.from({ length: columnCount }",
     "restoreLimitedImageHtml",
     "editLinkAtSelection",
     "removeLinkAtSelection",
@@ -233,17 +225,22 @@ test("phase 9 markdown editor helper applies formatting commands", async () => {
     "insertHtmlAtSelection",
     "escapeAttribute"
   ]);
+  assert.doesNotMatch(
+    editorSource,
+    /"highlight"|"text-color"|"background-color"|applyInlineStyleAtSelection|removeInlineStyleAtSelection|restoreLimitedInlineHtml|sanitizeInlineColorStyle|options\.color|reset\?: boolean/
+  );
+  assert.doesNotMatch(
+    editorSource,
+    /"align-left"|"align-center"|"align-right"|"table-align-left"|"table-align-center"|"table-align-right"|justifyLeft|justifyCenter|justifyRight|alignTableColumnAtSelection|htmlAlignedBlockToHtml|blockWithAlignment|parseTableAlignment|tableAlignmentSeparator|data-align|text-align/
+  );
+  assert.doesNotMatch(editorSource, /\[!\$\{type\.toUpperCase\(\)\}\] Callout/);
 });
 
-test("phase 9 editor styles cover highlighted and aligned text", async () => {
+test("phase 9 editor styles omit text and table alignment support", async () => {
   const stylesSource = await readText("src/renderer/src/styles.css");
 
-  assertIncludesAll(stylesSource, [
-    ".visual-editor mark",
-    "[style*=\"text-align: left\"]",
-    "[style*=\"text-align: center\"]",
-    "[style*=\"text-align: right\"]"
-  ]);
+  assert.doesNotMatch(stylesSource, /\.visual-editor mark/);
+  assert.doesNotMatch(stylesSource, /text-align|data-align/);
 });
 
 test("phase 9 editor supports callouts, nested quotes, code language, and block escape", async () => {
@@ -303,8 +300,9 @@ test("phase 9 editor supports list keyboard behavior and table editing", async (
     "leading-6",
     ".visual-editor li[data-task=\"true\"]",
     "list-style: none",
-    "th[data-align=\"center\"]",
-    "td[data-align=\"right\"]"
+    ".visual-editor th",
+    ".visual-editor td",
+    "@apply border border-neutral-400 px-3 py-2 text-left align-top"
   ]);
 });
 
@@ -323,10 +321,12 @@ test("phase 9 editor supports links, images, and math while editing", async () =
     "range.selectNodeContents(link)",
     "link.getAttribute(\"href\")",
     "target instanceof HTMLImageElement",
-    "options.src = result.data.dataUrl",
+    "options.src = result.data.assetPath",
+    "options.previewSrc = result.data.displaySrc",
     "selectImageForResize(target)",
     "syncImageResizeFrames",
     "image-resize-frame",
+    "workspacePath={workspace.path}",
     "target.closest(\"[data-math]\")",
     "x^2 + y^2 = z^2"
   ]);
@@ -336,6 +336,11 @@ test("phase 9 editor supports links, images, and math while editing", async () =
     "$${node.dataset.math}$",
     "data-math",
     "data-math-display",
+    "data-markdown-src",
+    "node.dataset.markdownSrc",
+    "imageToHtml",
+    "resolveImageDisplaySrc",
+    "workspacePathToFileUrl",
     "width=\"${width}\"",
     "\\\\frac",
     "\\\\sqrt",
@@ -367,12 +372,17 @@ test("phase 9 editor supports code-friendly behavior and clearing formatting", a
     'event.key === "ArrowRight"',
     "exitInlineAtomAtSelection()",
     "isSelectionInsideCodeBlock()",
-    'target.dataset.codeCopy === "true"',
-    "navigator.clipboard?.writeText(code)"
+    "copyTextToClipboard",
+    "target.closest(\"[data-code-copy='true']\")",
+    "navigator.clipboard?.writeText(text)",
+    "document.execCommand(\"copy\")"
   ]);
   assertIncludesAll(editorSource, [
     "codeBlockToHtml",
-    "code,[data-math-display='inline'],mark,span[style]",
+    "codeBlockElementToMarkdown",
+    'if (tagName === "pre")',
+    "return codeBlockElementToMarkdown(node)",
+    "code,[data-math-display='inline']",
     "<pre>${codeLanguageSelectToHtml(language)}<button",
     "contenteditable=\"false\"",
     "data-code-copy=\"true\"",

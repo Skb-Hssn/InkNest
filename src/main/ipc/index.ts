@@ -23,6 +23,6 @@ export async function registerIpcHandlers() {
   registerFolderHandlers(activeWorkspace);
   registerSettingsHandlers();
   registerLinkHandlers();
-  registerDialogHandlers();
+  registerDialogHandlers(activeWorkspace);
   registerExportHandlers(activeWorkspace);
 }

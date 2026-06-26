@@ -172,42 +172,12 @@ input {
     @apply absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-white text-ink-700;
   }
 
-  .toolbar-button-color-selected {
-    border-color: var(--toolbar-command-color);
-    background: var(--toolbar-command-color);
-    color: var(--toolbar-command-text-color);
-    box-shadow: inset 0 0 0 1px rgb(17 24 39 / 0.3);
-  }
-
   .toolbar-separator {
     @apply mx-1 h-5 w-px bg-ink-100;
   }
 
-  .toolbar-popover {
-    @apply absolute z-30 rounded-md border border-ink-100 bg-white p-2 shadow-xl;
-    left: var(--toolbar-popover-left, 1rem);
-    top: var(--toolbar-popover-top, 100%);
-  }
-
-  .color-palette {
-    @apply w-60;
-  }
-
-  .color-swatch-grid {
-    @apply grid grid-cols-8 gap-1;
-  }
-
-  .color-swatch {
-    @apply h-7 w-7 rounded-md border border-neutral-300 shadow-sm transition hover:scale-105 hover:border-ink-500 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
-    background: var(--swatch-color);
-  }
-
   .code-language-select {
     @apply h-8 rounded-md border border-ink-100 bg-white px-2 text-sm text-ink-900 outline-none focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
-  }
-
-  .color-reset-button {
-    @apply mt-2 flex h-8 w-full items-center justify-center rounded-md border border-ink-100 bg-white px-2 text-xs font-medium text-ink-900 transition hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
   .link-popover {
@@ -298,21 +268,6 @@ input {
     @apply my-3;
   }
 
-  .visual-editor [style*="text-align: left"],
-  .visual-editor [style*="text-align:left"] {
-    text-align: left;
-  }
-
-  .visual-editor [style*="text-align: center"],
-  .visual-editor [style*="text-align:center"] {
-    text-align: center;
-  }
-
-  .visual-editor [style*="text-align: right"],
-  .visual-editor [style*="text-align:right"] {
-    text-align: right;
-  }
-
   .visual-editor ul,
   .visual-editor ol {
     @apply my-3 pl-6;
@@ -387,11 +342,6 @@ input {
     @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-sm text-ink-900;
   }
 
-  .visual-editor mark {
-    @apply rounded px-1;
-    background: #fef08a;
-  }
-
   .visual-editor pre {
     @apply relative my-4 overflow-x-auto rounded-md border border-neutral-300 bg-neutral-100 p-4 pt-12 text-ink-900;
   }
@@ -441,16 +391,6 @@ input {
 
   .visual-editor th {
     @apply bg-neutral-100 font-semibold;
-  }
-
-  .visual-editor th[data-align="center"],
-  .visual-editor td[data-align="center"] {
-    text-align: center;
-  }
-
-  .visual-editor th[data-align="right"],
-  .visual-editor td[data-align="right"] {
-    text-align: right;
   }
 
   .visual-editor hr {

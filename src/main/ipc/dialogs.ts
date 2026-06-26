@@ -1,13 +1,23 @@
-import { readFile } from "node:fs/promises";
+import { copyFile, mkdir } from "node:fs/promises";
 import path from "node:path";
+import { pathToFileURL } from "node:url";
 import { dialog } from "electron";
 import { ipcChannels, type SelectImageResult } from "../../shared/ipc";
+import {
+  resolveInsideWorkspace,
+  sanitizeFileName,
+  toWorkspaceRelativePath
+} from "../services/path-utils";
 import { registerIpcHandler } from "./register";
+import { assertActiveWorkspace, type ActiveWorkspaceState } from "./validation";
 
-export function registerDialogHandlers() {
+const workspaceImageAssetFolderName = "asset";
+
+export function registerDialogHandlers(activeWorkspace: ActiveWorkspaceState) {
   registerIpcHandler<SelectImageResult>(
     ipcChannels.dialogs.selectImage,
     async () => {
+      const workspaceRoot = assertActiveWorkspace(activeWorkspace);
       const selection = await dialog.showOpenDialog({
         title: "Select image",
         properties: ["openFile"],
@@ -23,45 +33,29 @@ export function registerDialogHandlers() {
         return {
           canceled: true,
           path: null,
-          dataUrl: null
+          assetPath: null,
+          displaySrc: null
         };
       }
 
       const selectedPath = selection.filePaths[0];
-      const imageBytes = await readFile(selectedPath);
-      const mimeType = getImageMimeType(selectedPath);
+      const assetDirectory = resolveInsideWorkspace(
+        workspaceRoot,
+        workspaceImageAssetFolderName
+      );
+      await mkdir(assetDirectory, { recursive: true });
+
+      const assetFileName = `${Date.now()}-${sanitizeFileName(path.basename(selectedPath))}`;
+      const assetPath = path.join(assetDirectory, assetFileName);
+      await copyFile(selectedPath, assetPath);
+      const relativeAssetPath = toWorkspaceRelativePath(workspaceRoot, assetPath);
 
       return {
         canceled: false,
         path: selectedPath,
-        dataUrl: `data:${mimeType};base64,${imageBytes.toString("base64")}`
+        assetPath: relativeAssetPath,
+        displaySrc: pathToFileURL(assetPath).toString()
       };
     }
   );
-}
-
-function getImageMimeType(filePath: string) {
-  const extension = path.extname(filePath).toLowerCase();
-
-  if (extension === ".jpg" || extension === ".jpeg") {
-    return "image/jpeg";
-  }
-
-  if (extension === ".gif") {
-    return "image/gif";
-  }
-
-  if (extension === ".webp") {
-    return "image/webp";
-  }
-
-  if (extension === ".svg") {
-    return "image/svg+xml";
-  }
-
-  if (extension === ".bmp") {
-    return "image/bmp";
-  }
-
-  return "image/png";
 }

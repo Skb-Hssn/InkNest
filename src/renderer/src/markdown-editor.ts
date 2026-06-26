@@ -1,5 +1,9 @@
 const blockSeparator = "\n\n";
 
+type MarkdownRenderOptions = {
+  workspacePath?: string | null;
+};
+
 export type MarkdownEditorCommand =
   | "heading-1"
   | "heading-2"
@@ -20,12 +24,6 @@ export type MarkdownEditorCommand =
   | "callout-success"
   | "inline-code"
   | "clear-format"
-  | "highlight"
-  | "text-color"
-  | "background-color"
-  | "align-left"
-  | "align-center"
-  | "align-right"
   | "code-block"
   | "divider"
   | "table"
@@ -33,9 +31,6 @@ export type MarkdownEditorCommand =
   | "table-delete-row"
   | "table-add-column"
   | "table-delete-column"
-  | "table-align-left"
-  | "table-align-center"
-  | "table-align-right"
   | "link"
   | "link-edit"
   | "link-remove"
@@ -50,14 +45,16 @@ export type MarkdownEditorCommandOptions = {
   url?: string;
   alt?: string;
   src?: string;
-  color?: string;
+  previewSrc?: string;
   language?: string;
   width?: string;
   equation?: string;
-  reset?: boolean;
 };
 
-export function markdownToHtml(markdown: string) {
+export function markdownToHtml(
+  markdown: string,
+  options: MarkdownRenderOptions = {}
+) {
   const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
   let index = 0;
@@ -67,13 +64,6 @@ export function markdownToHtml(markdown: string) {
     const trimmedLine = line.trim();
 
     if (!trimmedLine) {
-      index += 1;
-      continue;
-    }
-
-    const alignedHtmlBlock = htmlAlignedBlockToHtml(trimmedLine);
-    if (alignedHtmlBlock) {
-      blocks.push(alignedHtmlBlock);
       index += 1;
       continue;
     }
@@ -134,7 +124,9 @@ export function markdownToHtml(markdown: string) {
     const heading = trimmedLine.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const level = heading[1].length;
-      blocks.push(`<h${level}>${inlineMarkdownToHtml(heading[2])}</h${level}>`);
+      blocks.push(
+        `<h${level}>${inlineMarkdownToHtml(heading[2], options)}</h${level}>`
+      );
       index += 1;
       continue;
     }
@@ -153,7 +145,7 @@ export function markdownToHtml(markdown: string) {
         index += 1;
       }
 
-      blocks.push(blockquoteMarkdownToHtml(quoteLines));
+      blocks.push(blockquoteMarkdownToHtml(quoteLines, options));
       continue;
     }
 
@@ -165,7 +157,7 @@ export function markdownToHtml(markdown: string) {
         index += 1;
       }
 
-      blocks.push(tableMarkdownToHtml(tableLines));
+      blocks.push(tableMarkdownToHtml(tableLines, options));
       continue;
     }
 
@@ -177,7 +169,7 @@ export function markdownToHtml(markdown: string) {
         index += 1;
       }
 
-      blocks.push(listMarkdownToHtml(listLines));
+      blocks.push(listMarkdownToHtml(listLines, options));
       continue;
     }
 
@@ -188,7 +180,7 @@ export function markdownToHtml(markdown: string) {
       index += 1;
     }
 
-    blocks.push(`<p>${inlineMarkdownToHtml(paragraphLines.join(" "))}</p>`);
+    blocks.push(`<p>${inlineMarkdownToHtml(paragraphLines.join(" "), options)}</p>`);
   }
 
   return blocks.join("");
@@ -259,7 +251,7 @@ export function applyMarkdownEditorCommand(
   if (command.startsWith("callout-")) {
     const type = command.replace("callout-", "");
     insertHtmlAtSelection(
-      `<blockquote data-callout="${escapeAttribute(type)}"><p>[!${type.toUpperCase()}] Callout</p></blockquote>`
+      `<blockquote data-callout="${escapeAttribute(type)}"><p><br></p></blockquote>`
     );
     return;
   }
@@ -277,51 +269,6 @@ export function applyMarkdownEditorCommand(
 
   if (command === "clear-format") {
     removeFormattingAtSelection();
-    return;
-  }
-
-  if (command === "highlight") {
-    if (options.reset) {
-      removeInlineStyleAtSelection("background-color", "mark");
-      return;
-    }
-
-    applyInlineStyleAtSelection("background-color", options.color ?? "#fef08a", "mark");
-    return;
-  }
-
-  if (command === "text-color") {
-    if (options.reset) {
-      removeInlineStyleAtSelection("color");
-      return;
-    }
-
-    applyInlineStyleAtSelection("color", options.color ?? "#0f766e");
-    return;
-  }
-
-  if (command === "background-color") {
-    if (options.reset) {
-      removeInlineStyleAtSelection("background-color");
-      return;
-    }
-
-    applyInlineStyleAtSelection("background-color", options.color ?? "#dbeafe");
-    return;
-  }
-
-  if (command === "align-left") {
-    document.execCommand("justifyLeft");
-    return;
-  }
-
-  if (command === "align-center") {
-    document.execCommand("justifyCenter");
-    return;
-  }
-
-  if (command === "align-right") {
-    document.execCommand("justifyRight");
     return;
   }
 
@@ -371,21 +318,6 @@ export function applyMarkdownEditorCommand(
     return;
   }
 
-  if (command === "table-align-left") {
-    alignTableColumnAtSelection("left");
-    return;
-  }
-
-  if (command === "table-align-center") {
-    alignTableColumnAtSelection("center");
-    return;
-  }
-
-  if (command === "table-align-right") {
-    alignTableColumnAtSelection("right");
-    return;
-  }
-
   if (command === "link") {
     const url = options.url?.trim();
     const label = options.label?.trim() || getSelectedText() || "Link";
@@ -412,10 +344,11 @@ export function applyMarkdownEditorCommand(
   if (command === "image") {
     const src = options.src?.trim();
     const alt = options.alt?.trim() || "Image";
+    const previewSrc = options.previewSrc?.trim() || src;
 
     if (src) {
       insertHtmlAtSelection(
-        `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(alt)}">`
+        `<img src="${escapeAttribute(previewSrc)}" alt="${escapeAttribute(alt)}" data-markdown-src="${escapeAttribute(src)}">`
       );
     }
 
@@ -498,7 +431,7 @@ export function exitEditorBlockFromElement(element: Element | null | undefined) 
 
 export function exitInlineAtomAtSelection() {
   const element = getSelectionElement();
-  const inlineAtom = element?.closest("code,[data-math-display='inline'],mark,span[style]");
+  const inlineAtom = element?.closest("code,[data-math-display='inline']");
 
   if (!(inlineAtom instanceof HTMLElement) || inlineAtom.closest("pre")) {
     return false;
@@ -720,10 +653,7 @@ function blockNodeToMarkdown(node: Node): string {
   const tagName = node.tagName.toLowerCase();
 
   if (/^h[1-6]$/.test(tagName)) {
-    return blockWithAlignment(
-      node,
-      `${"#".repeat(Number(tagName[1]))} ${inlineNodeToMarkdown(node).trim()}`
-    );
+    return `${"#".repeat(Number(tagName[1]))} ${inlineNodeToMarkdown(node).trim()}`;
   }
 
   if (node.dataset.math && node.dataset.mathDisplay === "block") {
@@ -731,33 +661,17 @@ function blockNodeToMarkdown(node: Node): string {
   }
 
   if (tagName === "p") {
-    return blockWithAlignment(node, inlineNodeToMarkdown(node).trim());
+    return inlineNodeToMarkdown(node).trim();
   }
 
   if (tagName === "blockquote") {
     const calloutType = node.dataset.callout;
-    const quoteMarkdown = Array.from(node.childNodes)
-      .map((child) => blockNodeToMarkdown(child))
-      .join(blockSeparator)
-      .split("\n")
-      .map((line) => `> ${line}`.trimEnd())
-      .join("\n");
 
     if (calloutType && ["note", "warning", "info", "success"].includes(calloutType)) {
-      const calloutBody = quoteMarkdown
-        .split("\n")
-        .map((line, lineIndex) =>
-          lineIndex === 0
-            ? line.replace(/^>\s*\[!(NOTE|WARNING|INFO|SUCCESS)\]\s*/i, "> ")
-            : line
-        )
-        .filter((line) => line.trim() !== ">")
-        .join("\n");
-
-      return `> [!${calloutType.toUpperCase()}]\n${calloutBody}`;
+      return calloutElementToMarkdown(node, calloutType);
     }
 
-    return quoteMarkdown;
+    return quoteMarkdownLines(blockElementChildrenToMarkdown(node));
   }
 
   if (tagName === "ul" || tagName === "ol") {
@@ -772,10 +686,7 @@ function blockNodeToMarkdown(node: Node): string {
   }
 
   if (tagName === "pre") {
-    const code = node.querySelector("code");
-    const language = code?.getAttribute("data-language") ?? "";
-    const codeText = code?.textContent ?? node.textContent ?? "";
-    return `\`\`\`${language}\n${codeText.replace(/\n$/, "")}\n\`\`\``;
+    return codeBlockElementToMarkdown(node);
   }
 
   if (tagName === "table") {
@@ -787,12 +698,10 @@ function blockNodeToMarkdown(node: Node): string {
   }
 
   if (tagName === "div") {
-    const markdown = Array.from(node.childNodes)
+    return Array.from(node.childNodes)
       .map((child) => blockNodeToMarkdown(child))
       .filter(Boolean)
       .join(blockSeparator);
-
-    return blockWithAlignment(node, markdown, "div");
   }
 
   return inlineNodeToMarkdown(node).trim();
@@ -833,6 +742,35 @@ function listItemToMarkdown(item: HTMLElement, listTagName: string, index: numbe
   return nestedListMarkdown ? `${currentLine}\n${nestedListMarkdown}` : currentLine;
 }
 
+function blockElementChildrenToMarkdown(element: HTMLElement) {
+  return Array.from(element.childNodes)
+    .map((child) => blockNodeToMarkdown(child))
+    .join(blockSeparator)
+    .trim();
+}
+
+function calloutElementToMarkdown(element: HTMLElement, type: string) {
+  const marker = `> [!${type.toUpperCase()}]`;
+  const body = blockElementChildrenToMarkdown(element);
+
+  return body ? `${marker}\n${quoteMarkdownLines(body)}` : marker;
+}
+
+function quoteMarkdownLines(markdown: string) {
+  return markdown
+    .split("\n")
+    .map((line) => (line ? `> ${line}` : ">"))
+    .join("\n");
+}
+
+function codeBlockElementToMarkdown(element: HTMLElement) {
+  const code = element.querySelector("code");
+  const language = code?.getAttribute("data-language") ?? "";
+  const codeText = code?.textContent ?? "";
+
+  return `\`\`\`${language}\n${codeText.replace(/\n$/, "")}\n\`\`\``;
+}
+
 function inlineNodeToMarkdown(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? "";
@@ -846,6 +784,24 @@ function inlineNodeToMarkdown(node: Node): string {
 
   if (tagName === "br") {
     return "\n";
+  }
+
+  if (tagName === "pre") {
+    return codeBlockElementToMarkdown(node);
+  }
+
+  if (tagName === "table") {
+    return tableElementToMarkdown(node);
+  }
+
+  if (tagName === "blockquote") {
+    const calloutType = node.dataset.callout;
+
+    if (calloutType && ["note", "warning", "info", "success"].includes(calloutType)) {
+      return calloutElementToMarkdown(node, calloutType);
+    }
+
+    return quoteMarkdownLines(blockElementChildrenToMarkdown(node));
   }
 
   if (node.dataset.math) {
@@ -880,7 +836,7 @@ function inlineNodeToMarkdown(node: Node): string {
 
   if (tagName === "img") {
     const alt = node.getAttribute("alt") ?? "";
-    const src = node.getAttribute("src") ?? "";
+    const src = node.dataset.markdownSrc ?? node.getAttribute("src") ?? "";
     const width = node.getAttribute("width") ?? node.style.width.replace("px", "");
 
     return width
@@ -888,28 +844,7 @@ function inlineNodeToMarkdown(node: Node): string {
       : `![${alt}](${src})`;
   }
 
-  const childrenMarkdown = inlineChildrenToMarkdown(node);
-  const color = node.style.color || node.getAttribute("color") || "";
-  const backgroundColor = node.style.backgroundColor;
-
-  if (tagName === "mark") {
-    return backgroundColor
-      ? `<mark style="background-color: ${escapeAttribute(backgroundColor)}">${childrenMarkdown}</mark>`
-      : `<mark>${childrenMarkdown}</mark>`;
-  }
-
-  if (color || backgroundColor) {
-    const styles = [
-      color ? `color: ${escapeAttribute(color)}` : "",
-      backgroundColor
-        ? `background-color: ${escapeAttribute(backgroundColor)}`
-        : ""
-    ].filter(Boolean);
-
-    return `<span style="${styles.join("; ")}">${childrenMarkdown}</span>`;
-  }
-
-  return childrenMarkdown;
+  return inlineChildrenToMarkdown(node);
 }
 
 function inlineChildrenToMarkdown(element: HTMLElement) {
@@ -969,111 +904,6 @@ function insertTableAtSelection(html: string) {
   if (insertedNode instanceof HTMLTableElement) {
     placeCaretInside(insertedNode.querySelector("th,td") ?? insertedNode);
   }
-}
-
-function applyInlineStyleAtSelection(
-  property: "color" | "background-color",
-  value: string,
-  tagName = "span"
-) {
-  const selection = window.getSelection();
-
-  if (!selection || selection.rangeCount === 0) {
-    return;
-  }
-
-  const range = selection.getRangeAt(0);
-  const wrapper = document.createElement(tagName);
-  const selectedContent = range.extractContents();
-
-  wrapper.append(
-    selectedContent.childNodes.length > 0
-      ? selectedContent
-      : document.createTextNode("text")
-  );
-  wrapper.setAttribute("style", `${property}: ${value}`);
-  range.insertNode(wrapper);
-  range.selectNodeContents(wrapper);
-  selection.removeAllRanges();
-  selection.addRange(range);
-}
-
-function removeInlineStyleAtSelection(
-  property: "color" | "background-color",
-  preferredTagName?: "mark"
-) {
-  const selection = window.getSelection();
-
-  if (!selection || selection.rangeCount === 0) {
-    return;
-  }
-
-  const range = selection.getRangeAt(0);
-  const commonAncestor =
-    range.commonAncestorContainer instanceof HTMLElement
-      ? range.commonAncestorContainer
-      : range.commonAncestorContainer.parentElement;
-  const candidates = new Set<HTMLElement>();
-  const selectionElement = getSelectionElement();
-  const closestStyledElement = selectionElement?.closest(
-    preferredTagName === "mark" ? "mark" : "span[style],mark[style]"
-  );
-
-  if (closestStyledElement instanceof HTMLElement) {
-    candidates.add(closestStyledElement);
-  }
-
-  for (const ancestor of getStyledAncestorChain(selectionElement)) {
-    candidates.add(ancestor);
-  }
-
-  if (commonAncestor) {
-    if (commonAncestor instanceof HTMLElement && range.intersectsNode(commonAncestor)) {
-      candidates.add(commonAncestor);
-    }
-
-    for (const element of Array.from(commonAncestor.querySelectorAll("span[style],mark"))) {
-      if (range.intersectsNode(element)) {
-        candidates.add(element as HTMLElement);
-      }
-    }
-  }
-
-  for (const element of candidates) {
-    if (preferredTagName === "mark" && element.tagName.toLowerCase() !== "mark") {
-      continue;
-    }
-
-    element.style.removeProperty(property);
-
-    const tagName = element.tagName.toLowerCase();
-    const hasInlineStyle = Boolean(element.getAttribute("style"));
-    const shouldUnwrapMark =
-      tagName === "mark" &&
-      (preferredTagName === "mark" || property === "background-color" || !hasInlineStyle);
-
-    if (shouldUnwrapMark || (tagName === "span" && !hasInlineStyle)) {
-      unwrapElement(element);
-    }
-  }
-}
-
-function getStyledAncestorChain(element: Element | null | undefined) {
-  const ancestors: HTMLElement[] = [];
-  let currentElement = element?.parentElement;
-
-  while (currentElement && !currentElement.isContentEditable) {
-    if (
-      currentElement instanceof HTMLElement &&
-      currentElement.matches("span[style],mark[style]")
-    ) {
-      ancestors.push(currentElement);
-    }
-
-    currentElement = currentElement.parentElement;
-  }
-
-  return ancestors;
 }
 
 function unwrapElement(element: HTMLElement) {
@@ -1259,18 +1089,22 @@ function isVisiblyEmpty(element: HTMLElement) {
   return element.textContent?.replace(/\u200b/g, "").trim() === "";
 }
 
-function blockquoteMarkdownToHtml(quoteLines: string[]) {
+function blockquoteMarkdownToHtml(
+  quoteLines: string[],
+  options: MarkdownRenderOptions
+) {
   const callout = quoteLines[0]?.trim().match(/^\[!(NOTE|WARNING|INFO|SUCCESS)\]\s*(.*)$/i);
 
   if (!callout) {
-    return `<blockquote>${markdownToHtml(quoteLines.join("\n"))}</blockquote>`;
+    return `<blockquote>${markdownToHtml(quoteLines.join("\n"), options)}</blockquote>`;
   }
 
   const type = callout[1].toLowerCase();
-  const title = callout[2] || type;
-  const body = [title, ...quoteLines.slice(1)].join("\n");
+  const title = callout[2].trim();
+  const bodyLines = title ? [title, ...quoteLines.slice(1)] : quoteLines.slice(1);
+  const body = bodyLines.join("\n").trim();
 
-  return `<blockquote data-callout="${type}">${markdownToHtml(body)}</blockquote>`;
+  return `<blockquote data-callout="${type}">${body ? markdownToHtml(body, options) : "<p><br></p>"}</blockquote>`;
 }
 
 const codeBlockLanguages = [
@@ -1399,20 +1233,20 @@ function placeCaretInside(element: Element) {
   selection?.addRange(range);
 }
 
-function inlineMarkdownToHtml(markdown: string) {
+function inlineMarkdownToHtml(
+  markdown: string,
+  options: MarkdownRenderOptions = {}
+) {
   const tokens: string[] = [];
   let source = escapeHtml(markdown);
 
-  source = restoreLimitedInlineHtml(source, tokens);
-  source = restoreLimitedImageHtml(source, tokens);
+  source = restoreLimitedImageHtml(source, tokens, options);
   source = source.replace(/(?<!\$)\$([^$\n]+)\$(?!\$)/g, (_, equation) => {
     tokens.push(mathToHtml(String(equation), false));
     return `\u0000${tokens.length - 1}\u0000`;
   });
   source = source.replace(/!\[([^\]]*)\]\(([^)\s]+)\)/g, (_, alt, src) => {
-    tokens.push(
-      `<img src="${escapeAttribute(String(src))}" alt="${escapeAttribute(String(alt))}">`
-    );
+    tokens.push(imageToHtml(String(src), String(alt), undefined, options));
     return `\u0000${tokens.length - 1}\u0000`;
   });
   source = source.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
@@ -1427,64 +1261,58 @@ function inlineMarkdownToHtml(markdown: string) {
   return source.replace(/\u0000(\d+)\u0000/g, (_, tokenIndex) => tokens[Number(tokenIndex)]);
 }
 
-function restoreLimitedInlineHtml(source: string, _tokens: string[]) {
-  let nextSource = source;
-
-  nextSource = nextSource.replace(
-    /&lt;mark&gt;/g,
-    "<mark>"
-  );
-
-  nextSource = nextSource.replace(
-    /&lt;mark style=&quot;(background-color:\s*(?:#[\da-fA-F]{3,8}|rgb\([^)]+\));?)&quot;&gt;/g,
-    (_, style) => `<mark style="${sanitizeInlineColorStyle(String(style))}">`
-  );
-
-  nextSource = nextSource.replace(
-    /&lt;\/mark&gt;/g,
-    "</mark>"
-  );
-
-  nextSource = nextSource.replace(
-    /&lt;span style=&quot;((?:(?:color|background-color):\s*(?:#[\da-fA-F]{3,8}|rgb\([^)]+\));?\s*){1,2})&quot;&gt;/g,
-    (_, style) => `<span style="${sanitizeInlineColorStyle(String(style))}">`
-  );
-
-  nextSource = nextSource.replace(
-    /&lt;\/span&gt;/g,
-    "</span>"
-  );
-
-  return nextSource;
-}
-
-function sanitizeInlineColorStyle(style: string) {
-  return style
-    .split(";")
-    .map((declaration) => declaration.trim())
-    .filter((declaration) =>
-      /^(color|background-color):\s*(#[\da-fA-F]{3,8}|rgb\(\s*\d{1,3}\s*,\s*\d{1,3}\s*,\s*\d{1,3}\s*\))$/.test(
-        declaration
-      )
-    )
-    .map(escapeAttribute)
-    .join("; ");
-}
-
-function restoreLimitedImageHtml(source: string, tokens: string[]) {
+function restoreLimitedImageHtml(
+  source: string,
+  tokens: string[],
+  options: MarkdownRenderOptions
+) {
   return source.replace(
     /&lt;img src=&quot;([^"]+)&quot; alt=&quot;([^"]*)&quot; width=&quot;([\d.]+)&quot;&gt;/g,
     (_, src, alt, width) => {
       tokens.push(
-        `<img src="${escapeAttribute(String(src))}" alt="${escapeAttribute(
-          String(alt)
-        )}" width="${escapeAttribute(String(width))}" style="width: ${escapeAttribute(
-          String(width)
-        )}px; height: auto;">`
+        imageToHtml(String(src), String(alt), String(width), options)
       );
       return `\u0000${tokens.length - 1}\u0000`;
     }
   );
+}
+
+function imageToHtml(
+  markdownSrc: string,
+  alt: string,
+  width: string | undefined,
+  options: MarkdownRenderOptions
+) {
+  const displaySrc = resolveImageDisplaySrc(markdownSrc, options);
+  const widthAttributes = width
+    ? ` width="${escapeAttribute(width)}" style="width: ${escapeAttribute(width)}px; height: auto;"`
+    : "";
+
+  return `<img src="${escapeAttribute(displaySrc)}" alt="${escapeAttribute(alt)}" data-markdown-src="${escapeAttribute(markdownSrc)}"${widthAttributes}>`;
+}
+
+function resolveImageDisplaySrc(
+  src: string,
+  options: MarkdownRenderOptions
+) {
+  if (/^(?:data:|https?:|file:|blob:)/i.test(src) || src.startsWith("/")) {
+    return src;
+  }
+
+  if (!options.workspacePath) {
+    return src;
+  }
+
+  return `${workspacePathToFileUrl(options.workspacePath)}/${encodeURI(src)}`;
+}
+
+function workspacePathToFileUrl(workspacePath: string) {
+  const normalizedPath = workspacePath.replace(/\\/g, "/").replace(/\/+$/g, "");
+  const pathWithLeadingSlash = normalizedPath.startsWith("/")
+    ? normalizedPath
+    : `/${normalizedPath}`;
+
+  return `file://${encodeURI(pathWithLeadingSlash)}`;
 }
 
 function mathToHtml(equation: string, display: boolean) {
@@ -1620,35 +1448,6 @@ const mathSymbols: Record<string, string> = {
   emptyset: "∅"
 };
 
-function htmlAlignedBlockToHtml(markdown: string) {
-  const match = markdown.match(
-    /^<(p|h[1-6]|div) style="text-align: (left|center|right)">([\s\S]*)<\/\1>$/
-  );
-
-  if (!match) {
-    return null;
-  }
-
-  const [, tagName, textAlign, content] = match;
-  return `<${tagName} style="text-align: ${textAlign}">${inlineMarkdownToHtml(
-    content
-  )}</${tagName}>`;
-}
-
-function blockWithAlignment(
-  element: HTMLElement,
-  markdown: string,
-  fallbackTagName = element.tagName.toLowerCase()
-) {
-  const textAlign = element.style.textAlign;
-
-  if (!["left", "center", "right"].includes(textAlign)) {
-    return markdown;
-  }
-
-  return `<${fallbackTagName} style="text-align: ${textAlign}">${markdown}</${fallbackTagName}>`;
-}
-
 function isTableStart(lines: string[], index: number) {
   return (
     isTableLine(lines[index]) &&
@@ -1672,7 +1471,7 @@ type ListLine = {
   content: string;
 };
 
-function listMarkdownToHtml(lines: string[]) {
+function listMarkdownToHtml(lines: string[], options: MarkdownRenderOptions) {
   const parsedLines = lines.map(parseListLine).filter((line): line is ListLine => line !== null);
   const root = { indent: -1, html: "" };
   const stack: Array<{ indent: number; ordered: boolean; items: string[] }> = [];
@@ -1700,7 +1499,7 @@ function listMarkdownToHtml(lines: string[]) {
         : `<input type="checkbox"${line.checked ? " checked" : ""}> `;
     const taskAttribute = line.checked === null ? "" : ' data-task="true"';
     stack[stack.length - 1].items.push(
-      `<li${taskAttribute}>${checkbox}${inlineMarkdownToHtml(line.content)}</li>`
+      `<li${taskAttribute}>${checkbox}${inlineMarkdownToHtml(line.content, options)}</li>`
     );
   }
 
@@ -1750,18 +1549,17 @@ function parseListLine(line: string): ListLine | null {
   };
 }
 
-function tableMarkdownToHtml(lines: string[]) {
-  const alignments = splitTableCells(lines[1] ?? "").map(parseTableAlignment);
+function tableMarkdownToHtml(lines: string[], options: MarkdownRenderOptions) {
   const rows = lines
     .filter((_, index) => index !== 1)
     .map((line, rowIndex) => {
       const cells = splitTableCells(line);
       const cellTag = rowIndex === 0 ? "th" : "td";
       return `<tr>${cells
-        .map((cell, cellIndex) => {
-          const alignment = alignments[cellIndex] ?? "left";
-          return `<${cellTag} style="text-align: ${alignment}" data-align="${alignment}">${inlineMarkdownToHtml(cell.trim())}</${cellTag}>`;
-        })
+        .map(
+          (cell) =>
+            `<${cellTag}>${inlineMarkdownToHtml(cell.trim(), options)}</${cellTag}>`
+        )
         .join("")}</tr>`;
     });
 
@@ -1769,19 +1567,20 @@ function tableMarkdownToHtml(lines: string[]) {
 }
 
 function tableElementToMarkdown(table: HTMLElement) {
-  const rows = Array.from(table.querySelectorAll("tr"));
+  const rows = Array.from(table.rows);
+  const columnCount = Math.max(...rows.map((row) => row.cells.length), 0);
   const markdownRows = rows.map((row) =>
-    Array.from(row.children).map((cell) => inlineNodeToMarkdown(cell).trim())
+    Array.from({ length: columnCount }, (_, cellIndex) =>
+      tableCellToMarkdown(row.cells[cellIndex] ?? null)
+    )
   );
 
-  if (markdownRows.length === 0) {
+  if (markdownRows.length === 0 || columnCount === 0) {
     return "";
   }
 
   const header = markdownRows[0];
-  const separator = Array.from(rows[0].children).map((cell) =>
-    tableAlignmentSeparator((cell as HTMLElement).dataset.align || (cell as HTMLElement).style.textAlign)
-  );
+  const separator = header.map(() => "---");
   const body = markdownRows.slice(1);
 
   return [header, separator, ...body]
@@ -1789,30 +1588,18 @@ function tableElementToMarkdown(table: HTMLElement) {
     .join("\n");
 }
 
-function parseTableAlignment(separator: string) {
-  const trimmed = separator.trim();
-
-  if (trimmed.startsWith(":") && trimmed.endsWith(":")) {
-    return "center";
+function tableCellToMarkdown(cell: HTMLTableCellElement | null) {
+  if (!cell) {
+    return "";
   }
 
-  if (trimmed.endsWith(":")) {
-    return "right";
-  }
-
-  return "left";
+  return escapeTableCellMarkdown(inlineNodeToMarkdown(cell).trim());
 }
 
-function tableAlignmentSeparator(alignment: string | undefined) {
-  if (alignment === "center") {
-    return ":---:";
-  }
-
-  if (alignment === "right") {
-    return "---:";
-  }
-
-  return ":---";
+function escapeTableCellMarkdown(markdown: string) {
+  return markdown
+    .replace(/\n+/g, "<br>")
+    .replace(/(?<!\\)\|/g, "\\|");
 }
 
 function addTableRowAtSelection() {
@@ -1857,8 +1644,6 @@ function addTableColumnAtSelection() {
   for (const row of Array.from(table.rows)) {
     const sourceCell = row.cells[Math.min(cell.cellIndex, row.cells.length - 1)];
     const newCell = document.createElement(sourceCell.tagName.toLowerCase());
-    newCell.setAttribute("data-align", sourceCell.getAttribute("data-align") ?? "left");
-    newCell.style.textAlign = sourceCell.style.textAlign || "left";
     newCell.textContent = "";
     row.insertBefore(newCell, row.cells[insertIndex] ?? null);
   }
@@ -1884,35 +1669,37 @@ function deleteTableColumnAtSelection() {
   placeCaretInside(table.rows[cell.parentElement?.rowIndex ?? 0].cells[nextIndex]);
 }
 
-function alignTableColumnAtSelection(alignment: "left" | "center" | "right") {
-  const cell = getSelectionTableCellFromWindow();
-  const table = cell?.closest("table");
-
-  if (!cell || !table) {
-    return;
-  }
-
-  for (const row of Array.from(table.rows)) {
-    const targetCell = row.cells[cell.cellIndex];
-
-    if (targetCell) {
-      targetCell.dataset.align = alignment;
-      targetCell.style.textAlign = alignment;
-    }
-  }
-}
-
 function getSelectionTableCellFromWindow() {
   const selection = window.getSelection();
   return selection && selection.rangeCount > 0 ? getSelectionTableCell(selection) : null;
 }
 
 function splitTableCells(line: string) {
-  return line
-    .trim()
-    .replace(/^\|/, "")
-    .replace(/\|$/, "")
-    .split("|");
+  const cells: string[] = [];
+  let currentCell = "";
+  const trimmedLine = line.trim().replace(/^\|/, "").replace(/\|$/, "");
+
+  for (let index = 0; index < trimmedLine.length; index += 1) {
+    const character = trimmedLine[index];
+    const nextCharacter = trimmedLine[index + 1];
+
+    if (character === "\\" && nextCharacter === "|") {
+      currentCell += "|";
+      index += 1;
+      continue;
+    }
+
+    if (character === "|") {
+      cells.push(currentCell);
+      currentCell = "";
+      continue;
+    }
+
+    currentCell += character;
+  }
+
+  cells.push(currentCell);
+  return cells;
 }
 
 function escapeHtml(value: string) {

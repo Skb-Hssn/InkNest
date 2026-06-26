@@ -584,7 +584,7 @@ Phase 5 adds focused main-process services:
 ```text
 src/main/services/
   path-utils.ts       safe workspace path resolution and filename cleanup
-  folder-service.ts   workspace metadata, assets, trash, and folder scanning
+  folder-service.ts   workspace metadata, asset, trash, and folder scanning
   note-service.ts     Markdown note scanning, reading, and filename generation
 ```
 
@@ -597,7 +597,7 @@ and sanitizes filesystem names.
 
 - `.inknest/` stores app-owned workspace metadata.
 - `.inknest/trash/` is the app-level trash location for deleted notes.
-- `assets/` is the workspace asset convention for images and other local note
+- `asset/` is the workspace asset convention for images and other local note
   attachments.
 
 Folder scanning walks nested directories while skipping app-owned metadata and
@@ -636,7 +636,7 @@ Renderer asks for workspace file model
   -> window.inknest.workspace.scan()
   -> preload invokes workspace:scan
   -> main process asserts an active workspace
-  -> workspace service ensures .inknest, .inknest/trash, and assets/
+  -> workspace service ensures .inknest, .inknest/trash, and asset/
   -> folder service scans nested user folders
   -> note service scans nested Markdown notes
   -> renderer receives workspace-relative folders, notes, and metadata
@@ -645,7 +645,7 @@ Renderer asks for workspace file model
 ### Tests
 
 `tests/phase5.test.mjs` verifies the shared contract, preload scan method, safe
-path utility, metadata/assets/trash conventions, Markdown scanning and reading,
+path utility, metadata/asset/trash conventions, Markdown scanning and reading,
 duplicate filename helpers, and architecture documentation for this phase.
 
 `npm run check` remains the lightweight validation command.
@@ -789,7 +789,7 @@ folder before touching disk.
 - `deleteWorkspaceFolder` removes a folder after renderer confirmation.
 
 Folder moves reject unsafe targets, including the workspace root as a source,
-app-owned folders such as `.inknest/` and `assets/`, and moving a folder into
+app-owned folders such as `.inknest/` and `asset/`, and moving a folder into
 itself or one of its descendants.
 
 ### Renderer Behavior

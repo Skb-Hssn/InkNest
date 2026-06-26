@@ -14,9 +14,6 @@ import {
   useState
 } from "react";
 import {
-  AlignCenter,
-  AlignLeft,
-  AlignRight,
   AlertTriangle,
   BookOpenText,
   Bold,
@@ -42,7 +39,6 @@ import {
   Heading4,
   Heading5,
   Heading6,
-  Highlighter,
   Image,
   Italic,
   Link,
@@ -51,8 +47,6 @@ import {
   ListFilter,
   ListOrdered,
   Minus,
-  PaintBucket,
-  Palette,
   PanelLeft,
   PanelRightClose,
   Quote,
@@ -119,19 +113,12 @@ type ToolbarCommand = {
     | "blocks"
     | "lists"
     | "inline"
-    | "colors"
-    | "align"
     | "code"
     | "table"
     | "links"
     | "media"
     | "insert";
 };
-
-type ColorCommandId = Extract<
-  MarkdownEditorCommand,
-  "highlight" | "text-color" | "background-color"
->;
 
 type LinkDialogState = {
   text: string;
@@ -152,31 +139,6 @@ type LinkDialogDetails = {
     left: number;
     top: number;
   };
-};
-
-const commonColors = [
-  "#111827",
-  "#6b7280",
-  "#dc2626",
-  "#ea580c",
-  "#d97706",
-  "#16a34a",
-  "#0d9488",
-  "#2563eb",
-  "#4f46e5",
-  "#9333ea",
-  "#db2777",
-  "#fef08a",
-  "#dbeafe",
-  "#dcfce7",
-  "#fee2e2",
-  "#ffffff"
-];
-
-const defaultColorSelections: Record<ColorCommandId, string | null> = {
-  highlight: null,
-  "text-color": null,
-  "background-color": null
 };
 
 function tableActionIcon(baseIcon: ReactNode, badgeIcon: ReactNode) {
@@ -206,42 +168,33 @@ const deleteColumnIcon = tableActionIcon(
 );
 
 const toolbarPlaceholders: ToolbarCommand[] = [
+  { id: "bold", label: "B", icon: <Bold size={16} />, group: "inline" },
+  { id: "italic", label: "I", icon: <Italic size={16} />, group: "inline" },
+  { id: "strikethrough", label: "Strikethrough", icon: <Strikethrough size={16} />, group: "inline" },
+  { id: "inline-code", label: "Code", icon: <Code2 size={16} />, group: "inline" },
+  { id: "clear-format", label: "Clear formatting", icon: <Eraser size={16} />, group: "inline" },
   { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "headings" },
   { id: "heading-2", label: "H2", icon: <Heading2 size={16} />, group: "headings" },
   { id: "heading-3", label: "H3", icon: <Heading3 size={16} />, group: "headings" },
   { id: "heading-4", label: "H4", icon: <Heading4 size={16} />, group: "headings" },
   { id: "heading-5", label: "H5", icon: <Heading5 size={16} />, group: "headings" },
   { id: "heading-6", label: "H6", icon: <Heading6 size={16} />, group: "headings" },
-  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
-  { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
-  { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },
-  { id: "callout-info", label: "Info callout", icon: <BookOpenText size={16} />, group: "blocks" },
-  { id: "callout-success", label: "Success callout", icon: <Check size={16} />, group: "blocks" },
   { id: "unordered-list", label: "List", icon: <List size={16} />, group: "lists" },
   { id: "ordered-list", label: "Numbered list", icon: <ListOrdered size={16} />, group: "lists" },
   { id: "task-list", label: "Task list", icon: <ListChecks size={16} />, group: "lists" },
-  { id: "bold", label: "B", icon: <Bold size={16} />, group: "inline" },
-  { id: "italic", label: "I", icon: <Italic size={16} />, group: "inline" },
-  { id: "strikethrough", label: "Strikethrough", icon: <Strikethrough size={16} />, group: "inline" },
-  { id: "inline-code", label: "Code", icon: <Code2 size={16} />, group: "inline" },
-  { id: "clear-format", label: "Clear formatting", icon: <Eraser size={16} />, group: "inline" },
-  { id: "highlight", label: "Highlight", icon: <Highlighter size={16} />, group: "colors" },
-  { id: "text-color", label: "Text color", icon: <Palette size={16} />, group: "colors" },
-  { id: "background-color", label: "Background color", icon: <PaintBucket size={16} />, group: "colors" },
-  { id: "align-left", label: "Align left", icon: <AlignLeft size={16} />, group: "align" },
-  { id: "align-center", label: "Align center", icon: <AlignCenter size={16} />, group: "align" },
-  { id: "align-right", label: "Align right", icon: <AlignRight size={16} />, group: "align" },
+  { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
+  { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
   { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
   { id: "table", label: "Insert table", icon: <TableProperties size={16} />, group: "table" },
   { id: "table-add-row", label: "Add table row", icon: addRowIcon, group: "table" },
   { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
   { id: "table-add-column", label: "Add table column", icon: addColumnIcon, group: "table" },
   { id: "table-delete-column", label: "Delete table column", icon: deleteColumnIcon, group: "table" },
-  { id: "table-align-left", label: "Align table left", icon: <AlignLeft size={16} />, group: "table" },
-  { id: "table-align-center", label: "Align table center", icon: <AlignCenter size={16} />, group: "table" },
-  { id: "table-align-right", label: "Align table right", icon: <AlignRight size={16} />, group: "table" },
-  { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
-  { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
+  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },
+  { id: "callout-info", label: "Info callout", icon: <BookOpenText size={16} />, group: "blocks" },
+  { id: "callout-success", label: "Success callout", icon: <Check size={16} />, group: "blocks" },
   { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
 ];
 
@@ -263,29 +216,6 @@ function getToolbarGroups(commands: ToolbarCommand[]) {
     },
     []
   );
-}
-
-function isColorCommand(commandId: MarkdownEditorCommand): commandId is ColorCommandId {
-  return (
-    commandId === "highlight" ||
-    commandId === "text-color" ||
-    commandId === "background-color"
-  );
-}
-
-function getReadableTextColor(hexColor: string) {
-  const normalizedColor = hexColor.replace("#", "");
-
-  if (normalizedColor.length !== 6) {
-    return "#111827";
-  }
-
-  const red = Number.parseInt(normalizedColor.slice(0, 2), 16);
-  const green = Number.parseInt(normalizedColor.slice(2, 4), 16);
-  const blue = Number.parseInt(normalizedColor.slice(4, 6), 16);
-  const brightness = (red * 299 + green * 587 + blue * 114) / 1000;
-
-  return brightness > 145 ? "#111827" : "#ffffff";
 }
 
 function getViewportPopoverPosition(left: number, top: number) {
@@ -326,9 +256,6 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
-  const [activeColorCommand, setActiveColorCommand] = useState<ColorCommandId | null>(null);
-  const [colorPopoverPosition, setColorPopoverPosition] = useState({ left: 16, top: 44 });
-  const [colorSelections, setColorSelections] = useState(defaultColorSelections);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
@@ -492,7 +419,6 @@ export function App() {
     setEditorMarkdown("");
     setLastSavedMarkdown("");
     setActiveToolbarCommands(new Set());
-    setActiveColorCommand(null);
   }
 
   async function openNote(notePath: string) {
@@ -546,27 +472,6 @@ export function App() {
       return;
     }
 
-    if (isColorCommand(command.id)) {
-      const button = event?.currentTarget;
-      const toolbarShell = button?.closest(".toolbar-shell");
-
-      if (button && toolbarShell) {
-        const buttonRect = button.getBoundingClientRect();
-        const shellRect = toolbarShell.getBoundingClientRect();
-        setColorPopoverPosition({
-          left: buttonRect.left - shellRect.left,
-          top: buttonRect.bottom - shellRect.top + 6
-        });
-      }
-
-      setActiveColorCommand((currentCommand) =>
-        currentCommand === command.id ? null : command.id
-      );
-      return;
-    }
-
-    setActiveColorCommand(null);
-
     if (command.id === "link") {
       const buttonRect = event?.currentTarget.getBoundingClientRect();
       const linkDetails = editorHandleRef.current?.getLinkDetails();
@@ -603,7 +508,8 @@ export function App() {
         return;
       }
 
-      options.src = result.data.dataUrl;
+      options.src = result.data.assetPath;
+      options.previewSrc = result.data.displaySrc;
       options.alt = fileNameFromPath(result.data.path);
     }
 
@@ -622,7 +528,6 @@ export function App() {
   }
 
   function openLinkDialog(details: LinkDialogDetails) {
-    setActiveColorCommand(null);
     setLinkDialog({
       text: details.text,
       url: details.url,
@@ -665,51 +570,6 @@ export function App() {
     editorHandleRef.current?.runCommand("link-remove");
     setStatusMessage("Removed link");
     setLinkDialog(null);
-  }
-
-  function applyPaletteColor(color: string) {
-    if (!activeColorCommand) {
-      return;
-    }
-
-    editorHandleRef.current?.runCommand(activeColorCommand, { color });
-    setColorSelections((currentSelections) => ({
-      ...currentSelections,
-      [activeColorCommand]: color
-    }));
-    setActiveColorCommand(null);
-    setStatusMessage(`Applied ${activeColorCommand.replace(/-/g, " ")}`);
-  }
-
-  function resetPaletteColor() {
-    if (!activeColorCommand) {
-      return;
-    }
-
-    editorHandleRef.current?.runCommand(activeColorCommand, { reset: true });
-    setColorSelections((currentSelections) => ({
-      ...currentSelections,
-      [activeColorCommand]: defaultColorSelections[activeColorCommand]
-    }));
-    setActiveColorCommand(null);
-    setStatusMessage(`Reset ${activeColorCommand.replace(/-/g, " ")}`);
-  }
-
-  function getToolbarButtonStyle(commandId: MarkdownEditorCommand): CSSProperties | undefined {
-    if (!isColorCommand(commandId)) {
-      return undefined;
-    }
-
-    const color = colorSelections[commandId];
-
-    if (!color) {
-      return undefined;
-    }
-
-    return {
-      "--toolbar-command-color": color,
-      "--toolbar-command-text-color": getReadableTextColor(color)
-    } as CSSProperties;
   }
 
   async function createNote() {
@@ -1381,10 +1241,7 @@ export function App() {
                   aria-label={`${group.name} tools`}
                 >
                   {group.commands.map((command) => {
-                    const isActive =
-                      activeToolbarCommands.has(command.id) ||
-                      activeColorCommand === command.id;
-                    const isSelectedColorTool = isColorCommand(command.id) && isActive;
+                    const isActive = activeToolbarCommands.has(command.id);
 
                     return (
                       <button
@@ -1392,8 +1249,7 @@ export function App() {
                         type="button"
                         className={`toolbar-button ${
                           isActive ? "toolbar-button-active" : ""
-                        } ${isSelectedColorTool ? "toolbar-button-color-selected" : ""}`}
-                        style={getToolbarButtonStyle(command.id)}
+                        }`}
                         aria-label={command.label}
                         title={command.label}
                         onMouseDown={(event) => event.preventDefault()}
@@ -1407,42 +1263,6 @@ export function App() {
                 </div>
               ))}
             </div>
-
-            {activeColorCommand ? (
-              <div
-                className="toolbar-popover color-palette"
-                style={{
-                  "--toolbar-popover-left": `${colorPopoverPosition.left}px`,
-                  "--toolbar-popover-top": `${colorPopoverPosition.top}px`
-                } as CSSProperties}
-                aria-label={`${activeColorCommand.replace(/-/g, " ")} palette`}
-              >
-                <div className="color-swatch-grid">
-                  {commonColors.map((color) => (
-                    <button
-                      key={color}
-                      type="button"
-                      className="color-swatch"
-                      style={{ "--swatch-color": color } as CSSProperties}
-                      aria-label={color}
-                      title={color}
-                      onMouseDown={(event) => event.preventDefault()}
-                      onClick={() => applyPaletteColor(color)}
-                      disabled={!selectedNoteContent || isBusy}
-                    />
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className="color-reset-button"
-                  onMouseDown={(event) => event.preventDefault()}
-                  onClick={resetPaletteColor}
-                  disabled={!selectedNoteContent || isBusy}
-                >
-                  Reset
-                </button>
-              </div>
-            ) : null}
           </div>
 
           {linkDialog ? (
@@ -1518,6 +1338,7 @@ export function App() {
                 ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
+                workspacePath={workspace.path}
                 disabled={isBusy}
                 onChange={(nextMarkdown) => {
                   setEditorMarkdown(nextMarkdown);
@@ -1556,6 +1377,7 @@ export function App() {
 
 type VisualMarkdownEditorProps = {
   markdown: string;
+  workspacePath: string | null;
   disabled: boolean;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
@@ -1578,7 +1400,14 @@ const VisualMarkdownEditor = forwardRef<
   VisualMarkdownEditorHandle,
   VisualMarkdownEditorProps
 >(function VisualMarkdownEditor(
-  { markdown, disabled, onChange, onSelectionFormatChange, onLinkDialogRequest },
+  {
+    markdown,
+    workspacePath,
+    disabled,
+    onChange,
+    onSelectionFormatChange,
+    onLinkDialogRequest
+  },
   ref
 ) {
   const editorRef = useRef<HTMLDivElement | null>(null);
@@ -1590,9 +1419,11 @@ const VisualMarkdownEditor = forwardRef<
       return;
     }
 
-    editorRef.current.innerHTML = markdownToHtml(markdown);
+    editorRef.current.innerHTML = markdownToHtml(markdown, {
+      workspacePath
+    });
     lastRenderedMarkdown.current = markdown;
-  }, [markdown]);
+  }, [markdown, workspacePath]);
 
   useEffect(() => {
     function handleSelectionChange() {
@@ -1794,34 +1625,6 @@ const VisualMarkdownEditor = forwardRef<
       activeCommands.add(
         mathElement.dataset.mathDisplay === "block" ? "block-math" : "inline-math"
       );
-    }
-
-    const mark = element.closest("mark");
-    if (mark) {
-      activeCommands.add("highlight");
-    }
-
-    const styledElement = element.closest("span[style],mark[style]") as HTMLElement | null;
-    if (styledElement?.style.color) {
-      activeCommands.add("text-color");
-    }
-
-    if (styledElement?.style.backgroundColor) {
-      activeCommands.add("background-color");
-    }
-
-    const alignedElement = element.closest(
-      "[style*='text-align']"
-    ) as HTMLElement | null;
-    const textAlign = alignedElement?.style.textAlign;
-    if (textAlign === "left") {
-      activeCommands.add("align-left");
-    }
-    if (textAlign === "center") {
-      activeCommands.add("align-center");
-    }
-    if (textAlign === "right") {
-      activeCommands.add("align-right");
     }
 
     return activeCommands;
@@ -2036,14 +1839,38 @@ const VisualMarkdownEditor = forwardRef<
     rememberEditorSelection();
   }
 
+  async function copyTextToClipboard(text: string) {
+    try {
+      await navigator.clipboard?.writeText(text);
+
+      if (navigator.clipboard) {
+        return;
+      }
+    } catch {
+      // Fall back for Electron or browser contexts where async clipboard is unavailable.
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
   function handleClick(event: MouseEvent<HTMLDivElement>) {
     const target = event.target;
+    const codeCopyButton =
+      target instanceof HTMLElement ? target.closest("[data-code-copy='true']") : null;
 
-    if (target instanceof HTMLButtonElement && target.dataset.codeCopy === "true") {
-      const code = target.closest("pre")?.querySelector("code")?.textContent ?? "";
+    if (codeCopyButton instanceof HTMLButtonElement) {
+      const code = codeCopyButton.closest("pre")?.querySelector("code")?.textContent ?? "";
 
       event.preventDefault();
-      void navigator.clipboard?.writeText(code);
+      void copyTextToClipboard(code);
       return;
     }
 

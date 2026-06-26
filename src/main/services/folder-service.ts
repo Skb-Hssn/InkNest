@@ -10,7 +10,7 @@ import {
 } from "./path-utils";
 
 export const workspaceMetadataFolderName = ".inknest";
-export const workspaceAssetsFolderName = "assets";
+export const workspaceAssetsFolderName = "asset";
 export const workspaceTrashFolderName = "trash";
 
 const skippedFolderNames = new Set([

@@ -108,12 +108,14 @@ export type SelectImageResult =
   | {
       canceled: true;
       path: null;
-      dataUrl: null;
+      assetPath: null;
+      displaySrc: null;
     }
   | {
       canceled: false;
       path: string;
-      dataUrl: string;
+      assetPath: string;
+      displaySrc: string;
     };
 
 export type CreateNotePayload = {

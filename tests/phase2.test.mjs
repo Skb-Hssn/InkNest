@@ -92,8 +92,10 @@ test("phase 2 preload only invokes approved channels", async () => {
   assert.doesNotMatch(preloadSource, /exposeInMainWorld\("[^"]*ipc/i);
   assert.doesNotMatch(preloadSource, /shell\.openExternal/);
   assert.match(dialogsSource, /dialog\.showOpenDialog/);
-  assert.match(dialogsSource, /readFile\(selectedPath\)/);
-  assert.match(dialogsSource, /dataUrl:\s*`data:\$\{mimeType\};base64/);
+  assert.match(dialogsSource, /workspaceImageAssetFolderName = "asset"/);
+  assert.match(dialogsSource, /copyFile\(selectedPath,\s*assetPath\)/);
+  assert.match(dialogsSource, /assetPath:\s*relativeAssetPath/);
+  assert.match(dialogsSource, /displaySrc:\s*pathToFileURL\(assetPath\)\.toString\(\)/);
   assert.match(dialogsSource, /extensions:\s*\["png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"\]/);
 });
 
