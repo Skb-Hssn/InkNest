@@ -18,7 +18,7 @@ function assertIncludesAll(source, expectedValues) {
 test("phase 3 app info reports the static layout milestone", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
-  assert.match(appHandlerSource, /phase-5-workspace-file-model/);
+  assert.match(appHandlerSource, /phase-6-note-crud/);
 });
 
 test("phase 3 renderer defines the permanent three-column app layout", async () => {
@@ -28,9 +28,9 @@ test("phase 3 renderer defines the permanent three-column app layout", async () 
     "grid-rows-[56px_minmax(0,1fr)_34px]",
     "grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]",
     "workspacePath",
-    "folderPlaceholders",
+    "rootFolder",
     "toolbarPlaceholders",
-    "NotePlaceholder",
+    "NoteRow",
     "EmptyState"
   ]);
 });
@@ -60,12 +60,9 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "No workspace selected",
     "No search results",
     "Choose a local Markdown folder to begin.",
-    "Search results will appear here after a workspace is indexed.",
-    "Folder tree placeholder",
-    "Folder tree preview",
-    "Inbox",
-    "Projects",
-    "Archive"
+    "Search arrives in a later phase.",
+    "Folder tree",
+    "Workspace root"
   ]);
 });
 
@@ -74,17 +71,13 @@ test("phase 3 notes sidebar contains note-list controls and placeholders", async
 
   assertIncludesAll(appSource, [
     "Notes",
-    "No folder selected",
     "Collapse notes list",
     "Sort notes",
-    "Select a folder to list its Markdown notes.",
-    "Note list placeholder",
-    "Note list preview",
+    "No notes here",
+    "Create a note in this folder to start writing.",
     "Untitled note",
-    "Meeting notes",
-    "Reading list",
-    "Preview text will appear after notes are scanned.",
-    "Markdown"
+    "Trash",
+    "Trash is empty."
   ]);
 
   assert.match(appSource, /PanelRightClose/);
@@ -103,22 +96,27 @@ test("phase 3 editor area contains file, toolbar, note, and status placeholders"
     "List",
     "Link",
     "Image",
-    "More editor actions",
+    "Note title",
+    "event.key === \"Enter\"",
+    "Duplicate",
+    "Move",
+    "Delete",
     "No note selected",
-    "Open or create a Markdown note to edit formatted content here.",
+    "Open or create a Markdown note to inspect its saved content here.",
     "Open a local Markdown folder to begin",
-    "Saved - 0 words - 0 characters"
+    "Saved - {wordCount} words - {characterCount} characters"
   ]);
 });
 
-test("phase 3 renderer stays static and uses the preload boundary only", async () => {
+test("phase 3 renderer uses the preload boundary only", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
   const sharedIpcSource = await readText("src/shared/ipc.ts");
 
   assert.match(appSource, /window\.inknest\.app\.getInfo\(\)/);
   assert.match(appSource, /window\.inknest\.workspace\.getActive\(\)/);
+  assert.match(appSource, /window\.inknest\.notes\.read/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
-  assert.doesNotMatch(appSource, /window\.inknest\.(notes|settings|links|dialogs|export)\./);
+  assert.doesNotMatch(appSource, /window\.inknest\.(settings|links|dialogs|export)\./);
   assert.doesNotMatch(appSource, /ipcRenderer|shell\.openExternal/);
   assert.doesNotMatch(sharedIpcSource, /phase-3/);
 });
@@ -152,7 +150,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "note list column",
     "editor area",
     "status bar",
-    "phase-5-workspace-file-model",
+    "phase-6-note-crud",
     "tests/phase3.test.mjs"
   ]);
 });

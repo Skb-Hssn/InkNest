@@ -85,7 +85,7 @@ test("renderer starts with an app workspace shell, not a landing page", async ()
   assert.match(appSource, /Folders/);
   assert.match(appSource, /Notes/);
   assert.match(appSource, /Untitled note/);
-  assert.match(appSource, /0 words/);
+  assert.match(appSource, /wordCount/);
   assert.doesNotMatch(appSource, /hero/i);
 });
 

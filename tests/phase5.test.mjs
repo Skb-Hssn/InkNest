@@ -66,7 +66,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-5-workspace-file-model",
+    "phase-6-note-crud",
     "FolderSummary",
     "WorkspaceMetadata",
     "WorkspaceFileModel",
@@ -75,7 +75,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   ]);
   assert.match(sharedPreload, /scan:\s*\(\)\s*=>\s*Promise<IpcResult<WorkspaceFileModel>>/);
   assert.match(preloadSource, /ipcChannels\.workspace\.scan/);
-  assert.match(appHandlerSource, /phase-5-workspace-file-model/);
+  assert.match(appHandlerSource, /phase-6-note-crud/);
 });
 
 test("phase 5 path utilities prevent traversal and sanitize filenames", async () => {
@@ -104,6 +104,8 @@ test("phase 5 folder service creates metadata, assets, and trash conventions", a
     'workspaceTrashFolderName = "trash"',
     "ensureWorkspaceStructure",
     "scanWorkspaceFolders",
+    "createWorkspaceFolder",
+    "createAvailableFolderName",
     "metadataPath",
     "assetsPath",
     "trashPath",
@@ -123,9 +125,9 @@ test("phase 5 note service scans and reads markdown safely", async () => {
     "createAvailableMarkdownFileName",
     "extractNoteTitle",
     "folderPath",
-    'readFile(entryPath, "utf8")',
+    "createNoteSummary",
     'readFile(resolvedPath, "utf8")',
-    "Only Markdown files can be read as notes"
+    "assertMarkdownFile"
   ]);
   assert.match(noteServiceSource, /path\.extname\(entry\.name\)\.toLowerCase\(\)\s*!==\s*markdownExtension/);
   assert.match(noteServiceSource, /candidateName = `\$\{baseName\} \$\{counter\}\$\{markdownExtension\}`/);
@@ -195,8 +197,22 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
     const { scanWorkspaceFileModel } = await harness.requireService(
       "src/main/services/workspace-service.js"
     );
+    const folderService = await harness.requireService(
+      "src/main/services/folder-service.js"
+    );
     const { readMarkdownNote } = await harness.requireService(
       "src/main/services/note-service.js"
+    );
+
+    const createdFolder = await folderService.createWorkspaceFolder(
+      workspaceRoot,
+      ".",
+      "Projects"
+    );
+    const nestedFolder = await folderService.createWorkspaceFolder(
+      workspaceRoot,
+      "Projects 2",
+      "Nested"
     );
 
     const fileModel = await scanWorkspaceFileModel(workspaceRoot, {
@@ -214,8 +230,16 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
     assert.equal(existsSync(path.join(workspaceRoot, "assets")), true);
     assert.deepEqual(
       fileModel.folders.map((folder) => folder.path),
-      ["Projects", "Projects/Nested"]
+      ["Projects", "Projects 2", "Projects 2/Nested", "Projects/Nested"]
     );
+    assert.deepEqual(createdFolder, {
+      name: "Projects 2",
+      path: "Projects 2"
+    });
+    assert.deepEqual(nestedFolder, {
+      name: "Nested",
+      path: "Projects 2/Nested"
+    });
     assert.deepEqual(
       fileModel.notes.map((note) => [note.title, note.path, note.folderPath]),
       [

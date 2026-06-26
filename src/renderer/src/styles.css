@@ -35,12 +35,20 @@ input {
     @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-neutral-600 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
+  .icon-button.danger {
+    @apply text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700;
+  }
+
   .command-button {
     @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-ink-700 px-3 text-sm font-medium text-white transition hover:bg-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
   .secondary-button {
     @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-white px-3 text-sm font-medium text-ink-900 transition hover:border-ink-500/30 hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
+  .secondary-button.danger {
+    @apply border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50;
   }
 
   .workspace-button {
@@ -56,7 +64,23 @@ input {
   }
 
   .tree-row {
-    @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-neutral-500 opacity-75;
+    @apply grid h-8 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-2 text-sm text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900;
+  }
+
+  .tree-row-active {
+    @apply bg-ink-50 font-medium text-ink-900;
+  }
+
+  .tree-open-area {
+    @apply flex min-w-0 items-center gap-2 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60;
+  }
+
+  .folder-actions {
+    @apply flex items-center gap-1;
+  }
+
+  .folder-action-button {
+    @apply h-6 w-6 bg-white/80;
   }
 
   .recent-workspace-row {
@@ -64,7 +88,31 @@ input {
   }
 
   .note-row {
-    @apply block w-full rounded-md border border-ink-100 bg-white px-3 py-3 text-left text-sm text-neutral-500 opacity-75;
+    @apply relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-ink-100 bg-white px-3 py-3 text-sm text-neutral-700 transition hover:border-ink-500/30 hover:bg-ink-50 focus-within:border-ink-500/30 focus-within:bg-ink-50 focus-within:ring-2 focus-within:ring-ink-500/40;
+  }
+
+  .note-row-active {
+    @apply border-ink-500/40 bg-ink-50 text-ink-900;
+  }
+
+  .note-open-area {
+    @apply min-w-0 text-left outline-none;
+  }
+
+  .note-actions {
+    @apply pointer-events-none relative z-10 flex items-center gap-1 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100;
+  }
+
+  .note-action-button {
+    @apply h-7 w-7 bg-white/90 shadow-sm;
+  }
+
+  .move-menu {
+    @apply absolute right-0 top-8 z-20 w-44 rounded-md border border-ink-100 bg-white p-1 shadow-lg;
+  }
+
+  .move-menu-item {
+    @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-700 transition hover:bg-ink-50 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
   .toolbar-button {
@@ -73,5 +121,21 @@ input {
 
   .status-pill {
     @apply inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-ink-100 bg-ink-50 px-2 text-xs font-medium text-ink-700;
+  }
+
+  .note-title-input {
+    @apply block h-7 w-full min-w-0 rounded-md border border-transparent bg-transparent px-2 text-sm font-semibold text-ink-900 outline-none transition hover:border-ink-100 hover:bg-ink-50 focus:border-ink-500/40 focus:bg-white focus:ring-2 focus:ring-ink-500/20 disabled:opacity-60;
+  }
+
+  .trash-row {
+    @apply grid grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1 rounded-md border border-ink-100 bg-white p-2;
+  }
+
+  .note-preview {
+    @apply m-0 whitespace-pre-wrap break-words rounded-md border border-ink-100 bg-ink-50 p-5 font-mono text-sm leading-7 text-ink-900;
+  }
+
+  button:disabled {
+    @apply cursor-not-allowed opacity-50;
   }
 }

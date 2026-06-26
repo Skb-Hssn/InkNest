@@ -104,7 +104,7 @@ test("phase 4 architecture document describes workspace selection and restore", 
     "workspace:select",
     "settings.json",
     "recentWorkspaces",
-    "phase-5-workspace-file-model"
+    "phase-6-note-crud"
   ]);
 });
 
