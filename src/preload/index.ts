@@ -19,6 +19,7 @@ const inknestApi: InkNestApi = {
     rename: (payload) => ipcRenderer.invoke(ipcChannels.notes.rename, payload),
     duplicate: (payload) => ipcRenderer.invoke(ipcChannels.notes.duplicate, payload),
     move: (payload) => ipcRenderer.invoke(ipcChannels.notes.move, payload),
+    save: (payload) => ipcRenderer.invoke(ipcChannels.notes.save, payload),
     delete: (payload) => ipcRenderer.invoke(ipcChannels.notes.delete, payload),
     listTrash: () => ipcRenderer.invoke(ipcChannels.notes.listTrash),
     restore: (payload) => ipcRenderer.invoke(ipcChannels.notes.restore, payload),

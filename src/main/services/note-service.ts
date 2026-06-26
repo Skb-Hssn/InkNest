@@ -164,6 +164,25 @@ export async function moveMarkdownNote(
   return createNoteSummary(workspaceRoot, targetPath);
 }
 
+export async function saveMarkdownNote(
+  workspaceRoot: string,
+  notePath: string,
+  markdown: string
+): Promise<NoteContent> {
+  if (typeof markdown !== "string") {
+    throw invalidPayload("Markdown content must be a string.");
+  }
+
+  const resolvedPath = resolveMarkdownNotePath(workspaceRoot, notePath, "save");
+
+  await writeFile(resolvedPath, markdown, { encoding: "utf8" });
+
+  return {
+    path: toWorkspaceRelativePath(workspaceRoot, resolvedPath),
+    markdown
+  };
+}
+
 export async function moveMarkdownNoteToTrash(
   workspaceRoot: string,
   notePath: string

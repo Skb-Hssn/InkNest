@@ -1,11 +1,10 @@
 # ARCH.md - InkNest Architecture
 
-This document describes the architecture established by Phase 0, Phase 1,
-Phase 2, Phase 3, Phase 4, Phase 5, Phase 6, and Phase 7 of `PLAN.md`. It covers the repository baseline,
-the first running app shell, the secure Electron boundary, the static
-application layout, the workspace selection flow, and the workspace file model
-plus note and folder organization behavior that future search and editor
-behavior will build on.
+This document describes the architecture established by Phase 0 through Phase 8
+of `PLAN.md`. It covers the repository baseline, the first running app shell,
+the secure Electron boundary, the static application layout, the workspace
+selection flow, the workspace file model, note and folder organization, and the
+visual Markdown editor that later toolbar and autosave behavior will build on.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -341,7 +340,7 @@ Renderer asks for app info
   -> preload invokes ipcChannels.app.getInfo
   -> main-process app handler returns AppInfo
   -> registerIpcHandler wraps it as { ok: true, data }
-  -> renderer displays phase-7-folder-organization
+  -> renderer displays phase-8-visual-markdown-editor
 ```
 
 Invalid requests follow the same path, but validators throw safe request errors
@@ -428,7 +427,7 @@ App starts
   -> React renderer initializes static placeholders
   -> renderer asks window.inknest.app.getInfo()
   -> preload invokes ipcChannels.app.getInfo
-  -> main-process handler returns phase-7-folder-organization
+  -> main-process handler returns phase-8-visual-markdown-editor
   -> status bar displays the current phase marker
 ```
 
@@ -448,7 +447,7 @@ Phase 4 makes the workspace switcher real while keeping one active workspace at
 a time. The renderer still has no direct filesystem access; it asks the preload
 bridge for workspace actions and the main process owns native dialogs,
 persistence, and path checks. The app info milestone is now
-`phase-7-folder-organization`.
+`phase-8-visual-markdown-editor`.
 
 ### Workspace Contract
 
@@ -558,7 +557,7 @@ the Electron main process. The renderer still does not touch the filesystem
 directly; it asks `window.inknest.workspace.scan()`, `window.inknest.notes.list()`,
 or `window.inknest.notes.read(path)` through the preload bridge.
 
-The app info milestone is now `phase-7-folder-organization`.
+The app info milestone is now `phase-8-visual-markdown-editor`.
 
 ### Workspace File Contract
 
@@ -831,7 +830,91 @@ workspace boundary, file model, and note CRUD behavior.
 
 `npm run check` remains the lightweight validation command.
 
-## Architecture Direction After Phase 7
+## Phase 8 Architecture: Visual Markdown Editor
+
+Phase 8 turns the editor area from a read-only Markdown inspection surface into
+the primary writing surface. The renderer owns DOM editing and Markdown
+round-tripping, while the main process still owns the actual filesystem write.
+
+### Note Save Contract
+
+The shared IPC contract now includes `SaveNotePayload`:
+
+```ts
+type SaveNotePayload = {
+  path: string;
+  markdown: string;
+};
+```
+
+The preload note surface exposes:
+
+```ts
+window.inknest.notes.save(payload);
+```
+
+The `notes:save` channel accepts a workspace-relative Markdown path and the
+next Markdown string. The main process validates the active workspace, rejects
+paths outside the workspace, and writes only `.md` files.
+
+### Main-Process Save Operation
+
+`src/main/services/note-service.ts` now includes `saveMarkdownNote`. It resolves
+the note path with the same workspace boundary as read, rename, move, delete,
+and restore operations, writes UTF-8 Markdown, and returns the saved
+`NoteContent` envelope.
+
+Phase 10 will replace this direct write with debounced autosave and a safer
+temporary-file write flow. Phase 8 intentionally keeps saving manual so the
+visual editor can be validated before autosave behavior is layered on.
+
+### Renderer Editor Model
+
+The editor implementation is split between:
+
+- `src/renderer/src/App.tsx` for selected-note state, dirty state, counts,
+  manual save, and the `VisualMarkdownEditor` component.
+- `src/renderer/src/markdown-editor.ts` for Markdown-to-DOM rendering and
+  DOM-to-Markdown serialization helpers.
+- `src/renderer/src/styles.css` for readable editable styles covering
+  headings, paragraphs, lists, task lists, blockquotes, inline code, code
+  blocks, tables, horizontal rules, links, and images.
+
+The editor uses a native `contenteditable` surface, so browser undo and redo
+remain available during normal typing. Input changes are serialized back to
+Markdown with `editorDomToMarkdown`, and opening a note renders saved Markdown
+with `markdownToHtml`.
+
+Paste handling inserts plain text at the current selection. This keeps normal
+paste behavior predictable and avoids importing arbitrary HTML into the saved
+Markdown.
+
+### Phase 8 Data Flow
+
+```text
+User opens a note
+  -> renderer calls window.inknest.notes.read(path)
+  -> main process returns saved Markdown
+  -> renderer converts Markdown to editable formatted HTML
+  -> user edits the contenteditable surface
+  -> renderer serializes the edited DOM back to Markdown
+  -> user clicks Save
+  -> renderer calls window.inknest.notes.save({ path, markdown })
+  -> main process validates the path and writes the Markdown file
+  -> renderer clears dirty state and refreshes workspace summaries
+```
+
+### Tests
+
+`tests/phase8.test.mjs` verifies the note save contract, workspace-bound save
+service behavior, visual editor wiring, Markdown conversion helper coverage,
+and this architecture section. Earlier phase tests continue to protect the
+shell, workspace boundary, file model, note CRUD behavior, and folder
+organization.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 8
 
 Future work should preserve the current split:
 

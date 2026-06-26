@@ -18,6 +18,7 @@ import type {
   RenameFolderPayload,
   DeleteFolderPayload,
   RestoreNotePayload,
+  SaveNotePayload,
   SaveSettingsPayload,
   WorkspaceFileModel,
   WorkspaceInfo
@@ -40,6 +41,7 @@ export type InkNestApi = {
     rename: (payload: RenameNotePayload) => Promise<IpcResult<NoteSummary>>;
     duplicate: (payload: DuplicateNotePayload) => Promise<IpcResult<NoteContent>>;
     move: (payload: MoveNotePayload) => Promise<IpcResult<NoteSummary>>;
+    save: (payload: SaveNotePayload) => Promise<IpcResult<NoteContent>>;
     delete: (payload: DeleteNotePayload) => Promise<IpcResult<DeletedNoteSummary>>;
     listTrash: () => Promise<IpcResult<DeletedNoteSummary[]>>;
     restore: (payload: RestoreNotePayload) => Promise<IpcResult<NoteContent>>;

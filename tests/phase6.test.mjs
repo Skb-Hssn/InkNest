@@ -65,7 +65,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-7-folder-organization",
+    "phase-8-visual-markdown-editor",
     "NoteContent",
     "DeletedNoteSummary",
     "CreateNotePayload",
@@ -97,7 +97,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   assert.match(preloadSource, /ipcChannels\.folders\.rename/);
   assert.match(preloadSource, /ipcChannels\.folders\.move/);
   assert.match(preloadSource, /ipcChannels\.folders\.delete/);
-  assert.match(appHandlerSource, /phase-7-folder-organization/);
+  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
 });
 
 test("phase 6 IPC handlers validate note CRUD payloads", async () => {
@@ -157,7 +157,7 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "Delete folder",
     "folder-actions",
     "event.key === \"Enter\"",
-    "note-preview"
+    "visual-editor"
   ]);
   assert.doesNotMatch(appSource, /New note title/);
   assert.doesNotMatch(appSource, /Rename note/);

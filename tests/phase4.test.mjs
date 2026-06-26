@@ -104,7 +104,7 @@ test("phase 4 architecture document describes workspace selection and restore", 
     "workspace:select",
     "settings.json",
     "recentWorkspaces",
-    "phase-7-folder-organization"
+    "phase-8-visual-markdown-editor"
   ]);
 });
 

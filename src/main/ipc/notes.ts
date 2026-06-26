@@ -13,6 +13,7 @@ import {
   readMarkdownNote,
   renameMarkdownNote,
   restoreMarkdownNote,
+  saveMarkdownNote,
   scanMarkdownNotes,
   scanTrashNotes
 } from "../services/note-service";
@@ -75,6 +76,16 @@ export function registerNoteHandlers(activeWorkspace: ActiveWorkspaceState) {
       assertActiveWorkspace(activeWorkspace),
       assertString(payload.path, "path"),
       assertString(payload.folderPath, "folderPath")
+    );
+  });
+
+  registerIpcHandler<NoteContent>(ipcChannels.notes.save, (payload) => {
+    assertPlainObject(payload);
+
+    return saveMarkdownNote(
+      assertActiveWorkspace(activeWorkspace),
+      assertString(payload.path, "path"),
+      assertString(payload.markdown, "markdown")
     );
   });
 

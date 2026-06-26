@@ -65,7 +65,7 @@ test("phase 7 shared contract exposes folder move and current app phase", async 
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-7-folder-organization",
+    "phase-8-visual-markdown-editor",
     "MoveFolderPayload",
     "parentPath: string",
     'move: "folders:move"'
@@ -74,7 +74,7 @@ test("phase 7 shared contract exposes folder move and current app phase", async 
   assert.match(preloadSource, /ipcChannels\.folders\.move/);
   assert.match(foldersHandlerSource, /moveWorkspaceFolder/);
   assert.match(foldersHandlerSource, /assertString\(payload\.parentPath, "parentPath"\)/);
-  assert.match(appHandlerSource, /phase-7-folder-organization/);
+  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
 });
 
 test("phase 7 folder service moves folders safely", async () => {
