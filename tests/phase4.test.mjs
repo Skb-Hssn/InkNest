@@ -107,3 +107,19 @@ test("phase 4 architecture document describes workspace selection and restore", 
     "phase-4-workspace-selection"
   ]);
 });
+
+test("phase 4 e2e coverage exercises selection, restore, and missing workspace states", async () => {
+  const phase4E2eSource = await readText("tests/e2e/phase4.spec.ts");
+
+  assertIncludesAll(phase4E2eSource, [
+    "phase 4 selects a workspace and persists it in settings",
+    "phase 4 restores the last workspace after restart",
+    "phase 4 shows a clear missing-workspace state on startup",
+    "window.inknest.workspace.select(workspacePath)",
+    "window.inknest.workspace.getActive()",
+    "window.inknest.settings.get()",
+    'path.join(userDataDir, "settings.json")',
+    "Previous workspace missing",
+    "INKNEST_USER_DATA_DIR"
+  ]);
+});
