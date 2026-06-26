@@ -39,6 +39,10 @@ input {
     @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-ink-700 px-3 text-sm font-medium text-white transition hover:bg-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
+  .secondary-button {
+    @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-white px-3 text-sm font-medium text-ink-900 transition hover:border-ink-500/30 hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
   .workspace-button {
     @apply flex w-full items-center gap-3 rounded-md border border-ink-100 bg-ink-50 px-3 py-2 text-left transition hover:border-ink-500/30 hover:bg-white focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
@@ -49,5 +53,21 @@ input {
 
   .search-box input {
     @apply min-w-0 flex-1 bg-transparent text-sm text-ink-900 outline-none placeholder:text-neutral-400;
+  }
+
+  .tree-row {
+    @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-sm text-neutral-500 opacity-75;
+  }
+
+  .note-row {
+    @apply block w-full rounded-md border border-ink-100 bg-white px-3 py-3 text-left text-sm text-neutral-500 opacity-75;
+  }
+
+  .toolbar-button {
+    @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent px-2 text-xs font-semibold text-neutral-600 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
+  .status-pill {
+    @apply inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-ink-100 bg-ink-50 px-2 text-xs font-medium text-ink-700;
   }
 }

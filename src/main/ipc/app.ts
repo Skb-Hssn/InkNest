@@ -4,6 +4,6 @@ import { registerIpcHandler } from "./register";
 export function registerAppHandlers() {
   registerIpcHandler<AppInfo>(ipcChannels.app.getInfo, () => ({
     name: "InkNest",
-    phase: "phase-2-secure-boundary"
+    phase: "phase-3-static-layout"
   }));
 }
