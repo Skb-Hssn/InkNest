@@ -2,6 +2,7 @@ import { ipcChannels, type FolderSummary } from "../../shared/ipc";
 import {
   createWorkspaceFolder,
   deleteWorkspaceFolder,
+  moveWorkspaceFolder,
   renameWorkspaceFolder
 } from "../services/folder-service";
 import { invalidPayload } from "./errors";
@@ -31,6 +32,16 @@ export function registerFolderHandlers(activeWorkspace: ActiveWorkspaceState) {
       assertActiveWorkspace(activeWorkspace),
       assertString(payload.path, "path"),
       assertString(payload.name, "name")
+    );
+  });
+
+  registerIpcHandler<FolderSummary>(ipcChannels.folders.move, (payload) => {
+    assertPlainObject(payload);
+
+    return moveWorkspaceFolder(
+      assertActiveWorkspace(activeWorkspace),
+      assertString(payload.path, "path"),
+      assertString(payload.parentPath, "parentPath")
     );
   });
 

@@ -1,9 +1,10 @@
-import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, type ReactNode, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   BookOpenText,
   Check,
   ChevronDown,
+  ChevronRight,
   Copy,
   Edit3,
   FileText,
@@ -21,7 +22,8 @@ import {
   Settings,
   SlidersHorizontal,
   SquarePen,
-  Trash2
+  Trash2,
+  X
 } from "lucide-react";
 import type {
   DeletedNoteSummary,
@@ -56,7 +58,7 @@ const toolbarPlaceholders = [
 ] as const;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-6-note-crud");
+  const [phase, setPhase] = useState("phase-7-folder-organization");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
@@ -65,6 +67,12 @@ export function App() {
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
   const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const [activeMoveNotePath, setActiveMoveNotePath] = useState<string | null>(null);
+  const [activeMoveFolderPath, setActiveMoveFolderPath] = useState<string | null>(null);
+  const [editingFolderPath, setEditingFolderPath] = useState<string | null>(null);
+  const [folderNameDraft, setFolderNameDraft] = useState("");
+  const [expandedFolderPaths, setExpandedFolderPaths] = useState<Set<string>>(
+    () => new Set(["."])
+  );
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
@@ -104,6 +112,7 @@ export function App() {
     [fileModel]
   );
   const notes = fileModel?.notes ?? [];
+  const folderTree = useMemo(() => buildFolderTree(folders, notes), [folders, notes]);
   const visibleNotes = notes.filter((note) => note.folderPath === selectedFolderPath);
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
@@ -130,6 +139,33 @@ export function App() {
   useEffect(() => {
     setNoteTitleDraft(selectedNote?.title ?? "");
   }, [selectedNote?.title]);
+
+  useEffect(() => {
+    if (!fileModel) {
+      return;
+    }
+
+    const folderPaths = new Set(folders.map((folder) => folder.path));
+
+    if (!folderPaths.has(selectedFolderPath)) {
+      setSelectedFolderPath(".");
+    }
+
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(
+        [...currentPaths].filter((folderPath) => folderPaths.has(folderPath))
+      );
+
+      nextPaths.add(".");
+      for (const ancestorPath of getAncestorFolderPaths(selectedFolderPath)) {
+        if (folderPaths.has(ancestorPath)) {
+          nextPaths.add(ancestorPath);
+        }
+      }
+
+      return nextPaths;
+    });
+  }, [fileModel, folders, selectedFolderPath]);
 
   async function refreshWorkspace() {
     const result = await window.inknest.workspace.scan();
@@ -225,6 +261,8 @@ export function App() {
 
   async function createFolder() {
     setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(null);
     setIsBusy(true);
     const result = await window.inknest.folders.create({
       parentPath: selectedFolderPath,
@@ -234,6 +272,14 @@ export function App() {
     if (result.ok) {
       await refreshWorkspace();
       setSelectedFolderPath(result.data.path);
+      setExpandedFolderPaths((currentPaths) => {
+        const nextPaths = new Set(currentPaths);
+        nextPaths.add(result.data.path);
+        for (const ancestorPath of getAncestorFolderPaths(result.data.path)) {
+          nextPaths.add(ancestorPath);
+        }
+        return nextPaths;
+      });
       setStatusMessage("Folder created");
     } else {
       setWorkspaceError(result.error.message);
@@ -242,23 +288,48 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function renameFolder(folder: FolderSummary) {
-    const name = window.prompt("Rename folder", folder.name)?.trim();
+  function startRenamingFolder(folder: FolderSummary) {
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(folder.path);
+    setFolderNameDraft(folder.name);
+  }
 
-    if (!name) {
+  async function renameFolder(folder: FolderSummary, name: string) {
+    const nextName = name.trim();
+
+    if (!nextName) {
+      setWorkspaceError("Folder name cannot be empty.");
       return;
     }
 
     setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
     setIsBusy(true);
     const result = await window.inknest.folders.rename({
       path: folder.path,
-      name
+      name: nextName
     });
 
     if (result.ok) {
+      setEditingFolderPath(null);
+      setFolderNameDraft("");
+
+      if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
+        setSelectedNotePath(null);
+        setSelectedNoteContent(null);
+      }
+
       await refreshWorkspace();
       setSelectedFolderPath(result.data.path);
+      setExpandedFolderPaths((currentPaths) => {
+        const nextPaths = new Set(currentPaths);
+        nextPaths.add(result.data.path);
+        for (const ancestorPath of getAncestorFolderPaths(result.data.path)) {
+          nextPaths.add(ancestorPath);
+        }
+        return nextPaths;
+      });
       setStatusMessage("Folder renamed");
     } else {
       setWorkspaceError(result.error.message);
@@ -273,6 +344,8 @@ export function App() {
     }
 
     setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(null);
     setIsBusy(true);
     const result = await window.inknest.folders.delete({
       path: folder.path,
@@ -299,6 +372,54 @@ export function App() {
     }
 
     setIsBusy(false);
+  }
+
+  async function moveFolder(folder: FolderSummary, parentPath: string) {
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(null);
+    setIsBusy(true);
+    const result = await window.inknest.folders.move({
+      path: folder.path,
+      parentPath
+    });
+
+    if (result.ok) {
+      if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
+        setSelectedNotePath(null);
+        setSelectedNoteContent(null);
+      }
+
+      await refreshWorkspace();
+      setSelectedFolderPath(result.data.path);
+      setExpandedFolderPaths((currentPaths) => {
+        const nextPaths = new Set(currentPaths);
+        nextPaths.add(result.data.path);
+        for (const ancestorPath of getAncestorFolderPaths(result.data.path)) {
+          nextPaths.add(ancestorPath);
+        }
+        return nextPaths;
+      });
+      setStatusMessage("Folder moved");
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+
+    setIsBusy(false);
+  }
+
+  function toggleFolder(folderPath: string) {
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths);
+
+      if (nextPaths.has(folderPath)) {
+        nextPaths.delete(folderPath);
+      } else {
+        nextPaths.add(folderPath);
+      }
+
+      return nextPaths;
+    });
   }
 
   async function renameNote() {
@@ -593,48 +714,36 @@ export function App() {
 
             <div className="px-3 py-3">
               <div className="space-y-1" aria-label="Folder tree">
-                {folders.map((folder) => (
-                  <div
-                    key={folder.path}
-                    className={`tree-row group ${
-                      folder.path === selectedFolderPath ? "tree-row-active" : ""
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className="tree-open-area"
-                      onClick={() => setSelectedFolderPath(folder.path)}
-                      disabled={!hasWorkspace}
-                    >
-                      <Folder size={15} />
-                      <span className="truncate">{folder.name}</span>
-                    </button>
-                    {folder.path !== "." ? (
-                      <span className="folder-actions">
-                        <button
-                          type="button"
-                          aria-label="Rename folder"
-                          title="Rename folder"
-                          className="icon-button folder-action-button"
-                          onClick={() => void renameFolder(folder)}
-                          disabled={!hasWorkspace || isBusy}
-                        >
-                          <Edit3 size={13} />
-                        </button>
-                        <button
-                          type="button"
-                          aria-label="Delete folder"
-                          title="Delete folder"
-                          className="icon-button folder-action-button danger"
-                          onClick={() => void deleteFolder(folder)}
-                          disabled={!hasWorkspace || isBusy}
-                        >
-                          <Trash2 size={13} />
-                        </button>
-                      </span>
-                    ) : null}
-                  </div>
-                ))}
+                <FolderTree
+                  nodes={folderTree}
+                  folders={folders}
+                  selectedFolderPath={selectedFolderPath}
+                  expandedFolderPaths={expandedFolderPaths}
+                  activeMoveFolderPath={activeMoveFolderPath}
+                  editingFolderPath={editingFolderPath}
+                  folderNameDraft={folderNameDraft}
+                  hasWorkspace={hasWorkspace}
+                  isBusy={isBusy}
+                  onSelect={(folderPath) => {
+                    setActiveMoveNotePath(null);
+                    setSelectedFolderPath(folderPath);
+                  }}
+                  onToggle={toggleFolder}
+                  onStartRename={startRenamingFolder}
+                  onRenameDraftChange={setFolderNameDraft}
+                  onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
+                  onCancelRename={() => {
+                    setEditingFolderPath(null);
+                    setFolderNameDraft("");
+                  }}
+                  onToggleMove={(folderPath) =>
+                    setActiveMoveFolderPath((currentPath) =>
+                      currentPath === folderPath ? null : folderPath
+                    )
+                  }
+                  onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
+                  onDelete={(folder) => void deleteFolder(folder)}
+                />
               </div>
             </div>
 
@@ -839,6 +948,269 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
   );
 }
 
+type FolderTreeNode = FolderSummary & {
+  children: FolderTreeNode[];
+  depth: number;
+  noteCount: number;
+};
+
+type FolderTreeProps = {
+  nodes: FolderTreeNode[];
+  folders: FolderSummary[];
+  selectedFolderPath: string;
+  expandedFolderPaths: Set<string>;
+  activeMoveFolderPath: string | null;
+  editingFolderPath: string | null;
+  folderNameDraft: string;
+  hasWorkspace: boolean;
+  isBusy: boolean;
+  onSelect: (folderPath: string) => void;
+  onToggle: (folderPath: string) => void;
+  onStartRename: (folder: FolderSummary) => void;
+  onRenameDraftChange: (name: string) => void;
+  onSubmitRename: (folder: FolderSummary) => void;
+  onCancelRename: () => void;
+  onToggleMove: (folderPath: string) => void;
+  onMove: (folder: FolderSummary, parentPath: string) => void;
+  onDelete: (folder: FolderSummary) => void;
+};
+
+function FolderTree({
+  nodes,
+  folders,
+  selectedFolderPath,
+  expandedFolderPaths,
+  activeMoveFolderPath,
+  editingFolderPath,
+  folderNameDraft,
+  hasWorkspace,
+  isBusy,
+  onSelect,
+  onToggle,
+  onStartRename,
+  onRenameDraftChange,
+  onSubmitRename,
+  onCancelRename,
+  onToggleMove,
+  onMove,
+  onDelete
+}: FolderTreeProps) {
+  return (
+    <>
+      {nodes.map((node) => (
+        <FolderTreeRow
+          key={node.path}
+          node={node}
+          folders={folders}
+          selectedFolderPath={selectedFolderPath}
+          expandedFolderPaths={expandedFolderPaths}
+          activeMoveFolderPath={activeMoveFolderPath}
+          editingFolderPath={editingFolderPath}
+          folderNameDraft={folderNameDraft}
+          hasWorkspace={hasWorkspace}
+          isBusy={isBusy}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          onStartRename={onStartRename}
+          onRenameDraftChange={onRenameDraftChange}
+          onSubmitRename={onSubmitRename}
+          onCancelRename={onCancelRename}
+          onToggleMove={onToggleMove}
+          onMove={onMove}
+          onDelete={onDelete}
+        />
+      ))}
+    </>
+  );
+}
+
+function FolderTreeRow({
+  node,
+  folders,
+  selectedFolderPath,
+  expandedFolderPaths,
+  activeMoveFolderPath,
+  editingFolderPath,
+  folderNameDraft,
+  hasWorkspace,
+  isBusy,
+  onSelect,
+  onToggle,
+  onStartRename,
+  onRenameDraftChange,
+  onSubmitRename,
+  onCancelRename,
+  onToggleMove,
+  onMove,
+  onDelete
+}: Omit<FolderTreeProps, "nodes"> & { node: FolderTreeNode }) {
+  const isExpanded = expandedFolderPaths.has(node.path);
+  const hasChildren = node.children.length > 0;
+  const isRoot = node.path === ".";
+  const isRenaming = editingFolderPath === node.path;
+  const moveTargets = folders.filter((folder) => isFolderMoveTarget(node, folder));
+
+  return (
+    <div>
+      <div
+        className={`tree-row group ${
+          node.path === selectedFolderPath ? "tree-row-active" : ""
+        }`}
+        style={{ "--folder-depth": node.depth } as CSSProperties}
+      >
+        <button
+          type="button"
+          aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
+          className="tree-toggle-button"
+          onClick={() => onToggle(node.path)}
+          disabled={!hasWorkspace || !hasChildren}
+        >
+          {hasChildren ? (
+            isExpanded ? (
+              <ChevronDown size={14} />
+            ) : (
+              <ChevronRight size={14} />
+            )
+          ) : (
+            <span className="tree-toggle-spacer" />
+          )}
+        </button>
+        {isRenaming ? (
+          <form
+            className="folder-rename-form"
+            onSubmit={(event) => {
+              event.preventDefault();
+              onSubmitRename(node);
+            }}
+          >
+            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
+            <input
+              type="text"
+              aria-label="Folder name"
+              value={folderNameDraft}
+              onChange={(event) => onRenameDraftChange(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault();
+                  onCancelRename();
+                }
+              }}
+              autoFocus
+              disabled={isBusy}
+            />
+          </form>
+        ) : (
+          <button
+            type="button"
+            className="tree-open-area"
+            onClick={() => onSelect(node.path)}
+            disabled={!hasWorkspace}
+          >
+            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
+            <span className="truncate">{node.name}</span>
+            <span className="tree-count">{node.noteCount}</span>
+          </button>
+        )}
+        {!isRoot ? (
+          <span className={`folder-actions ${isRenaming ? "folder-actions-visible" : ""}`}>
+            <button
+              type="button"
+              aria-label={isRenaming ? "Save folder name" : "Rename folder"}
+              title={isRenaming ? "Save folder name" : "Rename folder"}
+              className="icon-button folder-action-button"
+              onClick={() => {
+                if (isRenaming) {
+                  onSubmitRename(node);
+                } else {
+                  onStartRename(node);
+                }
+              }}
+              disabled={!hasWorkspace || isBusy}
+            >
+              {isRenaming ? <Check size={13} /> : <Edit3 size={13} />}
+            </button>
+            {isRenaming ? (
+              <button
+                type="button"
+                aria-label="Cancel folder rename"
+                title="Cancel folder rename"
+                className="icon-button folder-action-button"
+                onClick={onCancelRename}
+                disabled={isBusy}
+              >
+                <X size={13} />
+              </button>
+            ) : (
+              <>
+                <div className="relative">
+                  <button
+                    type="button"
+                    aria-label="Move folder"
+                    title="Move folder"
+                    className="icon-button folder-action-button"
+                    onClick={() => onToggleMove(node.path)}
+                    disabled={!hasWorkspace || isBusy || moveTargets.length === 0}
+                  >
+                    <FolderInput size={13} />
+                  </button>
+                  {activeMoveFolderPath === node.path ? (
+                    <div className="move-menu folder-move-menu" role="menu" aria-label="Move folder to parent">
+                      {moveTargets.map((folder) => (
+                        <button
+                          key={folder.path}
+                          type="button"
+                          className="move-menu-item"
+                          onClick={() => onMove(node, folder.path)}
+                        >
+                          <Folder size={13} />
+                          <span className="truncate">{folder.name}</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : null}
+                </div>
+                <button
+                  type="button"
+                  aria-label="Delete folder"
+                  title="Delete folder"
+                  className="icon-button folder-action-button danger"
+                  onClick={() => onDelete(node)}
+                  disabled={!hasWorkspace || isBusy}
+                >
+                  <Trash2 size={13} />
+                </button>
+              </>
+            )}
+          </span>
+        ) : null}
+      </div>
+
+      {isExpanded && hasChildren ? (
+        <FolderTree
+          nodes={node.children}
+          folders={folders}
+          selectedFolderPath={selectedFolderPath}
+          expandedFolderPaths={expandedFolderPaths}
+          activeMoveFolderPath={activeMoveFolderPath}
+          editingFolderPath={editingFolderPath}
+          folderNameDraft={folderNameDraft}
+          hasWorkspace={hasWorkspace}
+          isBusy={isBusy}
+          onSelect={onSelect}
+          onToggle={onToggle}
+          onStartRename={onStartRename}
+          onRenameDraftChange={onRenameDraftChange}
+          onSubmitRename={onSubmitRename}
+          onCancelRename={onCancelRename}
+          onToggleMove={onToggleMove}
+          onMove={onMove}
+          onDelete={onDelete}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 type NoteRowProps = {
   note: NoteSummary;
   folders: FolderSummary[];
@@ -927,4 +1299,91 @@ function NoteRow({
       </div>
     </div>
   );
+}
+
+function buildFolderTree(
+  folders: FolderSummary[],
+  notes: NoteSummary[]
+): FolderTreeNode[] {
+  const folderNodes = new Map<string, FolderTreeNode>();
+
+  for (const folder of folders) {
+    folderNodes.set(folder.path, {
+      ...folder,
+      children: [],
+      depth: 0,
+      noteCount: notes.filter((note) => note.folderPath === folder.path).length
+    });
+  }
+
+  const rootNode = folderNodes.get(".");
+
+  if (!rootNode) {
+    return [];
+  }
+
+  for (const folder of folders) {
+    if (folder.path === ".") {
+      continue;
+    }
+
+    const node = folderNodes.get(folder.path);
+    const parentNode = folderNodes.get(getParentFolderPath(folder.path)) ?? rootNode;
+
+    if (node) {
+      parentNode.children.push(node);
+    }
+  }
+
+  function sortAndSetDepth(node: FolderTreeNode, depth: number) {
+    node.depth = depth;
+    node.children.sort((first, second) => first.name.localeCompare(second.name));
+
+    for (const child of node.children) {
+      sortAndSetDepth(child, depth + 1);
+    }
+  }
+
+  sortAndSetDepth(rootNode, 0);
+
+  return [rootNode];
+}
+
+function getParentFolderPath(folderPath: string) {
+  if (folderPath === "." || !folderPath.includes("/")) {
+    return ".";
+  }
+
+  return folderPath.slice(0, folderPath.lastIndexOf("/"));
+}
+
+function getAncestorFolderPaths(folderPath: string) {
+  const ancestorPaths = ["."];
+  let currentPath = folderPath;
+
+  while (currentPath !== ".") {
+    currentPath = getParentFolderPath(currentPath);
+
+    if (!ancestorPaths.includes(currentPath)) {
+      ancestorPaths.push(currentPath);
+    }
+  }
+
+  return ancestorPaths;
+}
+
+function isFolderMoveTarget(source: FolderSummary, target: FolderSummary) {
+  if (source.path === "." || target.path === source.path) {
+    return false;
+  }
+
+  if (target.path.startsWith(`${source.path}/`)) {
+    return false;
+  }
+
+  return getParentFolderPath(source.path) !== target.path;
+}
+
+function isSameOrChildFolderPath(candidatePath: string, folderPath: string) {
+  return candidatePath === folderPath || candidatePath.startsWith(`${folderPath}/`);
 }

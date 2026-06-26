@@ -65,7 +65,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-6-note-crud",
+    "phase-7-folder-organization",
     "NoteContent",
     "DeletedNoteSummary",
     "CreateNotePayload",
@@ -74,6 +74,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
     "CreateFolderPayload",
     "RenameFolderPayload",
     "DeleteFolderPayload",
+    "MoveFolderPayload",
     "PermanentlyDeleteNotePayload",
     'create: "notes:create"',
     'rename: "notes:rename"',
@@ -85,6 +86,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
     'permanentlyDelete: "notes:permanently-delete"',
     'create: "folders:create"',
     'rename: "folders:rename"',
+    'move: "folders:move"',
     'delete: "folders:delete"'
   ]);
   assert.match(sharedPreload, /create:\s*\(payload\?: CreateNotePayload\)/);
@@ -93,8 +95,9 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   assert.match(preloadSource, /ipcChannels\.notes\.permanentlyDelete/);
   assert.match(preloadSource, /ipcChannels\.folders\.create/);
   assert.match(preloadSource, /ipcChannels\.folders\.rename/);
+  assert.match(preloadSource, /ipcChannels\.folders\.move/);
   assert.match(preloadSource, /ipcChannels\.folders\.delete/);
-  assert.match(appHandlerSource, /phase-6-note-crud/);
+  assert.match(appHandlerSource, /phase-7-folder-organization/);
 });
 
 test("phase 6 IPC handlers validate note CRUD payloads", async () => {

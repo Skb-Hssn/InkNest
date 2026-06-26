@@ -64,7 +64,8 @@ input {
   }
 
   .tree-row {
-    @apply grid h-8 w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-1 rounded-md px-2 text-sm text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900;
+    @apply grid h-8 w-full grid-cols-[24px_minmax(0,1fr)_auto] items-center gap-1 rounded-md pr-2 text-sm text-neutral-600 transition hover:bg-ink-50 hover:text-ink-900;
+    padding-left: calc(0.25rem + (var(--folder-depth, 0) * 1rem));
   }
 
   .tree-row-active {
@@ -75,12 +76,40 @@ input {
     @apply flex min-w-0 items-center gap-2 text-left outline-none disabled:cursor-not-allowed disabled:opacity-60;
   }
 
+  .tree-toggle-button {
+    @apply flex h-6 w-6 items-center justify-center rounded-md text-neutral-500 transition hover:bg-white hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/30 disabled:cursor-default disabled:opacity-40 disabled:hover:bg-transparent;
+  }
+
+  .tree-toggle-spacer {
+    @apply block h-3.5 w-3.5;
+  }
+
+  .tree-count {
+    @apply ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-white px-1 text-[11px] font-medium text-neutral-500;
+  }
+
   .folder-actions {
-    @apply flex items-center gap-1;
+    @apply pointer-events-none flex items-center gap-1 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100;
+  }
+
+  .folder-actions-visible {
+    @apply pointer-events-auto opacity-100;
   }
 
   .folder-action-button {
     @apply h-6 w-6 bg-white/80;
+  }
+
+  .folder-move-menu {
+    @apply w-48;
+  }
+
+  .folder-rename-form {
+    @apply flex min-w-0 items-center gap-2;
+  }
+
+  .folder-rename-form input {
+    @apply h-6 min-w-0 flex-1 rounded-md border border-ink-500/30 bg-white px-2 text-sm text-ink-900 outline-none ring-2 ring-ink-500/20;
   }
 
   .recent-workspace-row {

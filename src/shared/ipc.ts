@@ -15,7 +15,7 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-6-note-crud";
+  phase: "phase-7-folder-organization";
 };
 
 export type WorkspaceStatus =
@@ -70,6 +70,11 @@ export type RenameFolderPayload = {
 export type DeleteFolderPayload = {
   path: string;
   confirmed: true;
+};
+
+export type MoveFolderPayload = {
+  path: string;
+  parentPath: string;
 };
 
 export type WorkspaceMetadata = {
@@ -156,6 +161,7 @@ export const ipcChannels = {
   folders: {
     create: "folders:create",
     rename: "folders:rename",
+    move: "folders:move",
     delete: "folders:delete"
   },
   settings: {
