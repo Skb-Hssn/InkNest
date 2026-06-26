@@ -1048,6 +1048,7 @@ function FolderTreeRow({
   const hasChildren = node.children.length > 0;
   const isRoot = node.path === ".";
   const isRenaming = editingFolderPath === node.path;
+  const isMoveMenuOpen = activeMoveFolderPath === node.path;
   const moveTargets = folders.filter((folder) => isFolderMoveTarget(node, folder));
 
   return (
@@ -1112,7 +1113,11 @@ function FolderTreeRow({
           </button>
         )}
         {!isRoot ? (
-          <span className={`folder-actions ${isRenaming ? "folder-actions-visible" : ""}`}>
+          <span
+            className={`folder-actions ${
+              isRenaming || isMoveMenuOpen ? "folder-actions-visible" : ""
+            }`}
+          >
             <button
               type="button"
               aria-label={isRenaming ? "Save folder name" : "Rename folder"}
@@ -1153,7 +1158,7 @@ function FolderTreeRow({
                   >
                     <FolderInput size={13} />
                   </button>
-                  {activeMoveFolderPath === node.path ? (
+                  {isMoveMenuOpen ? (
                     <div className="move-menu folder-move-menu" role="menu" aria-label="Move folder to parent">
                       {moveTargets.map((folder) => (
                         <button
