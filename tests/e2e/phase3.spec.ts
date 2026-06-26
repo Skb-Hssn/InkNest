@@ -59,7 +59,7 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
       window.getByText("Open or create a Markdown note to inspect its saved content here.")
     ).toBeVisible();
     await expect(window.getByText("Open a local Markdown folder to begin")).toBeVisible();
-    await expect(window.getByText("Saved - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
   } finally {
     await app.close();
   }
