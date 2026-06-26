@@ -1,10 +1,10 @@
 # ARCH.md - InkNest Architecture
 
 This document describes the architecture established by Phase 0, Phase 1,
-Phase 2, Phase 3, and Phase 4 of `PLAN.md`. It covers the repository baseline,
+Phase 2, Phase 3, Phase 4, and Phase 5 of `PLAN.md`. It covers the repository baseline,
 the first running app shell, the secure Electron boundary, the static
-application layout, and the workspace selection flow that future note, search,
-and editor behavior will build on.
+application layout, the workspace selection flow, and the workspace file model
+that future note, search, and editor behavior will build on.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -550,7 +550,107 @@ startup restore flow, native folder picker channel, renderer prompts, and this
 architecture section. `npm run check` remains the lightweight validation
 command.
 
-## Architecture Direction After Phase 4
+## Phase 5 Architecture: Workspace File Model
+
+Phase 5 turns the selected workspace folder into a typed file model owned by
+the Electron main process. The renderer still does not touch the filesystem
+directly; it asks `window.inknest.workspace.scan()`, `window.inknest.notes.list()`,
+or `window.inknest.notes.read(path)` through the preload bridge.
+
+The app info milestone is now `phase-5-workspace-file-model`.
+
+### Workspace File Contract
+
+The shared contract in `src/shared/ipc.ts` now includes:
+
+```ts
+type WorkspaceFileModel = {
+  workspace: WorkspaceInfo;
+  folders: FolderSummary[];
+  notes: NoteSummary[];
+  metadata: WorkspaceMetadata;
+};
+```
+
+Note and folder paths returned to the renderer are workspace-relative. The main
+process resolves those paths against the active workspace before reading or
+writing anything. This keeps the UI portable while preserving the Phase 2 path
+boundary.
+
+### Filesystem Services
+
+Phase 5 adds focused main-process services:
+
+```text
+src/main/services/
+  path-utils.ts       safe workspace path resolution and filename cleanup
+  folder-service.ts   workspace metadata, assets, trash, and folder scanning
+  note-service.ts     Markdown note scanning, reading, and filename generation
+```
+
+`path-utils.ts` contains the reusable path boundary logic. It resolves candidate
+paths against the active workspace, rejects path traversal, converts absolute
+paths back into workspace-relative paths, normalizes separators for IPC data,
+and sanitizes filesystem names.
+
+`folder-service.ts` establishes the workspace conventions:
+
+- `.inknest/` stores app-owned workspace metadata.
+- `.inknest/trash/` is the app-level trash location for deleted notes.
+- `assets/` is the workspace asset convention for images and other local note
+  attachments.
+
+Folder scanning walks nested directories while skipping app-owned metadata and
+assets so those implementation folders do not appear as user note folders.
+
+`note-service.ts` scans nested `.md` files, reads Markdown as UTF-8, derives
+note titles from the first `# Heading` when present, and falls back to the file
+name when a heading is missing. It also exposes safe Markdown filename helpers,
+including duplicate-name handling such as `Untitled 2.md`.
+
+### IPC Flow
+
+Phase 5 adds one workspace-level scan channel:
+
+- `workspace:scan` returns the active `WorkspaceFileModel`.
+
+The preload surface exposes it as:
+
+```ts
+window.inknest.workspace.scan();
+```
+
+The existing note channels are now backed by real services:
+
+- `notes:list` scans the active workspace and returns `NoteSummary[]`.
+- `notes:read` validates a workspace-relative Markdown path and returns its
+  UTF-8 content.
+
+Opening or selecting a workspace also ensures the Phase 5 directory conventions
+exist before the renderer receives a ready workspace state.
+
+### Phase 5 Data Flow
+
+```text
+Renderer asks for workspace file model
+  -> window.inknest.workspace.scan()
+  -> preload invokes workspace:scan
+  -> main process asserts an active workspace
+  -> workspace service ensures .inknest, .inknest/trash, and assets/
+  -> folder service scans nested user folders
+  -> note service scans nested Markdown notes
+  -> renderer receives workspace-relative folders, notes, and metadata
+```
+
+### Tests
+
+`tests/phase5.test.mjs` verifies the shared contract, preload scan method, safe
+path utility, metadata/assets/trash conventions, Markdown scanning and reading,
+duplicate filename helpers, and architecture documentation for this phase.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 5
 
 Future work should preserve the current split:
 

@@ -1,8 +1,17 @@
 import { access, stat } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
-import type { WorkspaceInfo, WorkspaceStatus } from "../../shared/ipc";
+import type {
+  WorkspaceFileModel,
+  WorkspaceInfo,
+  WorkspaceStatus
+} from "../../shared/ipc";
 import type { AppSettings } from "../../shared/ipc";
+import {
+  ensureWorkspaceStructure,
+  scanWorkspaceFolders
+} from "./folder-service";
+import { scanMarkdownNotes } from "./note-service";
 
 type WorkspaceAccess = {
   status: WorkspaceStatus;
@@ -65,5 +74,24 @@ export function createWorkspaceInfo(
     message,
     recentWorkspaces: settings.recentWorkspaces,
     lastWorkspacePath: settings.lastWorkspacePath
+  };
+}
+
+export async function scanWorkspaceFileModel(
+  activeWorkspacePath: string,
+  settings: AppSettings
+): Promise<WorkspaceFileModel> {
+  const metadata = await ensureWorkspaceStructure(activeWorkspacePath);
+
+  return {
+    workspace: createWorkspaceInfo(
+      path.resolve(activeWorkspacePath),
+      settings,
+      "ready",
+      "Workspace is ready."
+    ),
+    folders: await scanWorkspaceFolders(activeWorkspacePath),
+    notes: await scanMarkdownNotes(activeWorkspacePath),
+    metadata
   };
 }

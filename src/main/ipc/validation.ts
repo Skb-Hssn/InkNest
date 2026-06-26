@@ -37,11 +37,7 @@ export function assertWorkspacePath(
   candidatePath: string,
   activeWorkspace: ActiveWorkspaceState
 ) {
-  if (!activeWorkspace.path) {
-    throw workspaceRequired();
-  }
-
-  const workspaceRoot = path.resolve(activeWorkspace.path);
+  const workspaceRoot = assertActiveWorkspace(activeWorkspace);
   const resolvedPath = path.resolve(workspaceRoot, candidatePath);
   const relativePath = path.relative(workspaceRoot, resolvedPath);
 
@@ -54,6 +50,14 @@ export function assertWorkspacePath(
   }
 
   return resolvedPath;
+}
+
+export function assertActiveWorkspace(activeWorkspace: ActiveWorkspaceState) {
+  if (!activeWorkspace.path) {
+    throw workspaceRequired();
+  }
+
+  return path.resolve(activeWorkspace.path);
 }
 
 export function assertSafeExternalUrl(value: unknown) {

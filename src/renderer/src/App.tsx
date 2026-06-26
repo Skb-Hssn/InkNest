@@ -48,7 +48,7 @@ const toolbarPlaceholders = [
 ] as const;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-4-workspace-selection");
+  const [phase, setPhase] = useState("phase-5-workspace-file-model");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [isChoosingWorkspace, setIsChoosingWorkspace] = useState(false);

@@ -1,12 +1,18 @@
 import { dialog } from "electron";
 import path from "node:path";
-import { ipcChannels, type WorkspaceInfo } from "../../shared/ipc";
+import { ipcChannels, type WorkspaceFileModel, type WorkspaceInfo } from "../../shared/ipc";
 import { readSettings, rememberWorkspace } from "../services/settings-store";
 import {
   createWorkspaceInfo,
-  inspectWorkspacePath
+  inspectWorkspacePath,
+  scanWorkspaceFileModel
 } from "../services/workspace-service";
-import { assertPlainObject, assertString, type ActiveWorkspaceState } from "./validation";
+import {
+  assertActiveWorkspace,
+  assertPlainObject,
+  assertString,
+  type ActiveWorkspaceState
+} from "./validation";
 import { invalidPayload } from "./errors";
 import { registerIpcHandler } from "./register";
 
@@ -59,6 +65,13 @@ export function registerWorkspaceHandlers(activeWorkspace: ActiveWorkspaceState)
 
     return activateWorkspace(workspacePath, activeWorkspace);
   });
+
+  registerIpcHandler<WorkspaceFileModel>(ipcChannels.workspace.scan, async () => {
+    const workspacePath = assertActiveWorkspace(activeWorkspace);
+    const settings = await readSettings();
+
+    return scanWorkspaceFileModel(workspacePath, settings);
+  });
 }
 
 export async function restoreLastWorkspace(activeWorkspace: ActiveWorkspaceState) {
@@ -95,6 +108,7 @@ async function activateWorkspace(
 
   const settings = await rememberWorkspace(workspacePath);
   const resolvedWorkspacePath = path.resolve(workspacePath);
+  await scanWorkspaceFileModel(resolvedWorkspacePath, settings);
   activeWorkspace.path = resolvedWorkspacePath;
   activeWorkspace.restoreStatus = "ready";
   activeWorkspace.restoreMessage = accessResult.message;
