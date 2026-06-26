@@ -15,7 +15,7 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-5-workspace-file-model";
+  phase: "phase-6-note-crud";
 };
 
 export type WorkspaceStatus =
@@ -40,9 +40,36 @@ export type NoteSummary = {
   folderPath: string;
 };
 
+export type NoteContent = {
+  path: string;
+  markdown: string;
+};
+
+export type DeletedNoteSummary = {
+  id: string;
+  title: string;
+  originalPath: string;
+  trashPath: string;
+};
+
 export type FolderSummary = {
   name: string;
   path: string;
+};
+
+export type CreateFolderPayload = {
+  parentPath?: string;
+  name?: string;
+};
+
+export type RenameFolderPayload = {
+  path: string;
+  name: string;
+};
+
+export type DeleteFolderPayload = {
+  path: string;
+  confirmed: true;
 };
 
 export type WorkspaceMetadata = {
@@ -72,6 +99,38 @@ export type OpenExternalLinkPayload = {
   url: string;
 };
 
+export type CreateNotePayload = {
+  title?: string;
+  folderPath?: string;
+};
+
+export type RenameNotePayload = {
+  path: string;
+  title: string;
+};
+
+export type DuplicateNotePayload = {
+  path: string;
+};
+
+export type MoveNotePayload = {
+  path: string;
+  folderPath: string;
+};
+
+export type DeleteNotePayload = {
+  path: string;
+};
+
+export type RestoreNotePayload = {
+  trashPath: string;
+};
+
+export type PermanentlyDeleteNotePayload = {
+  trashPath: string;
+  confirmed: true;
+};
+
 export const ipcChannels = {
   app: {
     getInfo: "app:get-info"
@@ -84,7 +143,20 @@ export const ipcChannels = {
   },
   notes: {
     list: "notes:list",
-    read: "notes:read"
+    read: "notes:read",
+    create: "notes:create",
+    rename: "notes:rename",
+    duplicate: "notes:duplicate",
+    move: "notes:move",
+    delete: "notes:delete",
+    listTrash: "notes:list-trash",
+    restore: "notes:restore",
+    permanentlyDelete: "notes:permanently-delete"
+  },
+  folders: {
+    create: "folders:create",
+    rename: "folders:rename",
+    delete: "folders:delete"
   },
   settings: {
     get: "settings:get",

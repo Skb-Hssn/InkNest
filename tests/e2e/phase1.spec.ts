@@ -36,7 +36,7 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
     await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
     await expect(window.getByText("No search results")).toBeVisible();
-    await expect(window.getByText("0 words")).toBeVisible();
+    await expect(window.getByText("Saved - 0 words - 0 characters")).toBeVisible();
 
     await expect(window.locator("#root")).toHaveJSProperty("childElementCount", 1);
   } finally {
@@ -77,7 +77,7 @@ test("phase 2 exposes the narrow async preload API in the renderer", async ({
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-5-workspace-file-model"
+        phase: "phase-6-note-crud"
       }
     });
     expect(activeWorkspace).toEqual({

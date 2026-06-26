@@ -1,6 +1,7 @@
 import { registerAppHandlers } from "./app";
 import { registerDialogHandlers } from "./dialogs";
 import { registerExportHandlers } from "./export";
+import { registerFolderHandlers } from "./folders";
 import { registerLinkHandlers } from "./links";
 import { registerNoteHandlers } from "./notes";
 import { registerSettingsHandlers } from "./settings";
@@ -19,6 +20,7 @@ export async function registerIpcHandlers() {
   registerAppHandlers();
   registerWorkspaceHandlers(activeWorkspace);
   registerNoteHandlers(activeWorkspace);
+  registerFolderHandlers(activeWorkspace);
   registerSettingsHandlers();
   registerLinkHandlers();
   registerDialogHandlers();

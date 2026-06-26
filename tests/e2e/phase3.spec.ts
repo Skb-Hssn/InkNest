@@ -40,21 +40,19 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(window.getByRole("heading", { name: "Folders" })).toBeVisible();
     await expect(window.getByText("No workspace selected")).toBeVisible();
     await expect(window.getByText("No search results")).toBeVisible();
-    await expect(window.getByText("Folder tree placeholder")).toBeVisible();
+    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
 
     await expect(window.getByRole("heading", { name: "Notes" })).toBeVisible();
-    await expect(
-      window.getByRole("heading", { name: "No folder selected" })
-    ).toBeVisible();
-    await expect(window.getByText("Note list placeholder")).toBeVisible();
-    await expect(window.getByText("Meeting notes")).toBeVisible();
+    await expect(window.getByText("Workspace root")).toBeVisible();
+    await expect(window.getByText("No notes here")).toBeVisible();
+    await expect(window.getByText("Trash is empty.")).toBeVisible();
 
     await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
     await expect(window.getByText("No file selected")).toBeVisible();
     await expect(window.getByText("Saved").first()).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
     await expect(
-      window.getByText("Open or create a Markdown note to edit formatted content here.")
+      window.getByText("Open or create a Markdown note to inspect its saved content here.")
     ).toBeVisible();
     await expect(window.getByText("Open a local Markdown folder to begin")).toBeVisible();
     await expect(window.getByText("Saved - 0 words - 0 characters")).toBeVisible();
@@ -74,7 +72,6 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     await expect(window.getByRole("button", { name: "Collapse notes list" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Filter folders" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Sort notes" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "More editor actions" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
 
     await expect(
@@ -110,14 +107,14 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-5-workspace-file-model"
+        phase: "phase-6-note-crud"
       }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,
       hasProcess: false
     });
-    await expect(window.getByText("phase-5-workspace-file-model")).toBeVisible();
+    await expect(window.getByText("phase-6-note-crud")).toBeVisible();
   } finally {
     await app.close();
   }

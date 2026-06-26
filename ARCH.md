@@ -1,10 +1,10 @@
 # ARCH.md - InkNest Architecture
 
 This document describes the architecture established by Phase 0, Phase 1,
-Phase 2, Phase 3, Phase 4, and Phase 5 of `PLAN.md`. It covers the repository baseline,
+Phase 2, Phase 3, Phase 4, Phase 5, and Phase 6 of `PLAN.md`. It covers the repository baseline,
 the first running app shell, the secure Electron boundary, the static
 application layout, the workspace selection flow, and the workspace file model
-that future note, search, and editor behavior will build on.
+plus note CRUD behavior that future search and editor behavior will build on.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -340,7 +340,7 @@ Renderer asks for app info
   -> preload invokes ipcChannels.app.getInfo
   -> main-process app handler returns AppInfo
   -> registerIpcHandler wraps it as { ok: true, data }
-  -> renderer displays phase-2-secure-boundary
+  -> renderer displays phase-6-note-crud
 ```
 
 Invalid requests follow the same path, but validators throw safe request errors
@@ -427,7 +427,7 @@ App starts
   -> React renderer initializes static placeholders
   -> renderer asks window.inknest.app.getInfo()
   -> preload invokes ipcChannels.app.getInfo
-  -> main-process handler returns phase-3-static-layout
+  -> main-process handler returns phase-6-note-crud
   -> status bar displays the current phase marker
 ```
 
@@ -446,8 +446,8 @@ renderer access to Electron or Node.js filesystem modules.
 Phase 4 makes the workspace switcher real while keeping one active workspace at
 a time. The renderer still has no direct filesystem access; it asks the preload
 bridge for workspace actions and the main process owns native dialogs,
-persistence, and path checks. The app info milestone is
-`phase-4-workspace-selection`.
+persistence, and path checks. The app info milestone is now
+`phase-6-note-crud`.
 
 ### Workspace Contract
 
@@ -557,7 +557,7 @@ the Electron main process. The renderer still does not touch the filesystem
 directly; it asks `window.inknest.workspace.scan()`, `window.inknest.notes.list()`,
 or `window.inknest.notes.read(path)` through the preload bridge.
 
-The app info milestone is now `phase-5-workspace-file-model`.
+The app info milestone is now `phase-6-note-crud`.
 
 ### Workspace File Contract
 
@@ -650,7 +650,105 @@ duplicate filename helpers, and architecture documentation for this phase.
 
 `npm run check` remains the lightweight validation command.
 
-## Architecture Direction After Phase 5
+## Phase 6 Architecture: Note CRUD
+
+Phase 6 makes Markdown notes usable as local files. The renderer still requests
+every note action through `window.inknest.notes`; the Electron main process owns
+all filesystem changes and returns workspace-relative paths.
+
+### Note CRUD Contract
+
+The shared IPC contract now includes `NoteContent` for opened notes and
+`DeletedNoteSummary` for trash entries:
+
+```ts
+type NoteContent = {
+  path: string;
+  markdown: string;
+};
+
+type DeletedNoteSummary = {
+  id: string;
+  title: string;
+  originalPath: string;
+  trashPath: string;
+};
+```
+
+The preload note surface now exposes:
+
+```ts
+window.inknest.notes.create(payload);
+window.inknest.notes.read(path);
+window.inknest.notes.rename(payload);
+window.inknest.notes.duplicate(payload);
+window.inknest.notes.move(payload);
+window.inknest.notes.delete(payload);
+window.inknest.notes.listTrash();
+window.inknest.notes.restore(payload);
+window.inknest.notes.permanentlyDelete(payload);
+```
+
+Permanent deletion requires an explicit `{ confirmed: true }` payload in
+addition to renderer-side confirmation.
+
+### Main-Process Note Operations
+
+`src/main/services/note-service.ts` now owns the note file mutations:
+
+- `createMarkdownNote` writes a new UTF-8 `.md` file with a default `# Title`.
+- `renameMarkdownNote` changes the filename with collision-safe naming.
+- `duplicateMarkdownNote` copies note content into the same folder.
+- `moveMarkdownNote` moves a note into another workspace folder.
+- `moveMarkdownNoteToTrash` moves deleted notes under `.inknest/trash/`.
+- `scanTrashNotes` lists Markdown notes currently in trash.
+- `restoreMarkdownNote` moves trash items back to their original location, using
+  a collision-safe name when needed.
+- `permanentlyDeleteMarkdownNote` removes a trash item after confirmation.
+
+All operations resolve paths through `resolveInsideWorkspace()`. Regular note
+scanning still skips `.inknest/`, so trashed notes do not appear in the active
+note list.
+
+### Renderer Behavior
+
+`src/renderer/src/App.tsx` now renders scanned folders and notes instead of
+placeholder rows. Users can:
+
+- select a workspace and scan its folders and notes
+- create a note in the selected folder
+- open a note and inspect its saved Markdown content
+- rename, duplicate, move, and delete the selected note
+- restore or permanently delete notes from trash
+
+The editor area remains an inspection surface in this phase. Visual editing,
+toolbar commands, and autosave are intentionally left for later phases.
+
+### Phase 6 Data Flow
+
+```text
+User creates a note
+  -> renderer calls window.inknest.notes.create({ title, folderPath })
+  -> preload invokes notes:create
+  -> main process validates the payload and active workspace
+  -> note service writes a collision-safe Markdown file
+  -> renderer rescans workspace and opens the new note
+```
+
+Delete and restore follow the same boundary: renderer requests the action,
+main-process services move files inside the workspace, and the renderer rescans
+to keep visible state aligned with disk.
+
+### Tests
+
+`tests/phase6.test.mjs` verifies the shared contract, note IPC handlers, service
+operations, trash behavior, renderer controls, and architecture documentation
+for this phase. Existing phase tests continue to protect the app shell,
+workspace boundary, and file model.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 6
 
 Future work should preserve the current split:
 

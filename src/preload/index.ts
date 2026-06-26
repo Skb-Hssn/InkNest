@@ -14,7 +14,21 @@ const inknestApi: InkNestApi = {
   },
   notes: {
     list: () => ipcRenderer.invoke(ipcChannels.notes.list),
-    read: (path) => ipcRenderer.invoke(ipcChannels.notes.read, { path })
+    read: (path) => ipcRenderer.invoke(ipcChannels.notes.read, { path }),
+    create: (payload = {}) => ipcRenderer.invoke(ipcChannels.notes.create, payload),
+    rename: (payload) => ipcRenderer.invoke(ipcChannels.notes.rename, payload),
+    duplicate: (payload) => ipcRenderer.invoke(ipcChannels.notes.duplicate, payload),
+    move: (payload) => ipcRenderer.invoke(ipcChannels.notes.move, payload),
+    delete: (payload) => ipcRenderer.invoke(ipcChannels.notes.delete, payload),
+    listTrash: () => ipcRenderer.invoke(ipcChannels.notes.listTrash),
+    restore: (payload) => ipcRenderer.invoke(ipcChannels.notes.restore, payload),
+    permanentlyDelete: (payload) =>
+      ipcRenderer.invoke(ipcChannels.notes.permanentlyDelete, payload)
+  },
+  folders: {
+    create: (payload = {}) => ipcRenderer.invoke(ipcChannels.folders.create, payload),
+    rename: (payload) => ipcRenderer.invoke(ipcChannels.folders.rename, payload),
+    delete: (payload) => ipcRenderer.invoke(ipcChannels.folders.delete, payload)
   },
   settings: {
     get: () => ipcRenderer.invoke(ipcChannels.settings.get),
