@@ -15,7 +15,7 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-8-visual-markdown-editor";
+  phase: "phase-9-toolbar-editing-commands";
 };
 
 export type WorkspaceStatus =

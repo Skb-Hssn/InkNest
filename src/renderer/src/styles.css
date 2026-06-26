@@ -148,6 +148,10 @@ input {
     @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent px-2 text-xs font-semibold text-neutral-600 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
+  .toolbar-separator {
+    @apply mx-1 h-5 w-px bg-ink-100;
+  }
+
   .status-pill {
     @apply inline-flex h-7 shrink-0 items-center gap-1 rounded-md border border-ink-100 bg-ink-50 px-2 text-xs font-medium text-ink-700;
   }

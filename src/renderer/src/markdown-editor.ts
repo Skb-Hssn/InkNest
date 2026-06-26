@@ -1,5 +1,33 @@
 const blockSeparator = "\n\n";
 
+export type MarkdownEditorCommand =
+  | "heading-1"
+  | "heading-2"
+  | "heading-3"
+  | "heading-4"
+  | "heading-5"
+  | "heading-6"
+  | "bold"
+  | "italic"
+  | "strikethrough"
+  | "unordered-list"
+  | "ordered-list"
+  | "task-list"
+  | "blockquote"
+  | "inline-code"
+  | "code-block"
+  | "divider"
+  | "table"
+  | "link"
+  | "image";
+
+export type MarkdownEditorCommandOptions = {
+  label?: string;
+  url?: string;
+  alt?: string;
+  src?: string;
+};
+
 export function markdownToHtml(markdown: string) {
   const lines = markdown.replace(/\r\n?/g, "\n").split("\n");
   const blocks: string[] = [];
@@ -153,6 +181,106 @@ export function insertPlainTextAtSelection(text: string) {
   selection.addRange(range);
 }
 
+export function applyMarkdownEditorCommand(
+  command: MarkdownEditorCommand,
+  options: MarkdownEditorCommandOptions = {}
+) {
+  if (command.startsWith("heading-")) {
+    document.execCommand("formatBlock", false, `h${command.at(-1)}`);
+    return;
+  }
+
+  if (command === "bold") {
+    document.execCommand("bold");
+    return;
+  }
+
+  if (command === "italic") {
+    document.execCommand("italic");
+    return;
+  }
+
+  if (command === "strikethrough") {
+    document.execCommand("strikeThrough");
+    return;
+  }
+
+  if (command === "unordered-list") {
+    document.execCommand("insertUnorderedList");
+    return;
+  }
+
+  if (command === "ordered-list") {
+    document.execCommand("insertOrderedList");
+    return;
+  }
+
+  if (command === "blockquote") {
+    document.execCommand("formatBlock", false, "blockquote");
+    return;
+  }
+
+  if (command === "task-list") {
+    insertHtmlAtSelection('<ul><li data-task="true"><input type="checkbox"> Task</li></ul>');
+    return;
+  }
+
+  if (command === "inline-code") {
+    const selectedText = getSelectedText() || "code";
+    insertHtmlAtSelection(`<code>${escapeHtml(selectedText)}</code>`);
+    return;
+  }
+
+  if (command === "code-block") {
+    const selectedText = getSelectedText() || "code";
+    insertHtmlAtSelection(
+      `<pre><code data-language="">${escapeHtml(selectedText)}</code></pre>`
+    );
+    return;
+  }
+
+  if (command === "divider") {
+    insertHtmlAtSelection("<hr><p><br></p>");
+    return;
+  }
+
+  if (command === "table") {
+    insertHtmlAtSelection(
+      [
+        "<table><tbody>",
+        "<tr><th>Column 1</th><th>Column 2</th></tr>",
+        "<tr><td>Value</td><td>Value</td></tr>",
+        "</tbody></table>"
+      ].join("")
+    );
+    return;
+  }
+
+  if (command === "link") {
+    const url = options.url?.trim();
+    const label = options.label?.trim() || getSelectedText() || "Link";
+
+    if (url) {
+      insertHtmlAtSelection(
+        `<a href="${escapeAttribute(url)}">${escapeHtml(label)}</a>`
+      );
+    }
+
+    return;
+  }
+
+  if (command === "image") {
+    const src = options.src?.trim();
+    const alt = options.alt?.trim() || "Image";
+
+    if (src) {
+      insertHtmlAtSelection(
+        `<img src="${escapeAttribute(src)}" alt="${escapeAttribute(alt)}">`
+      );
+    }
+  }
+}
+
 function blockNodeToMarkdown(node: Node): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent?.trim() ?? "";
@@ -256,6 +384,10 @@ function inlineNodeToMarkdown(node: Node): string {
     return `\`${node.textContent ?? ""}\``;
   }
 
+  if (tagName === "s" || tagName === "strike" || tagName === "del") {
+    return `~~${inlineChildrenToMarkdown(node)}~~`;
+  }
+
   if (tagName === "a") {
     return `[${inlineChildrenToMarkdown(node)}](${node.getAttribute("href") ?? ""})`;
   }
@@ -269,6 +401,14 @@ function inlineNodeToMarkdown(node: Node): string {
 
 function inlineChildrenToMarkdown(element: HTMLElement) {
   return Array.from(element.childNodes).map(inlineNodeToMarkdown).join("");
+}
+
+function getSelectedText() {
+  return window.getSelection()?.toString().trim() ?? "";
+}
+
+function insertHtmlAtSelection(html: string) {
+  document.execCommand("insertHTML", false, html);
 }
 
 function inlineMarkdownToHtml(markdown: string) {
@@ -286,6 +426,7 @@ function inlineMarkdownToHtml(markdown: string) {
   source = source.replace(/`([^`]+)`/g, "<code>$1</code>");
   source = source.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   source = source.replace(/\*([^*]+)\*/g, "<em>$1</em>");
+  source = source.replace(/~~([^~]+)~~/g, "<s>$1</s>");
 
   return source.replace(/\u0000(\d+)\u0000/g, (_, tokenIndex) => tokens[Number(tokenIndex)]);
 }
@@ -348,4 +489,8 @@ function escapeHtml(value: string) {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+function escapeAttribute(value: string) {
+  return escapeHtml(value).replace(/'/g, "&#39;");
 }

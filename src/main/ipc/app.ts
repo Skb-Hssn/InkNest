@@ -4,6 +4,6 @@ import { registerIpcHandler } from "./register";
 export function registerAppHandlers() {
   registerIpcHandler<AppInfo>(ipcChannels.app.getInfo, () => ({
     name: "InkNest",
-    phase: "phase-8-visual-markdown-editor"
+    phase: "phase-9-toolbar-editing-commands"
   }));
 }

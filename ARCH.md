@@ -1,10 +1,10 @@
 # ARCH.md - InkNest Architecture
 
-This document describes the architecture established by Phase 0 through Phase 8
+This document describes the architecture established by Phase 0 through Phase 9
 of `PLAN.md`. It covers the repository baseline, the first running app shell,
 the secure Electron boundary, the static application layout, the workspace
 selection flow, the workspace file model, note and folder organization, and the
-visual Markdown editor that later toolbar and autosave behavior will build on.
+visual Markdown editor with its visible toolbar commands.
 
 ## Phase 0 Architecture: Repository Baseline
 
@@ -340,7 +340,7 @@ Renderer asks for app info
   -> preload invokes ipcChannels.app.getInfo
   -> main-process app handler returns AppInfo
   -> registerIpcHandler wraps it as { ok: true, data }
-  -> renderer displays phase-8-visual-markdown-editor
+  -> renderer displays phase-9-toolbar-editing-commands
 ```
 
 Invalid requests follow the same path, but validators throw safe request errors
@@ -427,7 +427,7 @@ App starts
   -> React renderer initializes static placeholders
   -> renderer asks window.inknest.app.getInfo()
   -> preload invokes ipcChannels.app.getInfo
-  -> main-process handler returns phase-8-visual-markdown-editor
+  -> main-process handler returns phase-9-toolbar-editing-commands
   -> status bar displays the current phase marker
 ```
 
@@ -447,7 +447,7 @@ Phase 4 makes the workspace switcher real while keeping one active workspace at
 a time. The renderer still has no direct filesystem access; it asks the preload
 bridge for workspace actions and the main process owns native dialogs,
 persistence, and path checks. The app info milestone is now
-`phase-8-visual-markdown-editor`.
+`phase-9-toolbar-editing-commands`.
 
 ### Workspace Contract
 
@@ -557,7 +557,7 @@ the Electron main process. The renderer still does not touch the filesystem
 directly; it asks `window.inknest.workspace.scan()`, `window.inknest.notes.list()`,
 or `window.inknest.notes.read(path)` through the preload bridge.
 
-The app info milestone is now `phase-8-visual-markdown-editor`.
+The app info milestone is now `phase-9-toolbar-editing-commands`.
 
 ### Workspace File Contract
 
@@ -914,7 +914,70 @@ organization.
 
 `npm run check` remains the lightweight validation command.
 
-## Architecture Direction After Phase 8
+## Phase 9 Architecture: Toolbar And Editing Commands
+
+Phase 9 replaces the disabled toolbar placeholders with real Markdown editing
+commands for the visual editor. It stays renderer-owned because toolbar actions
+change the editable DOM and the already-established manual save flow remains
+responsible for writing Markdown through the main process.
+
+### Toolbar Command Model
+
+The renderer defines a compact `toolbarPlaceholders` command list in
+`src/renderer/src/App.tsx`. Each command has an id, label, icon, and group. The
+toolbar exposes visible buttons for:
+
+- H1 and H2 headings
+- blockquotes
+- unordered, ordered, and task lists
+- bold, italic, and inline code
+- links
+- images
+- horizontal dividers
+
+Toolbar buttons use icon controls with `aria-label` and `title` attributes.
+Mouse down prevents the button from stealing the current contenteditable
+selection before the command runs.
+
+### Editor Command Boundary
+
+`VisualMarkdownEditor` exposes a small imperative handle with
+`runCommand(command, options)`. The parent app owns the toolbar, while the
+editor owns focus, DOM mutation, and Markdown synchronization.
+
+`src/renderer/src/markdown-editor.ts` contains `applyMarkdownEditorCommand`.
+The helper applies common contenteditable commands, inserts structured HTML for
+task lists, inline code, code blocks, dividers, links, and images, then the
+editor serializes the updated DOM with `editorDomToMarkdown`.
+
+Link and image commands ask for the needed URL/path and display text/alt text in
+the renderer. Phase 12 will replace this simple insertion path with asset import
+and safer local asset handling.
+
+### Phase 9 Data Flow
+
+```text
+User places the cursor or selects content
+  -> user clicks a toolbar button
+  -> toolbar preserves the editor selection on mouse down
+  -> App calls VisualMarkdownEditor.runCommand(command, options)
+  -> editor focuses the contenteditable surface
+  -> applyMarkdownEditorCommand mutates the DOM
+  -> editorDomToMarkdown serializes the new content
+  -> App marks the note dirty and keeps manual Save available
+```
+
+### Tests
+
+`tests/phase9.test.mjs` verifies the phase marker, toolbar command metadata,
+imperative editor command bridge, command helper coverage, toolbar styling, and
+this architecture section. Earlier phase tests continue to protect the shell,
+workspace boundary, file model, note CRUD behavior, folder organization, and
+visual Markdown save behavior.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 9
 
 Future work should preserve the current split:
 

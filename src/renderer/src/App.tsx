@@ -3,7 +3,9 @@ import {
   type ClipboardEvent,
   type FormEvent,
   type ReactNode,
+  forwardRef,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState
@@ -11,9 +13,11 @@ import {
 import {
   AlertTriangle,
   BookOpenText,
+  Bold,
   Check,
   ChevronDown,
   ChevronRight,
+  Code2,
   Copy,
   Edit3,
   FileText,
@@ -23,15 +27,31 @@ import {
   FolderOpen,
   FolderPlus,
   Hash,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  Image,
+  Italic,
+  Link,
+  List,
+  ListChecks,
   ListFilter,
+  ListOrdered,
+  Minus,
   PanelLeft,
   PanelRightClose,
+  Quote,
   RotateCcw,
   Save,
   Search,
   Settings,
   SlidersHorizontal,
   SquarePen,
+  Strikethrough,
+  Table2,
   Trash2,
   X
 } from "lucide-react";
@@ -44,8 +64,11 @@ import type {
   WorkspaceInfo
 } from "../../shared/ipc";
 import {
+  applyMarkdownEditorCommand,
   editorDomToMarkdown,
   insertPlainTextAtSelection,
+  type MarkdownEditorCommand,
+  type MarkdownEditorCommandOptions,
   markdownToHtml
 } from "./markdown-editor";
 
@@ -63,17 +86,38 @@ const rootFolder: FolderSummary = {
   path: "."
 };
 
-const toolbarPlaceholders = [
-  "H1",
-  "B",
-  "I",
-  "List",
-  "Link",
-  "Image"
-] as const;
+type ToolbarCommand = {
+  id: MarkdownEditorCommand;
+  label: string;
+  icon: ReactNode;
+  group: "block" | "inline" | "insert";
+};
+
+const toolbarPlaceholders: ToolbarCommand[] = [
+  { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "block" },
+  { id: "heading-2", label: "H2", icon: <Heading2 size={16} />, group: "block" },
+  { id: "heading-3", label: "H3", icon: <Heading3 size={16} />, group: "block" },
+  { id: "heading-4", label: "H4", icon: <Heading4 size={16} />, group: "block" },
+  { id: "heading-5", label: "H5", icon: <Heading5 size={16} />, group: "block" },
+  { id: "heading-6", label: "H6", icon: <Heading6 size={16} />, group: "block" },
+  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "block" },
+  { id: "unordered-list", label: "List", icon: <List size={16} />, group: "block" },
+  { id: "ordered-list", label: "Numbered list", icon: <ListOrdered size={16} />, group: "block" },
+  { id: "task-list", label: "Task list", icon: <ListChecks size={16} />, group: "block" },
+  { id: "bold", label: "B", icon: <Bold size={16} />, group: "inline" },
+  { id: "italic", label: "I", icon: <Italic size={16} />, group: "inline" },
+  { id: "strikethrough", label: "Strikethrough", icon: <Strikethrough size={16} />, group: "inline" },
+  { id: "inline-code", label: "Code", icon: <Code2 size={16} />, group: "inline" },
+  { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "insert" },
+  { id: "table", label: "Table", icon: <Table2 size={16} />, group: "insert" },
+  { id: "link", label: "Link", icon: <Link size={16} />, group: "insert" },
+  { id: "image", label: "Image", icon: <Image size={16} />, group: "insert" },
+  { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
+];
 
 export function App() {
-  const [phase, setPhase] = useState("phase-8-visual-markdown-editor");
+  const [phase, setPhase] = useState("phase-9-toolbar-editing-commands");
+  const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
@@ -294,6 +338,39 @@ export function App() {
     }
 
     setIsBusy(false);
+  }
+
+  function runToolbarCommand(command: ToolbarCommand) {
+    if (!selectedNoteContent || isBusy) {
+      return;
+    }
+
+    const options: MarkdownEditorCommandOptions = {};
+
+    if (command.id === "link") {
+      const url = window.prompt("Link URL");
+
+      if (!url) {
+        return;
+      }
+
+      options.url = url;
+      options.label = window.prompt("Text to display") ?? undefined;
+    }
+
+    if (command.id === "image") {
+      const src = window.prompt("Image URL or local path");
+
+      if (!src) {
+        return;
+      }
+
+      options.src = src;
+      options.alt = window.prompt("Image description") ?? undefined;
+    }
+
+    editorHandleRef.current?.runCommand(command.id, options);
+    setStatusMessage(`Applied ${command.label}`);
   }
 
   async function createNote() {
@@ -953,17 +1030,39 @@ export function App() {
             </div>
           </div>
 
-          <div className="flex h-11 items-center gap-1 border-b border-ink-100 px-4">
-            {toolbarPlaceholders.map((label) => (
-              <button key={label} type="button" className="toolbar-button" disabled>
-                {label}
-              </button>
-            ))}
+          <div
+            className="flex h-11 items-center gap-1 overflow-x-auto border-b border-ink-100 px-4"
+            aria-label="Markdown toolbar"
+          >
+            {toolbarPlaceholders.map((command, commandIndex) => {
+              const previousCommand = toolbarPlaceholders[commandIndex - 1];
+              const showSeparator =
+                previousCommand !== undefined &&
+                previousCommand.group !== command.group;
+
+              return (
+                <div key={command.id} className="flex items-center gap-1">
+                  {showSeparator ? <span className="toolbar-separator" /> : null}
+                  <button
+                    type="button"
+                    className="toolbar-button"
+                    aria-label={command.label}
+                    title={command.label}
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => runToolbarCommand(command)}
+                    disabled={!selectedNoteContent || isBusy}
+                  >
+                    {command.icon}
+                  </button>
+                </div>
+              );
+            })}
           </div>
 
           {selectedNoteContent ? (
             <article className="min-h-0 flex-1 overflow-y-auto p-8">
               <VisualMarkdownEditor
+                ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
                 disabled={isBusy}
@@ -1006,11 +1105,17 @@ type VisualMarkdownEditorProps = {
   onChange: (markdown: string) => void;
 };
 
-function VisualMarkdownEditor({
-  markdown,
-  disabled,
-  onChange
-}: VisualMarkdownEditorProps) {
+type VisualMarkdownEditorHandle = {
+  runCommand: (
+    command: MarkdownEditorCommand,
+    options?: MarkdownEditorCommandOptions
+  ) => void;
+};
+
+const VisualMarkdownEditor = forwardRef<
+  VisualMarkdownEditorHandle,
+  VisualMarkdownEditorProps
+>(function VisualMarkdownEditor({ markdown, disabled, onChange }, ref) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const lastRenderedMarkdown = useRef("");
 
@@ -1023,11 +1128,27 @@ function VisualMarkdownEditor({
     lastRenderedMarkdown.current = markdown;
   }, [markdown]);
 
-  function handleInput(event: FormEvent<HTMLDivElement>) {
-    const nextMarkdown = editorDomToMarkdown(event.currentTarget);
+  useImperativeHandle(ref, () => ({
+    runCommand(command, options) {
+      if (!editorRef.current || disabled) {
+        return;
+      }
+
+      editorRef.current.focus();
+      applyMarkdownEditorCommand(command, options);
+      syncMarkdownFromEditor(editorRef.current);
+    }
+  }));
+
+  function syncMarkdownFromEditor(editorElement: HTMLDivElement) {
+    const nextMarkdown = editorDomToMarkdown(editorElement);
 
     lastRenderedMarkdown.current = nextMarkdown;
     onChange(nextMarkdown);
+  }
+
+  function handleInput(event: FormEvent<HTMLDivElement>) {
+    syncMarkdownFromEditor(event.currentTarget);
   }
 
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
@@ -1050,7 +1171,7 @@ function VisualMarkdownEditor({
       onPaste={handlePaste}
     />
   );
-}
+});
 
 type EmptyStateProps = {
   icon: ReactNode;
