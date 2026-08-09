@@ -19,8 +19,11 @@ import type {
   DeleteFolderPayload,
   RestoreNotePayload,
   SelectImageResult,
+  SearchNotesPayload,
+  SearchResult,
   SaveNotePayload,
   SaveSettingsPayload,
+  TagSummary,
   WorkspaceFileModel,
   WorkspaceInfo
 } from "./ipc";
@@ -52,6 +55,10 @@ export type InkNestApi = {
     permanentlyDelete: (
       payload: PermanentlyDeleteNotePayload
     ) => Promise<IpcResult<{ deleted: true; trashPath: string }>>;
+  };
+  search: {
+    query: (payload?: SearchNotesPayload) => Promise<IpcResult<SearchResult[]>>;
+    listTags: () => Promise<IpcResult<TagSummary[]>>;
   };
   folders: {
     create: (payload?: CreateFolderPayload) => Promise<IpcResult<FolderSummary>>;

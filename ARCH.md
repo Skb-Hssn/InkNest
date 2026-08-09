@@ -1053,3 +1053,98 @@ Future work should preserve the current split:
 
 This keeps InkNest aligned with the local-first goal while avoiding direct
 filesystem access from the renderer.
+
+## Phase 11 Architecture: Search And Tags
+
+Phase 11 adds a small in-memory search layer while keeping Markdown files as
+the source of truth. The index is rebuilt when a workspace opens and after
+filesystem mutations that can change note content or paths.
+
+### Search Contract
+
+The shared IPC contract adds:
+
+```ts
+type SearchNotesPayload = {
+  query?: string;
+  tag?: string;
+};
+
+type SearchResult = {
+  id: string;
+  title: string;
+  path: string;
+  folderPath: string;
+  tags: string[];
+  snippet: string;
+};
+
+type TagSummary = {
+  tag: string;
+  count: number;
+};
+```
+
+The narrow preload surface is:
+
+```ts
+window.inknest.search.query({ query, tag });
+window.inknest.search.listTags();
+```
+
+The renderer never reads note files directly. Search requests cross the same
+validated preload and main-process IPC boundary as note operations.
+
+### In-Memory Index
+
+`src/main/services/search-service.ts` owns `InMemorySearchIndex`. Each indexed
+note contains its title, workspace-relative path, body content, complete
+Markdown content, and normalized searchable text. Searches are case-insensitive
+and match all query terms across title, path, body, and frontmatter tags.
+
+Results are ranked by title, tag, path, and body matches and include a short
+body snippet. Empty queries can be combined with a tag filter to show every
+note carrying that tag. Tag summaries are generated from the current index and
+include the number of notes using each tag.
+
+### Frontmatter Tags
+
+`note-service.ts` extracts the optional YAML `tags` field from frontmatter.
+Both inline lists such as `tags: [writing, work]` and block lists are accepted.
+Tags are deduplicated case-insensitively while preserving their first display
+spelling. Note summaries now carry their parsed tags for the sidebar and search
+result chips.
+
+### Index Lifecycle
+
+```text
+Workspace opens
+  -> scan Markdown notes
+  -> read each note and parse title/body/tags
+  -> store normalized entries in InMemorySearchIndex
+
+Note or folder changes
+  -> main-process file operation completes
+  -> rebuild the active workspace index
+  -> renderer refreshes search results and tag counts
+```
+
+The rebuild approach is intentionally simple for small and medium workspaces.
+SQLite FTS remains a future optimization, and external filesystem watchers are
+reserved for Phase 15.
+
+### Renderer Behavior
+
+The sidebar search input is controlled and searches as the user types. Tag
+chips show the generated tag list and counts; selecting one filters notes by
+that tag, and a query plus tag can be used together. Search results display the
+note title, matching body preview, path-independent tag chips, and open the
+note in its folder when selected. Empty results explain how to try another
+query or tag.
+
+### Tests
+
+`tests/phase11.test.mjs` verifies frontmatter tag parsing, index construction,
+case-insensitive title/body/path/tag search, snippets, tag counts, IPC/preload
+contracts, and renderer search controls. `npm run check` remains the first
+lightweight validation command.

@@ -449,7 +449,8 @@ async function createNoteSummary(
     id: relativePath,
     title: extractNoteTitle(markdown, path.basename(notePath)),
     path: relativePath,
-    folderPath: getFolderPath(relativePath)
+    folderPath: getFolderPath(relativePath),
+    tags: extractFrontmatterTags(markdown)
   };
 }
 
@@ -496,6 +497,121 @@ function extractNoteTitle(markdown: string, fileName: string) {
   }
 
   return path.basename(fileName, path.extname(fileName));
+}
+
+type FrontmatterValue = string | string[];
+
+/**
+ * Parse the small frontmatter subset InkNest needs without making the
+ * renderer or the main process depend on a permissive YAML evaluator.
+ * Unknown keys are retained as scalar or list values for future metadata.
+ */
+export function parseFrontmatter(markdown: string): Record<string, FrontmatterValue> {
+  const match = markdown.match(
+    /^(?:\uFEFF)?---[ \t]*\r?\n([\s\S]*?)\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/
+  );
+
+  if (!match) {
+    return {};
+  }
+
+  const values: Record<string, FrontmatterValue> = {};
+  let listKey: string | null = null;
+
+  for (const line of match[1].split(/\r?\n/)) {
+    const listItem = line.match(/^\s*-\s+(.+)\s*$/);
+
+    if (listItem && listKey) {
+      const currentValue = values[listKey];
+      const list = Array.isArray(currentValue)
+        ? currentValue
+        : currentValue
+          ? [currentValue]
+          : [];
+      list.push(unquoteFrontmatterValue(listItem[1]));
+      values[listKey] = list;
+      continue;
+    }
+
+    const property = line.match(/^\s*([\w-]+)\s*:\s*(.*?)\s*$/);
+
+    if (!property) {
+      continue;
+    }
+
+    const key = property[1];
+    const rawValue = property[2];
+    listKey = null;
+
+    if (!rawValue || rawValue === "null" || rawValue === "~") {
+      values[key] = [];
+      listKey = key;
+      continue;
+    }
+
+    values[key] = parseFrontmatterValue(rawValue, key);
+  }
+
+  return values;
+}
+
+export function extractFrontmatterTags(markdown: string): string[] {
+  const frontmatter = parseFrontmatter(markdown);
+  const rawTags =
+    Object.entries(frontmatter).find(([key]) => key.toLocaleLowerCase() === "tags")?.[1] ??
+    [];
+  const candidates = Array.isArray(rawTags) ? rawTags : [rawTags];
+  const seen = new Set<string>();
+  const tags: string[] = [];
+
+  for (const candidate of candidates) {
+    const tag = candidate.trim();
+
+    if (!tag || seen.has(tag.toLocaleLowerCase())) {
+      continue;
+    }
+
+    seen.add(tag.toLocaleLowerCase());
+    tags.push(tag);
+  }
+
+  return tags;
+}
+
+// Alias kept explicit because callers commonly ask for the tags parser rather
+// than the complete frontmatter object.
+export const parseFrontmatterTags = extractFrontmatterTags;
+
+function parseFrontmatterValue(rawValue: string, key: string): FrontmatterValue {
+  if (rawValue.startsWith("[") && rawValue.endsWith("]")) {
+    return rawValue
+      .slice(1, -1)
+      .split(",")
+      .map((value) => unquoteFrontmatterValue(value))
+      .filter(Boolean);
+  }
+
+  if (key.toLocaleLowerCase() === "tags" && rawValue.includes(",")) {
+    return rawValue
+      .split(",")
+      .map((value) => unquoteFrontmatterValue(value))
+      .filter(Boolean);
+  }
+
+  return unquoteFrontmatterValue(rawValue);
+}
+
+function unquoteFrontmatterValue(value: string) {
+  const trimmed = value.trim();
+
+  if (
+    (trimmed.startsWith('"') && trimmed.endsWith('"')) ||
+    (trimmed.startsWith("'") && trimmed.endsWith("'"))
+  ) {
+    return trimmed.slice(1, -1).trim();
+  }
+
+  return trimmed;
 }
 
 function getFolderPath(relativeNotePath: string) {

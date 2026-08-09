@@ -11,6 +11,8 @@ export default defineConfig({
   },
   renderer: {
     root: resolve("src/renderer"),
-    plugins: [react()]
+    // The current plugin types require an explicit options object (equivalent
+    // to the original react() scaffold configuration).
+    plugins: [react({})] // react()
   }
 });

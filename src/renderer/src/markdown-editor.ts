@@ -344,7 +344,7 @@ export function applyMarkdownEditorCommand(
   if (command === "image") {
     const src = options.src?.trim();
     const alt = options.alt?.trim() || "Image";
-    const previewSrc = options.previewSrc?.trim() || src;
+    const previewSrc = options.previewSrc?.trim() || src || "";
 
     if (src) {
       insertHtmlAtSelection(
@@ -1575,7 +1575,7 @@ function tableMarkdownToHtml(lines: string[], options: MarkdownRenderOptions) {
 }
 
 function tableElementToMarkdown(table: HTMLElement) {
-  const rows = Array.from(table.rows);
+  const rows = Array.from((table as HTMLTableElement).rows);
   const columnCount = Math.max(...rows.map((row) => row.cells.length), 0);
   const markdownRows = rows.map((row) =>
     Array.from({ length: columnCount }, (_, cellIndex) =>
@@ -1629,7 +1629,7 @@ function addTableRowAtSelection() {
 function deleteTableRowAtSelection() {
   const cell = getSelectionTableCellFromWindow();
   const row = cell?.parentElement;
-  const table = cell?.closest("table");
+  const table = cell?.closest("table") as HTMLTableElement | null;
 
   if (!cell || !(row instanceof HTMLTableRowElement) || !table || table.rows.length <= 1) {
     return;
@@ -1661,12 +1661,16 @@ function addTableColumnAtSelection() {
     row.insertBefore(newCell, row.cells[insertIndex] ?? null);
   }
 
-  placeCaretInside(table.rows[cell.parentElement?.rowIndex ?? 0].cells[insertIndex]);
+  const rowIndex =
+    cell.parentElement instanceof HTMLTableRowElement
+      ? cell.parentElement.rowIndex
+      : 0;
+  placeCaretInside(table.rows[rowIndex].cells[insertIndex]);
 }
 
 function deleteTableColumnAtSelection() {
   const cell = getSelectionTableCellFromWindow();
-  const table = cell?.closest("table");
+  const table = cell?.closest("table") as HTMLTableElement | null;
 
   if (!cell || !table || table.rows[0].cells.length <= 1) {
     return;
@@ -1679,7 +1683,11 @@ function deleteTableColumnAtSelection() {
     row.cells[deleteIndex]?.remove();
   }
 
-  placeCaretInside(table.rows[cell.parentElement?.rowIndex ?? 0].cells[nextIndex]);
+  const rowIndex =
+    cell.parentElement instanceof HTMLTableRowElement
+      ? cell.parentElement.rowIndex
+      : 0;
+  placeCaretInside(table.rows[rowIndex].cells[nextIndex]);
 }
 
 function getSelectionTableCellFromWindow() {
