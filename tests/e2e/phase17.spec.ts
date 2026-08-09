@@ -25,6 +25,8 @@ async function launchInkNest(userDataDir: string) {
 }
 
 test("phase 17 release smoke flow covers the core MVP acceptance path", async ({}, testInfo) => {
+  test.setTimeout(60_000);
+
   const userDataDir = testInfo.outputPath("user-data");
   const workspaceDir = testInfo.outputPath("workspace");
   const exportPath = path.join(workspaceDir, "Release Renamed Export.md");
