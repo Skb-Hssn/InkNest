@@ -1213,6 +1213,37 @@ Ctrl/Cmd-click link
 
 `npm run check` remains the first lightweight validation command.
 
+## Phase 17 Architecture: Release Validation
+
+Phase 17 adds a release gate around the completed MVP rather than introducing
+another renderer feature. `scripts/release-check.mjs` runs the scaffold, unit,
+and TypeScript checks, validates the production package build, and then runs
+the Electron acceptance suite. The GitHub pull-request workflow invokes this
+single gate under Xvfb so local and CI validation use the same command.
+
+### Acceptance Coverage
+
+`tests/e2e/phase17.spec.ts` is an integrated smoke flow through the typed
+preload boundary. It selects a workspace, creates and edits a note, verifies
+the saved Markdown, searches for its content, renames the note, exports a
+copy, moves the note to trash, and restores it. The existing phase suites
+continue to cover the individual service and renderer behaviors in detail.
+
+`RELEASE_CHECKLIST.md` records the automated gate, MVP acceptance criteria,
+and manual checks for themes, autosave, external links, images, exports, and
+external file changes. It is the handoff checklist for a packaged desktop
+build.
+
+### Phase 17 Validation Flow
+
+```text
+npm run release-check
+  -> npm run check
+  -> npm run package
+  -> npm run test:e2e
+  -> release validation passed
+```
+
 ## Phase 14 Architecture: Settings And Themes
 
 Phase 14 stores user preferences in the existing user-data `settings.json`
