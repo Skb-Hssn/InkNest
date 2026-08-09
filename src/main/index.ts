@@ -1,6 +1,7 @@
-import { app, BrowserWindow, Menu } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import path from "node:path";
 import { registerIpcHandlers } from "./ipc";
+import { ipcChannels } from "../shared/ipc";
 
 if (process.env.INKNEST_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.INKNEST_USER_DATA_DIR));
@@ -37,6 +38,56 @@ function createMainWindow() {
       nodeIntegration: false,
       sandbox: true
     }
+  });
+
+  let closeHandshakeActive = false;
+  let closeHandshakeTimer: NodeJS.Timeout | null = null;
+
+  const clearCloseHandshakeTimer = () => {
+    if (closeHandshakeTimer) {
+      clearTimeout(closeHandshakeTimer);
+      closeHandshakeTimer = null;
+    }
+  };
+
+  const handleCloseReady = (event: Electron.IpcMainEvent) => {
+    if (event.sender !== mainWindow.webContents || !closeHandshakeActive) {
+      return;
+    }
+
+    clearCloseHandshakeTimer();
+    closeHandshakeActive = true;
+    mainWindow.close();
+  };
+  const handleCloseCanceled = (event: Electron.IpcMainEvent) => {
+    if (event.sender === mainWindow.webContents) {
+      clearCloseHandshakeTimer();
+      closeHandshakeActive = false;
+    }
+  };
+
+  ipcMain.on(ipcChannels.app.closeReady, handleCloseReady);
+  ipcMain.on(ipcChannels.app.closeCanceled, handleCloseCanceled);
+
+  mainWindow.on("close", (event) => {
+    if (closeHandshakeActive) {
+      return;
+    }
+
+    event.preventDefault();
+    closeHandshakeActive = true;
+    mainWindow.webContents.send(ipcChannels.app.prepareToClose);
+    closeHandshakeTimer = setTimeout(() => {
+      if (!mainWindow.isDestroyed()) {
+        mainWindow.destroy();
+      }
+    }, 5000);
+  });
+
+  mainWindow.on("closed", () => {
+    clearCloseHandshakeTimer();
+    ipcMain.removeListener(ipcChannels.app.closeReady, handleCloseReady);
+    ipcMain.removeListener(ipcChannels.app.closeCanceled, handleCloseCanceled);
   });
 
   mainWindow.setMenuBarVisibility(false);

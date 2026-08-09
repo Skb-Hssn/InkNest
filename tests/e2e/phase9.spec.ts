@@ -39,7 +39,10 @@ async function openNote(
     return window.inknest.workspace.select(workspacePath);
   }, workspaceDir);
   await window.reload();
-  await window.getByRole("button", { name: new RegExp(title) }).click();
+  await window
+    .locator(".note-open-area")
+    .filter({ hasText: title })
+    .click();
 
   return window.getByRole("textbox", { name: "Visual Markdown editor" });
 }
@@ -186,8 +189,11 @@ test("phase 9 slash commands and link popover produce editable Markdown", async 
 
     await placeCaretAtEnd(editor);
     await window.getByRole("button", { name: "Link", exact: true }).click();
-    await window.getByLabel("Text", { exact: true }).fill("InkNest docs");
-    await window.getByLabel("Link", { exact: true }).fill("https://example.com/docs");
+    const linkPopover = window.locator(".link-popover");
+    await linkPopover.getByLabel("Text", { exact: true }).fill("InkNest docs");
+    await linkPopover
+      .getByLabel("Link", { exact: true })
+      .fill("https://example.com/docs");
     await window.getByRole("button", { name: "Apply", exact: true }).click();
 
     const link = editor.locator("a");
@@ -195,8 +201,10 @@ test("phase 9 slash commands and link popover produce editable Markdown", async 
     await expect(link).toHaveAttribute("href", "https://example.com/docs");
 
     await link.dblclick();
-    await window.getByLabel("Text", { exact: true }).fill("Edited docs");
-    await window.getByLabel("Link", { exact: true }).fill("https://example.com/edited");
+    await linkPopover.getByLabel("Text", { exact: true }).fill("Edited docs");
+    await linkPopover
+      .getByLabel("Link", { exact: true })
+      .fill("https://example.com/edited");
     await window.getByRole("button", { name: "Apply", exact: true }).click();
     await expect(link).toHaveText("Edited docs");
     await expect(link).toHaveAttribute("href", "https://example.com/edited");

@@ -234,8 +234,13 @@ function fileNameFromPath(path: string) {
   return path.split(/[\\/]/).pop() ?? "Image";
 }
 
+type SaveState = "saved" | "unsaved" | "saving" | "failed";
+
+// Keep the debounce inside the product's 500ms-1000ms autosave range.
+const autoSaveDelayMs = 750;
+
 export function App() {
-  const [phase, setPhase] = useState("phase-9-toolbar-editing-commands");
+  const [phase, setPhase] = useState("phase-10-autosave-safe-writes");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
@@ -256,10 +261,25 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveState, setSaveState] = useState<SaveState>("saved");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
   >(() => new Set());
+  const saveTimerRef = useRef<number | null>(null);
+  const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const saveQueuedRef = useRef(false);
+  const editorMarkdownRef = useRef(editorMarkdown);
+  const lastSavedMarkdownRef = useRef(lastSavedMarkdown);
+  const selectedNoteContentRef = useRef(selectedNoteContent);
+  const saveStateRef = useRef<SaveState>(saveState);
+
+  editorMarkdownRef.current = editorMarkdown;
+  lastSavedMarkdownRef.current = lastSavedMarkdown;
+  selectedNoteContentRef.current = selectedNoteContent;
+  saveStateRef.current = saveState;
 
   useEffect(() => {
     let isMounted = true;
@@ -303,9 +323,13 @@ export function App() {
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
   const isDirty = selectedNoteContent !== null && editorMarkdown !== lastSavedMarkdown;
   const saveStatusLabel = selectedNoteContent
-    ? isDirty
-      ? "Unsaved changes"
-      : "Saved"
+    ? saveState === "saving"
+      ? "Saving"
+      : saveState === "failed"
+        ? "Save failed"
+        : isDirty || saveState === "unsaved"
+          ? "Unsaved changes"
+          : "Saved"
     : "No note";
   const wordCount = editorMarkdown.trim()
     ? editorMarkdown.trim().split(/\s+/).length
@@ -378,6 +402,10 @@ export function App() {
   }
 
   async function chooseWorkspace() {
+    if (!(await flushCurrentNote())) {
+      return;
+    }
+
     setIsBusy(true);
     setWorkspaceError(null);
 
@@ -397,6 +425,10 @@ export function App() {
   }
 
   async function reopenWorkspace(workspacePath: string) {
+    if (!(await flushCurrentNote())) {
+      return;
+    }
+
     setIsBusy(true);
     setWorkspaceError(null);
 
@@ -413,24 +445,73 @@ export function App() {
     setIsBusy(false);
   }
 
+  function updateSaveState(nextState: SaveState) {
+    saveStateRef.current = nextState;
+    setSaveState(nextState);
+  }
+
+  function updateSaveError(nextError: string | null) {
+    setSaveError(nextError);
+  }
+
+  function hasPendingSave() {
+    const note = selectedNoteContentRef.current;
+    return note !== null && editorMarkdownRef.current !== lastSavedMarkdownRef.current;
+  }
+
+  function clearAutoSaveTimer() {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+  }
+
+  function scheduleAutoSave(delay = autoSaveDelayMs) {
+    clearAutoSaveTimer();
+
+    if (!hasPendingSave()) {
+      return;
+    }
+
+    saveTimerRef.current = window.setTimeout(() => {
+      saveTimerRef.current = null;
+      void saveCurrentNote();
+    }, delay);
+  }
+
   function clearSelectedNote() {
+    clearAutoSaveTimer();
+    selectedNoteContentRef.current = null;
+    editorMarkdownRef.current = "";
+    lastSavedMarkdownRef.current = "";
     setSelectedNotePath(null);
     setSelectedNoteContent(null);
     setEditorMarkdown("");
     setLastSavedMarkdown("");
+    updateSaveState("saved");
+    updateSaveError(null);
     setActiveToolbarCommands(new Set());
   }
 
   async function openNote(notePath: string) {
+    if (!(await flushCurrentNote())) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setIsBusy(true);
     const result = await window.inknest.notes.read(notePath);
 
     if (result.ok) {
+      selectedNoteContentRef.current = result.data;
+      editorMarkdownRef.current = result.data.markdown;
+      lastSavedMarkdownRef.current = result.data.markdown;
       setSelectedNotePath(result.data.path);
       setSelectedNoteContent(result.data);
       setEditorMarkdown(result.data.markdown);
       setLastSavedMarkdown(result.data.markdown);
+      updateSaveState("saved");
+      updateSaveError(null);
       setStatusMessage("Note opened");
     } else {
       setWorkspaceError(result.error.message);
@@ -439,30 +520,175 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function saveCurrentNote() {
+  async function saveCurrentNote(): Promise<boolean> {
+    const note = selectedNoteContentRef.current;
+    const markdownToSave = editorMarkdownRef.current;
+
+    if (!note || markdownToSave === lastSavedMarkdownRef.current) {
+      return saveStateRef.current !== "failed";
+    }
+
+    if (saveInFlightRef.current) {
+      saveQueuedRef.current = true;
+      await saveInFlightRef.current;
+      return !hasPendingSave();
+    }
+
+    const requestPath = note.path;
+    updateSaveState("saving");
+    updateSaveError(null);
+    setStatusMessage("Saving");
+    setIsSaving(true);
+
+    const savePromise = (async () => {
+      let result;
+
+      try {
+        result = await window.inknest.notes.save({
+          path: requestPath,
+          markdown: markdownToSave
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "The note could not be saved.";
+
+        updateSaveState("failed");
+        updateSaveError(message);
+        setWorkspaceError(message);
+        setStatusMessage("Save failed");
+        return false;
+      }
+
+      if (!result.ok) {
+        if (selectedNoteContentRef.current?.path === requestPath) {
+          updateSaveState("failed");
+          updateSaveError(result.error.message);
+          setWorkspaceError(result.error.message);
+          setStatusMessage("Save failed");
+        }
+
+        return false;
+      }
+
+      if (selectedNoteContentRef.current?.path === requestPath) {
+        selectedNoteContentRef.current = result.data;
+        lastSavedMarkdownRef.current = result.data.markdown;
+        setSelectedNoteContent(result.data);
+        setLastSavedMarkdown(result.data.markdown);
+
+        if (editorMarkdownRef.current === markdownToSave) {
+          editorMarkdownRef.current = result.data.markdown;
+          setEditorMarkdown(result.data.markdown);
+        }
+      }
+
+      await refreshWorkspace();
+
+      if (selectedNoteContentRef.current?.path === requestPath) {
+        const stillDirty = hasPendingSave();
+        updateSaveState(stillDirty ? "unsaved" : "saved");
+        setStatusMessage(stillDirty ? "Unsaved changes" : "Saved");
+        updateSaveError(null);
+        if (!stillDirty) {
+          setWorkspaceError(null);
+        }
+      }
+
+      return true;
+    })();
+
+    saveInFlightRef.current = savePromise;
+
+    try {
+      return await savePromise;
+    } finally {
+      if (saveInFlightRef.current === savePromise) {
+        saveInFlightRef.current = null;
+      }
+
+      setIsSaving(false);
+
+      if (saveQueuedRef.current) {
+        saveQueuedRef.current = false;
+        scheduleAutoSave();
+      }
+    }
+  }
+
+  async function flushCurrentNote() {
+    clearAutoSaveTimer();
+
+    while (true) {
+      if (saveInFlightRef.current) {
+        await saveInFlightRef.current;
+        await Promise.resolve();
+        continue;
+      }
+
+      if (!hasPendingSave()) {
+        return true;
+      }
+
+      if (!(await saveCurrentNote())) {
+        return false;
+      }
+    }
+  }
+
+  useEffect(() => {
     if (!selectedNoteContent || !isDirty) {
       return;
     }
 
-    setIsBusy(true);
-    const result = await window.inknest.notes.save({
-      path: selectedNoteContent.path,
-      markdown: editorMarkdown
-    });
-
-    if (result.ok) {
-      setSelectedNoteContent(result.data);
-      setEditorMarkdown(result.data.markdown);
-      setLastSavedMarkdown(result.data.markdown);
-      await refreshWorkspace();
-      setStatusMessage("Saved");
-    } else {
-      setWorkspaceError(result.error.message);
-      setStatusMessage("Save failed");
+    if (saveStateRef.current !== "saving") {
+      updateSaveState("unsaved");
     }
 
-    setIsBusy(false);
-  }
+    scheduleAutoSave();
+
+    return clearAutoSaveTimer;
+  }, [editorMarkdown, isDirty, lastSavedMarkdown, selectedNoteContent?.path]);
+
+  useEffect(() => {
+    const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      if (
+        (event.ctrlKey || event.metaKey) &&
+        event.key.toLowerCase() === "s"
+      ) {
+        event.preventDefault();
+        void saveCurrentNote();
+      }
+    };
+
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
+
+  useEffect(() => {
+    return window.inknest.app.onPrepareToClose(() => {
+      void (async () => {
+        try {
+          const didFlush = await flushCurrentNote();
+
+          if (didFlush) {
+            window.inknest.app.closeReady();
+            return;
+          }
+
+          setStatusMessage("Save failed");
+          window.inknest.app.closeCanceled();
+        } catch (error) {
+          const message =
+            error instanceof Error ? error.message : "The pending save could not be completed.";
+          updateSaveState("failed");
+          updateSaveError(message);
+          setWorkspaceError(message);
+          setStatusMessage("Save failed");
+          window.inknest.app.closeCanceled();
+        }
+      })();
+    });
+  }, []);
 
   async function runToolbarCommand(
     command: ToolbarCommand,
@@ -634,6 +860,14 @@ export function App() {
       return;
     }
 
+    if (
+      selectedNote &&
+      isSameOrChildFolderPath(selectedNote.folderPath, folder.path) &&
+      !(await flushCurrentNote())
+    ) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
     setIsBusy(true);
@@ -673,6 +907,14 @@ export function App() {
       return;
     }
 
+    if (
+      selectedNote &&
+      isSameOrChildFolderPath(selectedNote.folderPath, folder.path) &&
+      !(await flushCurrentNote())
+    ) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
     setEditingFolderPath(null);
@@ -704,6 +946,14 @@ export function App() {
   }
 
   async function moveFolder(folder: FolderSummary, parentPath: string) {
+    if (
+      selectedNote &&
+      isSameOrChildFolderPath(selectedNote.folderPath, folder.path) &&
+      !(await flushCurrentNote())
+    ) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
     setEditingFolderPath(null);
@@ -762,6 +1012,10 @@ export function App() {
       return;
     }
 
+    if (!(await flushCurrentNote())) {
+      return;
+    }
+
     setIsBusy(true);
     const result = await window.inknest.notes.rename({
       path: selectedNote.path,
@@ -780,6 +1034,10 @@ export function App() {
   }
 
   async function duplicateNote(note: NoteSummary) {
+    if (note.path === selectedNotePath && !(await flushCurrentNote())) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setIsBusy(true);
     const result = await window.inknest.notes.duplicate({
@@ -798,6 +1056,10 @@ export function App() {
   }
 
   async function moveNote(note: NoteSummary, folderPath: string) {
+    if (note.path === selectedNotePath && !(await flushCurrentNote())) {
+      return;
+    }
+
     setActiveMoveNotePath(null);
     setIsBusy(true);
     const result = await window.inknest.notes.move({
@@ -821,6 +1083,10 @@ export function App() {
     setActiveMoveNotePath(null);
 
     if (!window.confirm(`Move "${note.title}" to trash?`)) {
+      return;
+    }
+
+    if (note.path === selectedNotePath && !(await flushCurrentNote())) {
       return;
     }
 
@@ -1217,12 +1483,12 @@ export function App() {
                 type="button"
                 className="secondary-button"
                 onClick={() => void saveCurrentNote()}
-                disabled={!selectedNoteContent || !isDirty || isBusy}
+                disabled={!selectedNoteContent || !isDirty || isBusy || isSaving}
               >
                 <Save size={15} />
                 <span>Save</span>
               </button>
-              <span className="status-pill">
+              <span className="status-pill" aria-live="polite" title={saveError ?? undefined}>
                 <Check size={13} />
                 {statusMessage} - {saveStatusLabel}
               </span>
@@ -1341,7 +1607,12 @@ export function App() {
                 workspacePath={workspace.path}
                 disabled={isBusy}
                 onChange={(nextMarkdown) => {
+                  editorMarkdownRef.current = nextMarkdown;
                   setEditorMarkdown(nextMarkdown);
+                  if (saveStateRef.current !== "saving") {
+                    updateSaveState("unsaved");
+                  }
+                  updateSaveError(null);
                   setStatusMessage("Editing");
                 }}
                 onSelectionFormatChange={setActiveToolbarCommands}
@@ -1369,6 +1640,7 @@ export function App() {
         <span>{phase}</span>
         <span className="justify-self-end">
           {saveStatusLabel} - {wordCount} words - {characterCount} characters
+          {saveError ? `: ${saveError}` : ""}
         </span>
       </footer>
     </main>
@@ -1434,6 +1706,35 @@ const VisualMarkdownEditor = forwardRef<
 
     return () => {
       document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  });
+
+  useEffect(() => {
+    const editorElement = editorRef.current;
+
+    if (!editorElement) {
+      return;
+    }
+
+    function handleNativeChange(event: Event) {
+      const target = event.target;
+
+      if (
+        !(target instanceof HTMLSelectElement) ||
+        target.dataset.codeLanguage !== "true" ||
+        !editorRef.current
+      ) {
+        return;
+      }
+
+      updateCodeBlockLanguageFromSelect(target);
+      syncMarkdownFromEditor(editorRef.current);
+    }
+
+    editorElement.addEventListener("change", handleNativeChange);
+
+    return () => {
+      editorElement.removeEventListener("change", handleNativeChange);
     };
   });
 

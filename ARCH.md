@@ -864,9 +864,9 @@ the note path with the same workspace boundary as read, rename, move, delete,
 and restore operations, writes UTF-8 Markdown, and returns the saved
 `NoteContent` envelope.
 
-Phase 10 will replace this direct write with debounced autosave and a safer
-temporary-file write flow. Phase 8 intentionally keeps saving manual so the
-visual editor can be validated before autosave behavior is layered on.
+Phase 10 extends this save contract with debounced autosave and a safer
+temporary-file write flow. The contract remains the same for manual saves and
+autosaves.
 
 ### Renderer Editor Model
 
@@ -977,7 +977,70 @@ visual Markdown save behavior.
 
 `npm run check` remains the lightweight validation command.
 
-## Architecture Direction After Phase 9
+## Phase 10 Architecture: Auto-Save And Safe Writes
+
+Phase 10 keeps editing in the renderer and makes persistence a small queued
+workflow. The renderer owns the current Markdown, the last confirmed Markdown,
+the debounce timer, and the in-flight save promise. The main process remains
+the only process that writes note files.
+
+### Renderer Save State
+
+`src/renderer/src/App.tsx` exposes four note save states:
+
+- `Unsaved changes` when the editor differs from the last confirmed write
+- `Saving` while `window.inknest.notes.save` is in flight
+- `Saved` after the main process confirms the write
+- `Save failed` when the request or filesystem operation fails
+
+Editor changes schedule a 750ms autosave, within the 500ms to 1000ms product
+range. Manual Save and `Ctrl+S`/`Cmd+S` use the same save function. If an edit
+arrives while a save is in flight, the latest content remains dirty and is
+queued for another save rather than overwriting it with an older response.
+
+### Safe Main-Process Write
+
+`saveMarkdownNote` resolves and validates the workspace-relative Markdown path,
+then writes the next content to a same-directory temporary file. The service
+flushes the temporary file with `FileHandle.sync()`, closes it, renames it over
+the target, and attempts to flush the parent directory. Failed writes are
+returned as `SAVE_FAILED` with actionable permission, read-only, or disk-space
+messages. Temporary files are cleaned up when the rename does not complete.
+
+### Close Handshake
+
+The main window intercepts its `close` event and calls `event.preventDefault()`
+until the renderer acknowledges the close request. The renderer flushes the
+debounce timer and any in-flight or dirty note through the same save queue, then
+sends `app:close-ready`. A failed pending save sends `app:close-canceled`,
+leaves the note dirty, and keeps the error visible for retry. A bounded main
+process watchdog prevents a nonresponsive renderer from deadlocking the app
+forever; it is only a fallback after the normal acknowledgment path fails.
+
+### Phase 10 Data Flow
+
+```text
+User edits the visual Markdown surface
+  -> App marks the note unsaved and starts a 750ms debounce
+  -> debounce/manual shortcut calls the shared save queue
+  -> preload invokes notes:save with workspace-relative Markdown
+  -> main process writes a flushed temporary file and renames it into place
+  -> renderer marks the confirmed content saved or keeps failure/dirty state
+  -> window close requests a final queue flush before destruction
+```
+
+### Tests
+
+`tests/phase10.test.mjs` verifies the save-state wiring, manual shortcut,
+close handshake, safe-write markers, and that a saved note leaves no temporary
+file behind. `tests/e2e/phase10.spec.ts` covers the user path of editing,
+waiting for autosave, and closing the app. Earlier phase tests continue to
+protect the preload boundary, workspace model, note CRUD behavior, folder
+organization, and editor behavior.
+
+`npm run check` remains the lightweight validation command.
+
+## Architecture Direction After Phase 10
 
 Future work should preserve the current split:
 
