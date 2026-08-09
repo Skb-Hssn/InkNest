@@ -5,6 +5,7 @@ import {
   moveWorkspaceFolder,
   renameWorkspaceFolder
 } from "../services/folder-service";
+import { InMemorySearchIndex } from "../services/search-service";
 import { invalidPayload } from "./errors";
 import {
   assertActiveWorkspace,
@@ -14,7 +15,10 @@ import {
 } from "./validation";
 import { registerIpcHandler } from "./register";
 
-export function registerFolderHandlers(activeWorkspace: ActiveWorkspaceState) {
+export function registerFolderHandlers(
+  activeWorkspace: ActiveWorkspaceState,
+  searchIndex?: InMemorySearchIndex
+) {
   registerIpcHandler<FolderSummary>(ipcChannels.folders.create, (payload = {}) => {
     assertPlainObject(payload);
 
@@ -25,39 +29,48 @@ export function registerFolderHandlers(activeWorkspace: ActiveWorkspaceState) {
     );
   });
 
-  registerIpcHandler<FolderSummary>(ipcChannels.folders.rename, (payload) => {
+  registerIpcHandler<FolderSummary>(ipcChannels.folders.rename, async (payload) => {
     assertPlainObject(payload);
 
-    return renameWorkspaceFolder(
+    const result = await renameWorkspaceFolder(
       assertActiveWorkspace(activeWorkspace),
       assertString(payload.path, "path"),
       assertString(payload.name, "name")
     );
+
+    await searchIndex?.rebuild(assertActiveWorkspace(activeWorkspace));
+    return result;
   });
 
-  registerIpcHandler<FolderSummary>(ipcChannels.folders.move, (payload) => {
+  registerIpcHandler<FolderSummary>(ipcChannels.folders.move, async (payload) => {
     assertPlainObject(payload);
 
-    return moveWorkspaceFolder(
+    const result = await moveWorkspaceFolder(
       assertActiveWorkspace(activeWorkspace),
       assertString(payload.path, "path"),
       assertString(payload.parentPath, "parentPath")
     );
+
+    await searchIndex?.rebuild(assertActiveWorkspace(activeWorkspace));
+    return result;
   });
 
   registerIpcHandler<{ deleted: true; path: string }>(
     ipcChannels.folders.delete,
-    (payload) => {
+    async (payload) => {
       assertPlainObject(payload);
 
       if (payload.confirmed !== true) {
         throw invalidPayload("Folder delete requires confirmation.");
       }
 
-      return deleteWorkspaceFolder(
+      const result = await deleteWorkspaceFolder(
         assertActiveWorkspace(activeWorkspace),
         assertString(payload.path, "path")
       );
+
+      await searchIndex?.rebuild(assertActiveWorkspace(activeWorkspace));
+      return result;
     }
   );
 }

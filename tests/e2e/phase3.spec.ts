@@ -111,14 +111,14 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-10-autosave-safe-writes"
+        phase: "phase-11-search-and-tags"
       }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,
       hasProcess: false
     });
-    await expect(window.getByText("phase-10-autosave-safe-writes")).toBeVisible();
+    await expect(window.getByText("phase-11-search-and-tags")).toBeVisible();
   } finally {
     await app.close();
   }

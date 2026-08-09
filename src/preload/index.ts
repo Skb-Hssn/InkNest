@@ -63,6 +63,10 @@ const inknestApi: InkNestApi = {
   },
   export: {
     note: (path) => ipcRenderer.invoke(ipcChannels.export.note, { path })
+  },
+  search: {
+    query: (payload = {}) => ipcRenderer.invoke(ipcChannels.search.query, payload),
+    listTags: () => ipcRenderer.invoke(ipcChannels.search.listTags)
   }
 };
 

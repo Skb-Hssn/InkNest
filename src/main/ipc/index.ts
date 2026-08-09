@@ -5,7 +5,9 @@ import { registerFolderHandlers } from "./folders";
 import { registerLinkHandlers } from "./links";
 import { registerNoteHandlers } from "./notes";
 import { registerSettingsHandlers } from "./settings";
+import { registerSearchHandlers } from "./search";
 import { registerWorkspaceHandlers, restoreLastWorkspace } from "./workspace";
+import { InMemorySearchIndex } from "../services/search-service";
 import type { ActiveWorkspaceState } from "./validation";
 
 export async function registerIpcHandlers() {
@@ -16,12 +18,18 @@ export async function registerIpcHandlers() {
   };
 
   await restoreLastWorkspace(activeWorkspace);
+  const searchIndex = new InMemorySearchIndex();
+
+  if (activeWorkspace.path) {
+    await searchIndex.rebuild(activeWorkspace.path);
+  }
 
   registerAppHandlers();
-  registerWorkspaceHandlers(activeWorkspace);
-  registerNoteHandlers(activeWorkspace);
-  registerFolderHandlers(activeWorkspace);
+  registerWorkspaceHandlers(activeWorkspace, searchIndex);
+  registerNoteHandlers(activeWorkspace, searchIndex);
+  registerFolderHandlers(activeWorkspace, searchIndex);
   registerSettingsHandlers();
+  registerSearchHandlers(activeWorkspace, searchIndex);
   registerLinkHandlers();
   registerDialogHandlers(activeWorkspace);
   registerExportHandlers(activeWorkspace);

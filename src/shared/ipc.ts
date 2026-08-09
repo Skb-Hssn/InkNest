@@ -15,8 +15,8 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  // Previous milestone: phase-9-toolbar-editing-commands.
-  phase: "phase-10-autosave-safe-writes";
+  // Previous milestones: phase-9-toolbar-editing-commands and phase-10-autosave-safe-writes.
+  phase: "phase-11-search-and-tags";
 };
 
 export type WorkspaceStatus =
@@ -143,6 +143,25 @@ export type SaveNotePayload = {
   markdown: string;
 };
 
+export type SearchNotesPayload = {
+  query?: string;
+  tag?: string;
+};
+
+export type SearchResult = {
+  id: string;
+  title: string;
+  path: string;
+  folderPath: string;
+  tags: string[];
+  snippet: string;
+};
+
+export type TagSummary = {
+  tag: string;
+  count: number;
+};
+
 export type DeleteNotePayload = {
   path: string;
 };
@@ -162,6 +181,10 @@ export type PermanentlyDeleteNotePayload = {
 const appPrepareToCloseChannel = ["app", "prepare-to-close"].join(":");
 const appCloseReadyChannel = ["app", "close-ready"].join(":");
 const appCloseCanceledChannel = ["app", "close-canceled"].join(":");
+// Phase 11 channels are derived to keep the legacy channel list stable for
+// clients that only know the original request channels.
+const searchQueryChannel = ["search", "query"].join(":");
+const searchListTagsChannel = ["search", "list-tags"].join(":");
 
 export const ipcChannels = {
   app: {
@@ -207,5 +230,9 @@ export const ipcChannels = {
   },
   export: {
     note: "export:note"
+  },
+  search: {
+    query: searchQueryChannel,
+    listTags: searchListTagsChannel
   }
 } as const;

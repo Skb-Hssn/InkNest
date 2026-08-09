@@ -68,6 +68,8 @@ import type {
   FolderSummary,
   NoteContent,
   NoteSummary,
+  SearchResult,
+  TagSummary,
   WorkspaceFileModel,
   WorkspaceInfo
 } from "../../shared/ipc";
@@ -240,10 +242,15 @@ type SaveState = "saved" | "unsaved" | "saving" | "failed";
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-10-autosave-safe-writes");
+  const [phase, setPhase] = useState("phase-11-search-and-tags");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedTag, setSelectedTag] = useState("");
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
+  const [tagSummaries, setTagSummaries] = useState<TagSummary[]>([]);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
   const [selectedFolderPath, setSelectedFolderPath] = useState(".");
   const [selectedNotePath, setSelectedNotePath] = useState<string | null>(null);
@@ -318,6 +325,10 @@ export function App() {
   const notes = fileModel?.notes ?? [];
   const folderTree = useMemo(() => buildFolderTree(folders, notes), [folders, notes]);
   const visibleNotes = notes.filter((note) => note.folderPath === selectedFolderPath);
+  const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
+  const displayedNotes: Array<NoteSummary | SearchResult> = hasActiveSearch
+    ? searchResults
+    : visibleNotes;
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
@@ -381,6 +392,50 @@ export function App() {
     });
   }, [fileModel, folders, selectedFolderPath]);
 
+  useEffect(() => {
+    let isCurrent = true;
+
+    if (!hasWorkspace || !hasActiveSearch) {
+      setSearchResults([]);
+      setSearchError(null);
+      return () => {
+        isCurrent = false;
+      };
+    }
+
+    window.inknest.search.query({
+      query: searchQuery,
+      tag: selectedTag || undefined
+    })
+      .then((result) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        if (result.ok) {
+          setSearchResults(result.data);
+          setSearchError(null);
+        } else {
+          setSearchResults([]);
+          setSearchError(result.error.message);
+        }
+      })
+      .catch((error: unknown) => {
+        if (!isCurrent) {
+          return;
+        }
+
+        setSearchResults([]);
+        setSearchError(
+          error instanceof Error ? error.message : "Search could not be completed."
+        );
+      });
+
+    return () => {
+      isCurrent = false;
+    };
+  }, [fileModel, hasActiveSearch, hasWorkspace, searchQuery, selectedTag, workspace.path]);
+
   async function refreshWorkspace() {
     const result = await window.inknest.workspace.scan();
 
@@ -392,6 +447,11 @@ export function App() {
       const trashResult = await window.inknest.notes.listTrash();
       if (trashResult.ok) {
         setTrashNotes(trashResult.data);
+      }
+
+      const tagsResult = await window.inknest.search.listTags();
+      if (tagsResult.ok) {
+        setTagSummaries(tagsResult.data);
       }
 
       return result.data;
@@ -413,6 +473,8 @@ export function App() {
 
     if (result.ok) {
       setWorkspace(result.data);
+      setSearchQuery("");
+      setSelectedTag("");
       clearSelectedNote();
       if (result.data.status === "ready") {
         await refreshWorkspace();
@@ -436,6 +498,8 @@ export function App() {
 
     if (result.ok) {
       setWorkspace(result.data);
+      setSearchQuery("");
+      setSelectedTag("");
       clearSelectedNote();
       await refreshWorkspace();
     } else {
@@ -518,6 +582,11 @@ export function App() {
     }
 
     setIsBusy(false);
+  }
+
+  function openSearchResult(result: SearchResult) {
+    setSelectedFolderPath(result.folderPath);
+    void openNote(result.path);
   }
 
   async function saveCurrentNote(): Promise<boolean> {
@@ -1210,8 +1279,51 @@ export function App() {
 
             <label className="search-box">
               <Search size={16} />
-              <input type="search" placeholder="Search notes" aria-label="Search notes" />
+              <input
+                type="search"
+                placeholder="Search notes"
+                aria-label="Search notes"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+              />
             </label>
+
+            {tagSummaries.length > 0 ? (
+              <div className="tag-filter-panel" aria-label="Filter notes by tag">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-xs font-semibold uppercase text-neutral-500">Tags</p>
+                  {selectedTag ? (
+                    <button
+                      type="button"
+                      className="tag-filter-clear"
+                      onClick={() => setSelectedTag("")}
+                    >
+                      Clear
+                    </button>
+                  ) : null}
+                </div>
+                <div className="tag-filter-list">
+                  {tagSummaries.map((tagSummary) => (
+                    <button
+                      key={tagSummary.tag}
+                      type="button"
+                      className={`tag-filter-chip ${
+                        selectedTag === tagSummary.tag ? "tag-filter-chip-active" : ""
+                      }`}
+                      aria-pressed={selectedTag === tagSummary.tag}
+                      onClick={() =>
+                        setSelectedTag((currentTag) =>
+                          currentTag === tagSummary.tag ? "" : tagSummary.tag
+                        )
+                      }
+                    >
+                      <span>#{tagSummary.tag}</span>
+                      <span className="tag-filter-count">{tagSummary.count}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ) : null}
 
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -1340,13 +1452,19 @@ export function App() {
               </div>
             </div>
 
-            <div className="border-t border-ink-100 px-4 py-4">
-              <EmptyState
-                icon={<Search size={18} />}
-                title="No search results"
-                description="Search arrives in a later phase."
-              />
-            </div>
+            {!hasWorkspace || hasActiveSearch ? (
+              <div className="border-t border-ink-100 px-4 py-4">
+                <EmptyState
+                  icon={<Search size={18} />}
+                  title="No search results"
+                  description={
+                    !hasWorkspace
+                      ? "Search arrives in a later phase."
+                      : "Try a different search or tag."
+                  }
+                />
+              </div>
+            ) : null}
           </div>
         </aside>
 
@@ -1355,7 +1473,9 @@ export function App() {
             <div className="min-w-0">
               <h2 className="text-sm font-semibold">Notes</h2>
               <p className="truncate text-xs text-neutral-500">
-                {selectedFolderLabel}
+                {hasActiveSearch
+                  ? `${displayedNotes.length} search result${displayedNotes.length === 1 ? "" : "s"}`
+                  : selectedFolderLabel}
               </p>
             </div>
             <div className="flex items-center gap-1">
@@ -1378,18 +1498,28 @@ export function App() {
           </div>
 
           <div className="min-h-0 flex-1 overflow-y-auto">
-            {visibleNotes.length === 0 ? (
+            {displayedNotes.length === 0 ? (
               <div className="border-b border-ink-100 px-5 py-5">
                 <EmptyState
                   icon={<Hash size={18} />}
-                  title="No notes here"
-                  description="Create a note in this folder to start writing."
+                  title={hasActiveSearch ? "No matching notes" : "No notes here"}
+                  description={
+                    hasActiveSearch
+                      ? "No note matches the current search."
+                      : "Create a note in this folder to start writing."
+                  }
                 />
               </div>
             ) : null}
 
+            {searchError ? (
+              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {searchError}
+              </p>
+            ) : null}
+
             <div className="space-y-2 px-3 py-3" aria-label="Note list">
-              {visibleNotes.map((note) => (
+              {displayedNotes.map((note) => (
                 <NoteRow
                   key={note.path}
                   note={note}
@@ -1397,7 +1527,13 @@ export function App() {
                   selected={note.path === selectedNotePath}
                   isMoveMenuOpen={note.path === activeMoveNotePath}
                   isBusy={isBusy}
-                  onOpen={() => void openNote(note.path)}
+                  onOpen={() => {
+                    if (hasActiveSearch && "snippet" in note) {
+                      openSearchResult(note);
+                    } else {
+                      void openNote(note.path);
+                    }
+                  }}
                   onDuplicate={() => void duplicateNote(note)}
                   onToggleMove={() =>
                     setActiveMoveNotePath((currentPath) =>
@@ -2559,7 +2695,7 @@ function FolderTreeRow({
 }
 
 type NoteRowProps = {
-  note: NoteSummary;
+  note: NoteSummary | SearchResult;
   folders: FolderSummary[];
   selected: boolean;
   isMoveMenuOpen: boolean;
@@ -2590,7 +2726,18 @@ function NoteRow({
           <FileText size={15} />
           <span className="truncate font-medium">{note.title}</span>
         </div>
-        <p className="mt-1 truncate text-xs text-neutral-500">{note.path}</p>
+        <p className="mt-1 truncate text-xs text-neutral-500">
+          {"snippet" in note ? note.snippet : note.path}
+        </p>
+        {"tags" in note && note.tags.length > 0 ? (
+          <div className="note-tag-list" aria-label="Note tags">
+            {note.tags.map((tag) => (
+              <span key={tag} className="note-tag">
+                #{tag}
+              </span>
+            ))}
+          </div>
+        ) : null}
       </button>
 
       <div className="note-actions">

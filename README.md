@@ -4,7 +4,9 @@ InkNest is a local-first desktop Markdown note-taking app. The MVP focuses on on
 
 ## Current Status
 
-This repository has the phase 1 app shell from `PLAN.md`: Electron, Vite, React, TypeScript, and Tailwind are scaffolded with a minimal InkNest workspace screen. Filesystem features and workspace selection begin in later phases.
+Phase 11 is implemented: InkNest has workspace-backed note CRUD, visual
+Markdown editing with autosave, in-memory search across titles, paths, body
+content, and YAML frontmatter tags, plus tag filtering in the sidebar.
 
 ## First Command
 

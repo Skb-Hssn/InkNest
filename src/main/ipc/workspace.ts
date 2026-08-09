@@ -7,6 +7,7 @@ import {
   inspectWorkspacePath,
   scanWorkspaceFileModel
 } from "../services/workspace-service";
+import { InMemorySearchIndex } from "../services/search-service";
 import {
   assertActiveWorkspace,
   assertPlainObject,
@@ -16,7 +17,10 @@ import {
 import { invalidPayload } from "./errors";
 import { registerIpcHandler } from "./register";
 
-export function registerWorkspaceHandlers(activeWorkspace: ActiveWorkspaceState) {
+export function registerWorkspaceHandlers(
+  activeWorkspace: ActiveWorkspaceState,
+  searchIndex?: InMemorySearchIndex
+) {
   registerIpcHandler<WorkspaceInfo>(ipcChannels.workspace.getActive, async () => {
     const settings = await readSettings();
 
@@ -56,19 +60,20 @@ export function registerWorkspaceHandlers(activeWorkspace: ActiveWorkspaceState)
       );
     }
 
-    return activateWorkspace(selection.filePaths[0], activeWorkspace);
+    return activateWorkspace(selection.filePaths[0], activeWorkspace, searchIndex);
   });
 
   registerIpcHandler<WorkspaceInfo>(ipcChannels.workspace.select, async (payload) => {
     assertPlainObject(payload);
     const workspacePath = path.resolve(assertString(payload.path, "path"));
 
-    return activateWorkspace(workspacePath, activeWorkspace);
+    return activateWorkspace(workspacePath, activeWorkspace, searchIndex);
   });
 
   registerIpcHandler<WorkspaceFileModel>(ipcChannels.workspace.scan, async () => {
     const workspacePath = assertActiveWorkspace(activeWorkspace);
     const settings = await readSettings();
+    await searchIndex?.ensureWorkspace(workspacePath);
 
     return scanWorkspaceFileModel(workspacePath, settings);
   });
@@ -98,7 +103,8 @@ export async function restoreLastWorkspace(activeWorkspace: ActiveWorkspaceState
 
 async function activateWorkspace(
   workspacePath: string,
-  activeWorkspace: ActiveWorkspaceState
+  activeWorkspace: ActiveWorkspaceState,
+  searchIndex?: InMemorySearchIndex
 ) {
   const accessResult = await inspectWorkspacePath(workspacePath);
 
@@ -109,6 +115,7 @@ async function activateWorkspace(
   const settings = await rememberWorkspace(workspacePath);
   const resolvedWorkspacePath = path.resolve(workspacePath);
   await scanWorkspaceFileModel(resolvedWorkspacePath, settings);
+  await searchIndex?.rebuild(resolvedWorkspacePath);
   activeWorkspace.path = resolvedWorkspacePath;
   activeWorkspace.restoreStatus = "ready";
   activeWorkspace.restoreMessage = accessResult.message;
