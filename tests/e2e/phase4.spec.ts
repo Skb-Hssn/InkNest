@@ -57,6 +57,12 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       ok: true,
       data: {
         theme: "system",
+        fontSize: 16,
+        fontFamily: "system",
+        autoSaveDelayMs: 750,
+        lineWrap: true,
+        showWordCount: true,
+        sidebarVisible: true,
         lastWorkspacePath: workspaceDir,
         recentWorkspaces: [workspaceDir]
       }

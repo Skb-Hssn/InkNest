@@ -1213,6 +1213,75 @@ Ctrl/Cmd-click link
 
 `npm run check` remains the first lightweight validation command.
 
+## Phase 14 Architecture: Settings And Themes
+
+Phase 14 stores user preferences in the existing user-data `settings.json`
+file and applies them through the typed preload boundary. The main process
+owns persistence and validation; the renderer owns the settings popover and
+applies the returned values to the document and editor.
+
+### Settings Contract
+
+`AppSettings` contains the theme, editor font size and family, auto-save delay,
+line wrapping, word-count visibility, sidebar visibility, and the existing
+workspace restore fields. `settings:save` accepts a partial preference update,
+validates every supplied value in the main process, merges it with the current
+settings, normalizes it, and writes the complete settings object back to disk.
+
+The persisted defaults are:
+
+```ts
+{
+  theme: "system",
+  fontSize: 16,
+  fontFamily: "system",
+  autoSaveDelayMs: 750,
+  lineWrap: true,
+  showWordCount: true,
+  sidebarVisible: true
+}
+```
+
+Font sizes are limited to 12–24px and auto-save delays to 500–5000ms. Invalid
+or legacy settings fall back field-by-field to these defaults, while recent
+workspace paths continue to be normalized and capped at five entries.
+
+### Renderer Application
+
+The renderer requests `settings:get` during startup and keeps the returned
+settings in React state. Theme selection is written to
+`document.documentElement.dataset.theme`; CSS variables select light, dark, or
+OS-following system colors, including `prefers-color-scheme` handling. Font
+preferences are exposed as CSS variables on the app root and consumed by the
+visual editor. The auto-save scheduler uses the persisted delay, while the
+sidebar, line wrapping, and word-count controls update the layout immediately
+after a successful save.
+
+The default workspace remains part of the workspace selection flow: selecting
+or reopening a workspace updates `lastWorkspacePath` and `recentWorkspaces`,
+so a restart can restore the same local folder without direct renderer
+filesystem access.
+
+### Phase 14 Data Flow
+
+```text
+App startup
+  -> renderer invokes settings:get through preload
+  -> main reads and normalizes user-data/settings.json
+  -> renderer applies theme, font, layout, and autosave preferences
+
+User changes a preference
+  -> settings popover sends a partial settings:save request
+  -> main validates and merges the request
+  -> main writes the complete normalized settings object
+  -> renderer applies the returned settings immediately
+```
+
+`tests/phase14.test.mjs` covers the shared contract, validation, persistence
+defaults, renderer controls, and theme behavior. The Phase 4 end-to-end
+settings assertions also verify that newly selected workspaces retain the
+complete preference object.
+
 ## Phase 13 Architecture: Export
 
 Phase 13 keeps export filesystem access and PDF printing in the main process.

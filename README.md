@@ -4,10 +4,15 @@ InkNest is a local-first desktop Markdown note-taking app. The MVP focuses on on
 
 ## Current Status
 
-Phase 13 is implemented: InkNest has workspace-backed note CRUD, visual
+Phase 14 is implemented: InkNest has workspace-backed note CRUD, visual
 Markdown editing with autosave, in-memory search and tags, Markdown file and
 folder import, portable workspace image assets, safe external/local links,
-and Markdown, HTML, and PDF export.
+Markdown, HTML, and PDF export, plus persisted theme and editor preferences.
+
+Settings include light/dark/system themes, font size and family, auto-save
+delay, line wrapping, word-count visibility, and sidebar visibility. The last
+selected workspace is persisted as the default workspace and restored when the
+app starts.
 
 ## First Command
 

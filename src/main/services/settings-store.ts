@@ -5,9 +5,16 @@ import type { AppSettings } from "../../shared/ipc";
 
 const settingsFileName = "settings.json";
 const maxRecentWorkspaces = 5;
+let settingsUpdateQueue: Promise<unknown> = Promise.resolve();
 
-const defaultSettings: AppSettings = {
+export const defaultSettings: AppSettings = {
   theme: "system",
+  fontSize: 16,
+  fontFamily: "system",
+  autoSaveDelayMs: 750,
+  lineWrap: true,
+  showWordCount: true,
+  sidebarVisible: true,
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -28,6 +35,38 @@ function normalizeSettings(value: unknown): AppSettings {
     candidate.theme === "system"
       ? candidate.theme
       : defaultSettings.theme;
+  const fontSize =
+    typeof candidate.fontSize === "number" &&
+    Number.isInteger(candidate.fontSize) &&
+    candidate.fontSize >= 12 &&
+    candidate.fontSize <= 24
+      ? candidate.fontSize
+      : defaultSettings.fontSize;
+  const fontFamily =
+    candidate.fontFamily === "system" ||
+    candidate.fontFamily === "serif" ||
+    candidate.fontFamily === "mono"
+      ? candidate.fontFamily
+      : defaultSettings.fontFamily;
+  const autoSaveDelayMs =
+    typeof candidate.autoSaveDelayMs === "number" &&
+    Number.isInteger(candidate.autoSaveDelayMs) &&
+    candidate.autoSaveDelayMs >= 500 &&
+    candidate.autoSaveDelayMs <= 5000
+      ? candidate.autoSaveDelayMs
+      : defaultSettings.autoSaveDelayMs;
+  const lineWrap =
+    typeof candidate.lineWrap === "boolean"
+      ? candidate.lineWrap
+      : defaultSettings.lineWrap;
+  const showWordCount =
+    typeof candidate.showWordCount === "boolean"
+      ? candidate.showWordCount
+      : defaultSettings.showWordCount;
+  const sidebarVisible =
+    typeof candidate.sidebarVisible === "boolean"
+      ? candidate.sidebarVisible
+      : defaultSettings.sidebarVisible;
   const lastWorkspacePath =
     typeof candidate.lastWorkspacePath === "string" &&
     candidate.lastWorkspacePath.trim().length > 0
@@ -43,6 +82,12 @@ function normalizeSettings(value: unknown): AppSettings {
 
   return {
     theme,
+    fontSize,
+    fontFamily,
+    autoSaveDelayMs,
+    lineWrap,
+    showWordCount,
+    sidebarVisible,
     lastWorkspacePath,
     recentWorkspaces: Array.from(new Set(recentWorkspaces)).slice(
       0,
@@ -70,8 +115,17 @@ export async function writeSettings(settings: AppSettings) {
 export async function updateSettings(
   update: (settings: AppSettings) => AppSettings
 ) {
-  const currentSettings = await readSettings();
-  return writeSettings(normalizeSettings(update(currentSettings)));
+  const queuedUpdate = settingsUpdateQueue.then(async () => {
+    const currentSettings = await readSettings();
+    return writeSettings(normalizeSettings(update(currentSettings)));
+  });
+
+  settingsUpdateQueue = queuedUpdate.then(
+    () => undefined,
+    () => undefined
+  );
+
+  return queuedUpdate;
 }
 
 export async function rememberWorkspace(workspacePath: string) {
