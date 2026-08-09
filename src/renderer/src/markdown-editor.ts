@@ -394,6 +394,14 @@ export function applySlashCommandAtSelection() {
     return null;
   }
 
+  if (command === "task-list") {
+    const taskList = document.createElement("ul");
+    taskList.innerHTML = '<li data-task="true"><input type="checkbox"> Task</li>';
+    block.replaceWith(taskList);
+    placeCaretInside(taskList.querySelector("li") ?? taskList);
+    return command;
+  }
+
   block.innerHTML = "";
   placeCaretInside(block);
   applyMarkdownEditorCommand(command);
@@ -1640,9 +1648,14 @@ function addTableColumnAtSelection() {
     return;
   }
 
-  const insertIndex = cell.cellIndex + 1;
+  const insertIndex = Math.max(...Array.from(table.rows, (row) => row.cells.length));
   for (const row of Array.from(table.rows)) {
-    const sourceCell = row.cells[Math.min(cell.cellIndex, row.cells.length - 1)];
+    const sourceCell = row.cells[row.cells.length - 1];
+
+    if (!sourceCell) {
+      continue;
+    }
+
     const newCell = document.createElement(sourceCell.tagName.toLowerCase());
     newCell.textContent = "";
     row.insertBefore(newCell, row.cells[insertIndex] ?? null);

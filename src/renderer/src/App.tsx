@@ -1709,6 +1709,35 @@ const VisualMarkdownEditor = forwardRef<
     };
   });
 
+  useEffect(() => {
+    const editorElement = editorRef.current;
+
+    if (!editorElement) {
+      return;
+    }
+
+    function handleNativeChange(event: Event) {
+      const target = event.target;
+
+      if (
+        !(target instanceof HTMLSelectElement) ||
+        target.dataset.codeLanguage !== "true" ||
+        !editorRef.current
+      ) {
+        return;
+      }
+
+      updateCodeBlockLanguageFromSelect(target);
+      syncMarkdownFromEditor(editorRef.current);
+    }
+
+    editorElement.addEventListener("change", handleNativeChange);
+
+    return () => {
+      editorElement.removeEventListener("change", handleNativeChange);
+    };
+  });
+
   function getSelectionElement() {
     const selection = window.getSelection();
 
