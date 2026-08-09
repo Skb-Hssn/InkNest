@@ -35,10 +35,12 @@ const requiredPaths = [
   "src/renderer/src/types/window.d.ts",
   "src/shared/ipc.ts",
   "src/shared/preload.ts",
+  "scripts/release-check.mjs",
+  "RELEASE_CHECKLIST.md",
   "tests/.gitkeep"
 ];
 
-const requiredScripts = ["dev", "check", "test", "build", "package"];
+const requiredScripts = ["dev", "check", "test", "test:e2e", "build", "package", "release-check"];
 const requiredDependencies = ["lucide-react", "react", "react-dom"];
 const requiredDevDependencies = [
   "@vitejs/plugin-react",

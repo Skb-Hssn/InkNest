@@ -4,7 +4,7 @@ InkNest is a local-first desktop Markdown note-taking app. The MVP focuses on on
 
 ## Current Status
 
-Phase 16 is implemented: InkNest has workspace-backed note CRUD, visual
+Phase 17 is release-validated: InkNest has workspace-backed note CRUD, visual
 Markdown editing with autosave, in-memory search and tags, Markdown file and
 folder import, portable workspace image assets, safe external/local links,
 Markdown, HTML, and PDF export, plus persisted theme and editor preferences.
@@ -24,6 +24,11 @@ for icon controls, a command palette on `Ctrl+K`, `/` search focusing, and a
 status bar with the active file path, editor mode, save state, word count, and
 character count. The three-column desktop layout contracts cleanly at narrow
 window sizes without relying on overlapping text.
+
+Release validation is available through `npm run release-check`. It runs the
+scaffold and unit checks, production packaging/build validation, and the full
+Electron E2E suite. The acceptance criteria are documented in
+`RELEASE_CHECKLIST.md`.
 
 ## First Command
 

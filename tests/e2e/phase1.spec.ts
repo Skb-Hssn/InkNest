@@ -83,7 +83,7 @@ test("phase 2 exposes the narrow async preload API in the renderer", async ({
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-16-accessibility-and-ui-polish"
+        phase: "phase-17-release-validation"
       }
     });
     expect(activeWorkspace).toEqual({
