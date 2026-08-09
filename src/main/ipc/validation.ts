@@ -33,6 +33,48 @@ export function assertTheme(value: unknown): "system" | "light" | "dark" {
   throw invalidPayload("theme must be system, light, or dark.");
 }
 
+export function assertFontSize(value: unknown) {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 12 ||
+    value > 24
+  ) {
+    throw invalidPayload("fontSize must be an integer between 12 and 24.");
+  }
+
+  return value;
+}
+
+export function assertFontFamily(value: unknown): "system" | "serif" | "mono" {
+  if (value === "system" || value === "serif" || value === "mono") {
+    return value;
+  }
+
+  throw invalidPayload("fontFamily must be system, serif, or mono.");
+}
+
+export function assertAutoSaveDelay(value: unknown) {
+  if (
+    typeof value !== "number" ||
+    !Number.isInteger(value) ||
+    value < 500 ||
+    value > 5000
+  ) {
+    throw invalidPayload("autoSaveDelayMs must be an integer between 500 and 5000.");
+  }
+
+  return value;
+}
+
+export function assertBoolean(value: unknown, fieldName: string) {
+  if (typeof value !== "boolean") {
+    throw invalidPayload(`${fieldName} must be a boolean.`);
+  }
+
+  return value;
+}
+
 export function assertWorkspacePath(
   candidatePath: string,
   activeWorkspace: ActiveWorkspaceState

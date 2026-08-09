@@ -16,8 +16,8 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 export type AppInfo = {
   name: "InkNest";
   // Previous milestones: phase-9-toolbar-editing-commands, phase-10-autosave-safe-writes,
-  // phase-11-search-and-tags, and phase-12-import-assets-links.
-  phase: "phase-13-export";
+  // phase-11-search-and-tags, phase-12-import-assets-links, and phase-13-export.
+  phase: "phase-14-settings-and-themes";
 };
 
 export type WorkspaceStatus =
@@ -94,13 +94,28 @@ export type WorkspaceFileModel = {
 
 export type AppSettings = {
   theme: "system" | "light" | "dark";
+  fontSize: number;
+  fontFamily: "system" | "serif" | "mono";
+  autoSaveDelayMs: number;
+  lineWrap: boolean;
+  showWordCount: boolean;
+  sidebarVisible: boolean;
   lastWorkspacePath: string | null;
   recentWorkspaces: string[];
 };
 
-export type SaveSettingsPayload = {
-  theme: AppSettings["theme"];
-};
+export type SaveSettingsPayload = Partial<
+  Pick<
+    AppSettings,
+    | "theme"
+    | "fontSize"
+    | "fontFamily"
+    | "autoSaveDelayMs"
+    | "lineWrap"
+    | "showWordCount"
+    | "sidebarVisible"
+  >
+>;
 
 export type OpenExternalLinkPayload = {
   url: string;

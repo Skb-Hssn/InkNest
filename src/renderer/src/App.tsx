@@ -69,6 +69,8 @@ import type {
   NoteContent,
   NoteSummary,
   type ExportFormat,
+  type AppSettings,
+  type SaveSettingsPayload,
   type SaveImagePayload,
   SearchResult,
   TagSummary,
@@ -106,6 +108,18 @@ const initialWorkspace: WorkspaceInfo = {
 const rootFolder: FolderSummary = {
   name: "Workspace root",
   path: "."
+};
+
+const initialSettings: AppSettings = {
+  theme: "system",
+  fontSize: 16,
+  fontFamily: "system",
+  autoSaveDelayMs: 750,
+  lineWrap: true,
+  showWordCount: true,
+  sidebarVisible: true,
+  lastWorkspacePath: null,
+  recentWorkspaces: []
 };
 
 type ToolbarCommand = {
@@ -238,14 +252,28 @@ function fileNameFromPath(path: string) {
   return path.split(/[\\/]/).pop() ?? "Image";
 }
 
+function fontFamilyCssValue(fontFamily: AppSettings["fontFamily"]) {
+  if (fontFamily === "serif") {
+    return "Georgia, Cambria, 'Times New Roman', serif";
+  }
+
+  if (fontFamily === "mono") {
+    return "ui-monospace, SFMono-Regular, Consolas, 'Liberation Mono', monospace";
+  }
+
+  return "Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif";
+}
+
 type SaveState = "saved" | "unsaved" | "saving" | "failed";
 
 // Keep the debounce inside the product's 500ms-1000ms autosave range.
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-13-export");
+  const [phase, setPhase] = useState("phase-14-settings-and-themes");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
+  const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -293,6 +321,19 @@ export function App() {
   useEffect(() => {
     let isMounted = true;
 
+    window.inknest.settings.get().then((result) => {
+      if (!isMounted) {
+        return;
+      }
+
+      if (result.ok) {
+        setSettings(result.data);
+        return;
+      }
+
+      setWorkspaceError(result.error.message);
+    });
+
     window.inknest.app.getInfo().then((result) => {
       if (isMounted && result.ok) {
         setPhase(result.data.phase);
@@ -319,6 +360,10 @@ export function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = settings.theme;
+  }, [settings.theme]);
 
   const folders = useMemo(
     () => [rootFolder, ...(fileModel?.folders ?? [])],
@@ -461,6 +506,31 @@ export function App() {
 
     setWorkspaceError(result.error.message);
     return null;
+  }
+
+  async function updateAppSettings(patch: SaveSettingsPayload) {
+    setSettings((currentSettings) => ({
+      ...currentSettings,
+      ...patch
+    }));
+    setStatusMessage("Saving settings");
+
+    const result = await window.inknest.settings.save(patch);
+
+    if (result.ok) {
+      setSettings(result.data);
+      setStatusMessage("Settings saved");
+      setWorkspaceError(null);
+      return true;
+    }
+
+    const latestSettings = await window.inknest.settings.get();
+    if (latestSettings.ok) {
+      setSettings(latestSettings.data);
+    }
+    setWorkspaceError(result.error.message);
+    setStatusMessage("Settings failed");
+    return false;
   }
 
   async function importNotes(mode: "files" | "folder") {
@@ -611,7 +681,7 @@ export function App() {
     }
   }
 
-  function scheduleAutoSave(delay = autoSaveDelayMs) {
+  function scheduleAutoSave(delay = settings.autoSaveDelayMs || autoSaveDelayMs) {
     clearAutoSaveTimer();
 
     if (!hasPendingSave()) {
@@ -820,7 +890,13 @@ export function App() {
     scheduleAutoSave();
 
     return clearAutoSaveTimer;
-  }, [editorMarkdown, isDirty, lastSavedMarkdown, selectedNoteContent?.path]);
+  }, [
+    editorMarkdown,
+    isDirty,
+    lastSavedMarkdown,
+    selectedNoteContent?.path,
+    settings.autoSaveDelayMs
+  ]);
 
   useEffect(() => {
     const handleShortcut = (event: globalThis.KeyboardEvent) => {
@@ -1318,10 +1394,22 @@ export function App() {
   }
 
   return (
-    <main className="grid h-screen overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
+    <main
+      className="grid h-screen overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      style={{
+        "--app-font-size": `${settings.fontSize}px`,
+        "--app-font-family": fontFamilyCssValue(settings.fontFamily)
+      } as CSSProperties}
+    >
       <header className="flex min-w-0 items-center justify-between border-b border-ink-100 bg-white px-4">
         <div className="flex items-center gap-3">
-          <button type="button" aria-label="Toggle sidebar" className="icon-button">
+          <button
+            type="button"
+            aria-label="Toggle sidebar"
+            aria-pressed={settings.sidebarVisible}
+            className="icon-button"
+            onClick={() => void updateAppSettings({ sidebarVisible: !settings.sidebarVisible })}
+          >
             <PanelLeft size={18} />
           </button>
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
@@ -1333,7 +1421,7 @@ export function App() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="relative flex items-center gap-2">
           <button
             type="button"
             className="command-button"
@@ -1361,13 +1449,145 @@ export function App() {
             <FolderPlus size={16} />
             <span>New folder</span>
           </button>
-          <button type="button" aria-label="Settings" className="icon-button">
+          <button
+            type="button"
+            aria-label="Settings"
+            aria-pressed={isSettingsOpen}
+            className="icon-button"
+            onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+          >
             <Settings size={18} />
           </button>
+          {isSettingsOpen ? (
+            <div className="settings-popover" role="dialog" aria-label="Settings">
+              <div className="settings-popover-header">
+                <div>
+                  <p className="settings-popover-title">Settings</p>
+                  <p className="settings-popover-description">Customize your writing space.</p>
+                </div>
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Close settings"
+                  onClick={() => setIsSettingsOpen(false)}
+                >
+                  <X size={16} />
+                </button>
+              </div>
+
+              <label className="settings-field">
+                <span>Theme</span>
+                <select
+                  aria-label="Theme"
+                  value={settings.theme}
+                  onChange={(event) =>
+                    void updateAppSettings({
+                      theme: event.target.value as AppSettings["theme"]
+                    })
+                  }
+                >
+                  <option value="system">System</option>
+                  <option value="light">Light</option>
+                  <option value="dark">Dark</option>
+                </select>
+              </label>
+
+              <label className="settings-field">
+                <span>Font size</span>
+                <select
+                  aria-label="Font size"
+                  value={settings.fontSize}
+                  onChange={(event) =>
+                    void updateAppSettings({ fontSize: Number(event.target.value) })
+                  }
+                >
+                  {[12, 14, 16, 18, 20, 22, 24].map((fontSize) => (
+                    <option key={fontSize} value={fontSize}>
+                      {fontSize}px
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="settings-field">
+                <span>Font family</span>
+                <select
+                  aria-label="Font family"
+                  value={settings.fontFamily}
+                  onChange={(event) =>
+                    void updateAppSettings({
+                      fontFamily: event.target.value as AppSettings["fontFamily"]
+                    })
+                  }
+                >
+                  <option value="system">System sans</option>
+                  <option value="serif">Serif</option>
+                  <option value="mono">Monospace</option>
+                </select>
+              </label>
+
+              <label className="settings-field">
+                <span>Auto-save delay</span>
+                <select
+                  aria-label="Auto-save delay"
+                  value={settings.autoSaveDelayMs}
+                  onChange={(event) =>
+                    void updateAppSettings({ autoSaveDelayMs: Number(event.target.value) })
+                  }
+                >
+                  {[500, 750, 1000, 1500, 2000, 3000, 5000].map((delay) => (
+                    <option key={delay} value={delay}>
+                      {delay} ms
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="settings-checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.lineWrap}
+                  onChange={(event) =>
+                    void updateAppSettings({ lineWrap: event.target.checked })
+                  }
+                />
+                <span>Wrap editor lines</span>
+              </label>
+              <label className="settings-checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.showWordCount}
+                  onChange={(event) =>
+                    void updateAppSettings({ showWordCount: event.target.checked })
+                  }
+                />
+                <span>Show word count</span>
+              </label>
+              <label className="settings-checkbox">
+                <input
+                  type="checkbox"
+                  checked={settings.sidebarVisible}
+                  onChange={(event) =>
+                    void updateAppSettings({ sidebarVisible: event.target.checked })
+                  }
+                />
+                <span>Show sidebar</span>
+              </label>
+
+              <div className="settings-default-workspace">
+                <span>Default workspace</span>
+                <strong title={settings.lastWorkspacePath ?? undefined}>
+                  {settings.lastWorkspacePath ?? "No workspace selected"}
+                </strong>
+              </div>
+            </div>
+          ) : null}
         </div>
       </header>
 
-      <section className="grid min-h-0 grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]">
+      <section
+        className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
+      >
         <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
             <button
@@ -1903,6 +2123,7 @@ export function App() {
                 workspacePath={workspace.path}
                 notePath={selectedNoteContent.path}
                 disabled={isBusy}
+                lineWrap={settings.lineWrap}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
                   setEditorMarkdown(nextMarkdown);
@@ -1938,7 +2159,11 @@ export function App() {
         <span className="truncate">{workspacePath}</span>
         <span>{phase}</span>
         <span className="justify-self-end">
-          {saveStatusLabel} - {wordCount} words - {characterCount} characters
+          {settings.showWordCount ? (
+            <>{saveStatusLabel} - {wordCount} words - {characterCount} characters</>
+          ) : (
+            <>{saveStatusLabel} - {characterCount} characters</>
+          )}
           {saveError ? `: ${saveError}` : ""}
         </span>
       </footer>
@@ -1951,6 +2176,7 @@ type VisualMarkdownEditorProps = {
   workspacePath: string | null;
   notePath: string;
   disabled: boolean;
+  lineWrap: boolean;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
   onLinkDialogRequest: (details: LinkDialogDetails) => void;
@@ -1979,6 +2205,7 @@ const VisualMarkdownEditor = forwardRef<
     workspacePath,
     notePath,
     disabled,
+    lineWrap,
     onChange,
     onSelectionFormatChange,
     onLinkDialogRequest,
@@ -2625,7 +2852,7 @@ const VisualMarkdownEditor = forwardRef<
   return (
     <div
       ref={editorRef}
-      className="visual-editor"
+      className={`visual-editor ${lineWrap ? "" : "visual-editor-no-wrap"}`}
       contentEditable={!disabled}
       suppressContentEditableWarning
       aria-label="Visual Markdown editor"
