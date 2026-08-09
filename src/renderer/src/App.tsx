@@ -68,6 +68,7 @@ import type {
   FolderSummary,
   NoteContent,
   NoteSummary,
+  type ExportFormat,
   type SaveImagePayload,
   SearchResult,
   TagSummary,
@@ -243,7 +244,7 @@ type SaveState = "saved" | "unsaved" | "saving" | "failed";
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-12-import-assets-links");
+  const [phase, setPhase] = useState("phase-13-export");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
@@ -762,6 +763,29 @@ export function App() {
         scheduleAutoSave();
       }
     }
+  }
+
+  async function exportCurrentNote(format: ExportFormat) {
+    if (!selectedNoteContent || isBusy || !(await flushCurrentNote())) {
+      return;
+    }
+
+    setIsBusy(true);
+    setWorkspaceError(null);
+
+    const result = await window.inknest.export.note({
+      path: selectedNoteContent.path,
+      format
+    });
+
+    if (!result.ok) {
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Export failed");
+    } else if (result.data.exported) {
+      setStatusMessage(`Exported ${format === "markdown" ? "Markdown" : format.toUpperCase()}`);
+    }
+
+    setIsBusy(false);
   }
 
   async function flushCurrentNote() {
@@ -1732,6 +1756,33 @@ export function App() {
               >
                 <Save size={15} />
                 <span>Save</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Export Markdown"
+                onClick={() => void exportCurrentNote("markdown")}
+                disabled={!selectedNoteContent || isBusy}
+              >
+                <span>Export MD</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Export HTML"
+                onClick={() => void exportCurrentNote("html")}
+                disabled={!selectedNoteContent || isBusy}
+              >
+                <span>Export HTML</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                aria-label="Export PDF"
+                onClick={() => void exportCurrentNote("pdf")}
+                disabled={!selectedNoteContent || isBusy}
+              >
+                <span>Export PDF</span>
               </button>
               <span className="status-pill" aria-live="polite" title={saveError ?? undefined}>
                 <Check size={13} />

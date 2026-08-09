@@ -1212,3 +1212,61 @@ Ctrl/Cmd-click link
 ```
 
 `npm run check` remains the first lightweight validation command.
+
+## Phase 13 Architecture: Export
+
+Phase 13 keeps export filesystem access and PDF printing in the main process.
+The renderer requests a format and note path through the typed preload bridge;
+the main process validates the active note, opens a native save dialog when a
+destination was not supplied, and reports a completed or canceled export.
+
+### Export Contract
+
+The shared contract supports three formats:
+
+```ts
+type ExportFormat = "markdown" | "html" | "pdf";
+
+window.inknest.export.note({
+  path: "Projects/Design.md",
+  format: "html"
+});
+```
+
+The legacy path-only request remains accepted for compatibility with the
+earlier export placeholder, but new callers use the format-aware payload.
+Destinations must use the expected extension, live inside an existing writable
+folder, and cannot overwrite the active Markdown source note.
+
+### Markdown And HTML
+
+`src/main/services/export-service.ts` reads the source Markdown and builds a
+standalone HTML document with readable styles for headings, lists, tables,
+blockquotes, links, images, and code blocks. Markdown text is escaped before
+formatting, unsafe URL schemes are replaced with safe placeholders, local
+images and note links are resolved only inside the active workspace, and the
+final document passes through `sanitizeExportedHtml` before it is written.
+
+Markdown export writes the original UTF-8 note content without transforming
+it, allowing users to share or archive the exact source file.
+
+### PDF Printing
+
+PDF export loads the generated standalone HTML into a hidden sandboxed
+`BrowserWindow`, calls Electron's `webContents.printToPDF` with background and
+CSS page-size support, writes the returned bytes to the validated destination,
+and destroys the temporary window in a `finally` block.
+
+### Phase 13 Data Flow
+
+```text
+User selects Export Markdown, HTML, or PDF
+  -> renderer flushes pending note edits
+  -> preload invokes export:note with path and format
+  -> main validates the note and destination
+  -> service writes Markdown or sanitized HTML
+  -> PDF format prints the same HTML in a hidden sandboxed window
+  -> renderer reports exported, canceled, or actionable failure status
+```
+
+`npm run check` remains the first lightweight validation command.

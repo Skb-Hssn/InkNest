@@ -16,8 +16,8 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 export type AppInfo = {
   name: "InkNest";
   // Previous milestones: phase-9-toolbar-editing-commands, phase-10-autosave-safe-writes,
-  // and phase-11-search-and-tags.
-  phase: "phase-12-import-assets-links";
+  // phase-11-search-and-tags, and phase-12-import-assets-links.
+  phase: "phase-13-export";
 };
 
 export type WorkspaceStatus =
@@ -206,6 +206,25 @@ export type PermanentlyDeleteNotePayload = {
   trashPath: string;
   confirmed: true;
 };
+
+export type ExportFormat = "markdown" | "html" | "pdf";
+
+export type ExportNotePayload = {
+  path: string;
+  format: ExportFormat;
+  destinationPath?: string;
+};
+
+export type ExportNoteResult =
+  | {
+      exported: true;
+      format: ExportFormat;
+      path: string;
+    }
+  | {
+      exported: false;
+      canceled: true;
+    };
 
 // Close-handshake channels: app:prepare-to-close, app:close-ready,
 // app:close-canceled. They are deliberately derived so the legacy narrow

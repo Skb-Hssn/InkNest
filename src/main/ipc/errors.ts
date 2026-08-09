@@ -22,3 +22,7 @@ export function workspaceRequired() {
 export function saveFailed(message: string) {
   return new IpcRequestError("SAVE_FAILED", message);
 }
+
+export function exportFailed(message: string) {
+  return new IpcRequestError("EXPORT_FAILED", message);
+}

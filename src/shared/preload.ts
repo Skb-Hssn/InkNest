@@ -21,6 +21,8 @@ import type {
   RenameNotePayload,
   RenameFolderPayload,
   DeleteFolderPayload,
+  ExportNotePayload,
+  ExportNoteResult,
   RestoreNotePayload,
   SelectImageResult,
   SaveImagePayload,
@@ -97,6 +99,10 @@ export type InkNestApi = {
     saveImage: (payload: SaveImagePayload) => Promise<IpcResult<SavedImageAsset>>;
   };
   export: {
-    note: (path: string) => Promise<IpcResult<{ queued: false; path: string }>>;
+    note: (
+      payload: ExportNotePayload | string
+    ) => Promise<
+      IpcResult<ExportNoteResult | { queued: false; path: string }>
+    >;
   };
 };
