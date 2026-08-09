@@ -16,10 +16,12 @@ import {
 } from "./validation";
 import { invalidPayload } from "./errors";
 import { registerIpcHandler } from "./register";
+import type { WorkspaceWatcher } from "../services/workspace-watcher";
 
 export function registerWorkspaceHandlers(
   activeWorkspace: ActiveWorkspaceState,
-  searchIndex?: InMemorySearchIndex
+  searchIndex?: InMemorySearchIndex,
+  workspaceWatcher?: WorkspaceWatcher
 ) {
   registerIpcHandler<WorkspaceInfo>(ipcChannels.workspace.getActive, async () => {
     const settings = await readSettings();
@@ -60,14 +62,24 @@ export function registerWorkspaceHandlers(
       );
     }
 
-    return activateWorkspace(selection.filePaths[0], activeWorkspace, searchIndex);
+    return activateWorkspace(
+      selection.filePaths[0],
+      activeWorkspace,
+      searchIndex,
+      workspaceWatcher
+    );
   });
 
   registerIpcHandler<WorkspaceInfo>(ipcChannels.workspace.select, async (payload) => {
     assertPlainObject(payload);
     const workspacePath = path.resolve(assertString(payload.path, "path"));
 
-    return activateWorkspace(workspacePath, activeWorkspace, searchIndex);
+    return activateWorkspace(
+      workspacePath,
+      activeWorkspace,
+      searchIndex,
+      workspaceWatcher
+    );
   });
 
   registerIpcHandler<WorkspaceFileModel>(ipcChannels.workspace.scan, async () => {
@@ -104,7 +116,8 @@ export async function restoreLastWorkspace(activeWorkspace: ActiveWorkspaceState
 async function activateWorkspace(
   workspacePath: string,
   activeWorkspace: ActiveWorkspaceState,
-  searchIndex?: InMemorySearchIndex
+  searchIndex?: InMemorySearchIndex,
+  workspaceWatcher?: WorkspaceWatcher
 ) {
   const accessResult = await inspectWorkspacePath(workspacePath);
 
@@ -116,6 +129,7 @@ async function activateWorkspace(
   const resolvedWorkspacePath = path.resolve(workspacePath);
   await scanWorkspaceFileModel(resolvedWorkspacePath, settings);
   await searchIndex?.rebuild(resolvedWorkspacePath);
+  await workspaceWatcher?.watch(resolvedWorkspacePath).catch(() => undefined);
   activeWorkspace.path = resolvedWorkspacePath;
   activeWorkspace.restoreStatus = "ready";
   activeWorkspace.restoreMessage = accessResult.message;

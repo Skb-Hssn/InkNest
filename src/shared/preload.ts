@@ -33,6 +33,7 @@ import type {
   SaveSettingsPayload,
   TagSummary,
   WorkspaceFileModel,
+  WorkspaceChangeEvent,
   WorkspaceInfo
 } from "./ipc";
 
@@ -48,6 +49,7 @@ export type InkNestApi = {
     choose: () => Promise<IpcResult<WorkspaceInfo>>;
     select: (path: string) => Promise<IpcResult<WorkspaceInfo>>;
     scan: () => Promise<IpcResult<WorkspaceFileModel>>;
+    onChanged: (listener: (event: WorkspaceChangeEvent) => void) => () => void;
   };
   notes: {
     list: () => Promise<IpcResult<NoteSummary[]>>;

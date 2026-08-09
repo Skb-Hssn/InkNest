@@ -28,7 +28,16 @@ const inknestApi: InkNestApi = {
     getActive: () => ipcRenderer.invoke(ipcChannels.workspace.getActive),
     choose: () => ipcRenderer.invoke(ipcChannels.workspace.choose),
     select: (path) => ipcRenderer.invoke(ipcChannels.workspace.select, { path }),
-    scan: () => ipcRenderer.invoke(ipcChannels.workspace.scan)
+    scan: () => ipcRenderer.invoke(ipcChannels.workspace.scan),
+    onChanged: (listener) => {
+      const handler = (_event: unknown, change: Parameters<typeof listener>[0]) =>
+        listener(change);
+      subscribeToIpcMessage(ipcChannels.workspace.changed, handler);
+
+      return () => {
+        unsubscribeFromIpcMessage(ipcChannels.workspace.changed, handler);
+      };
+    }
   },
   notes: {
     list: () => ipcRenderer.invoke(ipcChannels.notes.list),

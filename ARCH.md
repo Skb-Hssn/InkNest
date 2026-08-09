@@ -1282,6 +1282,55 @@ defaults, renderer controls, and theme behavior. The Phase 4 end-to-end
 settings assertions also verify that newly selected workspaces retain the
 complete preference object.
 
+## Phase 15 Architecture: Reliability, Trash, And External Changes
+
+Phase 15 keeps the Markdown workspace as the source of truth while adding a
+main-process snapshot watcher. The watcher polls the active workspace at a
+small interval, skips app metadata and temporary safe-write files, and tracks
+created, changed, and deleted paths. It reports typed events through the
+preload boundary without exposing filesystem APIs to the renderer. The main
+process also rebuilds the in-memory search index before forwarding a ready
+workspace event.
+
+### External Change Handling
+
+The renderer subscribes to `workspace.onChanged`. Changes to other files
+refresh the workspace model, folder tree, note list, tags, and trash display.
+When the open note changes externally, a clean editor reloads from disk. If
+the editor has local unsaved content, InkNest leaves that content untouched and
+shows a conflict banner with `Reload from disk`, `Keep my version`, and `Save as
+new note` actions. An externally deleted open note is marked in the same banner
+and can be kept locally or copied to a newly generated note. Saving is blocked
+while a conflict is unresolved, preventing autosave from silently overwriting
+an external edit.
+
+Workspace disappearance and permission loss become explicit workspace states
+with actionable messages. If the folder becomes available again, the watcher
+and renderer restore the ready state and rescan it.
+
+### Frontmatter And Trash
+
+Frontmatter parsing remains deliberately small and tolerant. The parser treats invalid frontmatter and unknown metadata as ignorable rather than allowing them to make the Markdown body
+unreadable; note scanning and direct reads continue to return the original
+content. Trash restore and permanent delete remain validated main-process
+operations, and the watcher refreshes the visible trash list after filesystem
+changes.
+
+### Phase 15 Data Flow
+
+```text
+WorkspaceWatcher snapshots the active folder
+  -> main rebuilds search index and sends workspace:changed through preload
+  -> renderer rescans folders, notes, tags, and trash
+  -> clean open notes reload automatically
+  -> dirty open notes show a conflict banner without losing local edits
+  -> user reloads, keeps, or saves the local version as a new note
+```
+
+`tests/phase15.test.mjs` covers watcher events and malformed frontmatter, while
+the Phase 15 Electron tests exercise external edit, conflict, deletion, and
+trash recovery flows.
+
 ## Phase 13 Architecture: Export
 
 Phase 13 keeps export filesystem access and PDF printing in the main process.

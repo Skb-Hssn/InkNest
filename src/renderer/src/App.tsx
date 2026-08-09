@@ -67,6 +67,7 @@ import type {
   DeletedNoteSummary,
   FolderSummary,
   NoteContent,
+  type WorkspaceChangeEvent,
   NoteSummary,
   type ExportFormat,
   type AppSettings,
@@ -265,12 +266,16 @@ function fontFamilyCssValue(fontFamily: AppSettings["fontFamily"]) {
 }
 
 type SaveState = "saved" | "unsaved" | "saving" | "failed";
+type ExternalNoteChange = {
+  kind: "changed" | "deleted";
+  path: string;
+};
 
 // Keep the debounce inside the product's 500ms-1000ms autosave range.
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-14-settings-and-themes");
+  const [phase, setPhase] = useState("phase-15-reliability-and-external-changes");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -301,6 +306,8 @@ export function App() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [externalNoteChange, setExternalNoteChange] =
+    useState<ExternalNoteChange | null>(null);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
@@ -312,11 +319,13 @@ export function App() {
   const lastSavedMarkdownRef = useRef(lastSavedMarkdown);
   const selectedNoteContentRef = useRef(selectedNoteContent);
   const saveStateRef = useRef<SaveState>(saveState);
+  const externalNoteChangeRef = useRef<ExternalNoteChange | null>(externalNoteChange);
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
   selectedNoteContentRef.current = selectedNoteContent;
   saveStateRef.current = saveState;
+  externalNoteChangeRef.current = externalNoteChange;
 
   useEffect(() => {
     let isMounted = true;
@@ -507,6 +516,116 @@ export function App() {
     setWorkspaceError(result.error.message);
     return null;
   }
+
+  function applyNoteContent(note: NoteContent) {
+    selectedNoteContentRef.current = note;
+    editorMarkdownRef.current = note.markdown;
+    lastSavedMarkdownRef.current = note.markdown;
+    setSelectedNotePath(note.path);
+    setSelectedNoteContent(note);
+    setEditorMarkdown(note.markdown);
+    setLastSavedMarkdown(note.markdown);
+    setExternalNoteChange(null);
+    updateSaveState("saved");
+    updateSaveError(null);
+  }
+
+  async function reloadNoteFromDisk(notePath: string) {
+    setIsBusy(true);
+    const result = await window.inknest.notes.read(notePath);
+
+    if (result.ok) {
+      applyNoteContent(result.data);
+      setWorkspaceError(null);
+      setStatusMessage("Reloaded from disk");
+    } else {
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Reload failed");
+    }
+
+    setIsBusy(false);
+  }
+
+  async function handleWorkspaceChanged(change: WorkspaceChangeEvent) {
+    const currentWorkspacePath = workspace.path ?? workspace.lastWorkspacePath;
+
+    if (!currentWorkspacePath || change.workspacePath !== currentWorkspacePath) {
+      return;
+    }
+
+    if (change.workspaceStatus !== "ready") {
+      const message =
+        change.workspaceStatus === "permission-denied"
+          ? "InkNest cannot access the workspace. Check its permissions or choose another folder."
+          : "The workspace folder is no longer available. Choose it again to continue.";
+      setWorkspace((currentWorkspace) => ({
+        ...currentWorkspace,
+        path: null,
+        name: null,
+        status: change.workspaceStatus,
+        message
+      }));
+      setWorkspaceError(message);
+      setStatusMessage("Workspace unavailable");
+
+      if (selectedNoteContentRef.current) {
+        setExternalNoteChange({
+          kind: "deleted",
+          path: selectedNoteContentRef.current.path
+        });
+      }
+      return;
+    }
+
+    if (!workspace.path) {
+      setWorkspace((currentWorkspace) => ({
+        ...currentWorkspace,
+        path: change.workspacePath,
+        name: change.workspacePath.split(/[\\/]/).pop() ?? null,
+        status: "ready",
+        message: "Workspace is ready."
+      }));
+      setWorkspaceError(null);
+      setStatusMessage("Workspace available");
+    }
+
+    const openNotePath = selectedNoteContentRef.current?.path;
+    const noteWasDeleted = openNotePath
+      ? change.deletedPaths.includes(openNotePath)
+      : false;
+    const noteWasChanged = openNotePath
+      ? change.changedPaths.includes(openNotePath)
+      : false;
+    const hasLocalChanges =
+      editorMarkdownRef.current !== lastSavedMarkdownRef.current;
+
+    if (openNotePath && (noteWasDeleted || noteWasChanged)) {
+      if (noteWasDeleted || hasLocalChanges) {
+        setExternalNoteChange({
+          kind: noteWasDeleted ? "deleted" : "changed",
+          path: openNotePath
+        });
+        updateSaveError(
+          noteWasDeleted
+            ? "This note was deleted outside InkNest."
+            : "This note changed outside InkNest while you had local edits."
+        );
+        setStatusMessage("External change needs review");
+      } else {
+        await reloadNoteFromDisk(openNotePath);
+      }
+    }
+
+    await refreshWorkspace();
+  }
+
+  useEffect(() => {
+    const unsubscribe = window.inknest.workspace.onChanged((change) => {
+      void handleWorkspaceChanged(change);
+    });
+
+    return unsubscribe;
+  }, [workspace.path]);
 
   async function updateAppSettings(patch: SaveSettingsPayload) {
     setSettings((currentSettings) => ({
@@ -718,15 +837,8 @@ export function App() {
     const result = await window.inknest.notes.read(notePath);
 
     if (result.ok) {
-      selectedNoteContentRef.current = result.data;
-      editorMarkdownRef.current = result.data.markdown;
-      lastSavedMarkdownRef.current = result.data.markdown;
-      setSelectedNotePath(result.data.path);
-      setSelectedNoteContent(result.data);
-      setEditorMarkdown(result.data.markdown);
-      setLastSavedMarkdown(result.data.markdown);
+      applyNoteContent(result.data);
       updateSaveState("saved");
-      updateSaveError(null);
       setStatusMessage("Note opened");
     } else {
       setWorkspaceError(result.error.message);
@@ -743,6 +855,11 @@ export function App() {
   async function saveCurrentNote(): Promise<boolean> {
     const note = selectedNoteContentRef.current;
     const markdownToSave = editorMarkdownRef.current;
+
+    if (externalNoteChangeRef.current) {
+      setStatusMessage("Resolve the external change first");
+      return false;
+    }
 
     if (!note || markdownToSave === lastSavedMarkdownRef.current) {
       return saveStateRef.current !== "failed";
@@ -833,6 +950,71 @@ export function App() {
         scheduleAutoSave();
       }
     }
+  }
+
+  function keepLocalNoteVersion() {
+    const note = selectedNoteContentRef.current;
+
+    if (!note) {
+      return;
+    }
+
+    if (externalNoteChangeRef.current?.kind === "deleted") {
+      const localMarkdown = editorMarkdownRef.current;
+      const localBaseline = localMarkdown.length > 0 ? "" : " ";
+      lastSavedMarkdownRef.current = localBaseline;
+      setLastSavedMarkdown(localBaseline);
+      updateSaveState("unsaved");
+    }
+
+    setExternalNoteChange(null);
+    updateSaveError(null);
+    setWorkspaceError(null);
+    setStatusMessage("Keeping local version");
+    scheduleAutoSave();
+  }
+
+  async function saveLocalVersionAsNewNote() {
+    const note = selectedNoteContentRef.current;
+    const markdownToSave = editorMarkdownRef.current;
+
+    if (!note) {
+      return;
+    }
+
+    setIsBusy(true);
+    const folderPath = note.path.includes("/")
+      ? note.path.slice(0, note.path.lastIndexOf("/"))
+      : ".";
+    const title = `${note.path
+      .split("/")
+      .pop()
+      ?.replace(/\.md$/i, "") ?? "Recovered note"} Recovered`;
+    const created = await window.inknest.notes.create({ folderPath, title });
+
+    if (!created.ok) {
+      setWorkspaceError(created.error.message);
+      setStatusMessage("Save as new failed");
+      setIsBusy(false);
+      return;
+    }
+
+    const saved = await window.inknest.notes.save({
+      path: created.data.path,
+      markdown: markdownToSave
+    });
+
+    if (!saved.ok) {
+      setWorkspaceError(saved.error.message);
+      setStatusMessage("Save as new failed");
+      setIsBusy(false);
+      return;
+    }
+
+    await refreshWorkspace();
+    applyNoteContent(saved.data);
+    setIsBusy(false);
+    setStatusMessage("Saved local version as new note");
   }
 
   async function exportCurrentNote(format: ExportFormat) {
@@ -1964,7 +2146,7 @@ export function App() {
                 <h2 className="truncate text-sm font-semibold">Untitled note</h2>
               )}
               <p className="truncate text-xs text-neutral-500">
-                {selectedNote?.path ?? "No file selected"}
+                {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
               </p>
             </div>
             <div className="flex items-center gap-2">
@@ -2046,6 +2228,52 @@ export function App() {
               ))}
             </div>
           </div>
+
+          {externalNoteChange ? (
+            <div className="external-change-banner" role="alert">
+              <div className="min-w-0">
+                <p className="font-semibold">
+                  {externalNoteChange.kind === "deleted"
+                    ? "This note was deleted outside InkNest."
+                    : "This note changed outside InkNest."}
+                </p>
+                <p className="mt-1 text-xs text-amber-900/80">
+                  {externalNoteChange.kind === "deleted"
+                    ? "Your local content is still open. Keep it, or save it as a new note."
+                    : "Your local edits are preserved. Choose which version to keep."
+                  }
+                </p>
+              </div>
+              <div className="external-change-actions">
+                {externalNoteChange.kind === "changed" ? (
+                  <button
+                    type="button"
+                    className="external-change-button"
+                    onClick={() => void reloadNoteFromDisk(externalNoteChange.path)}
+                    disabled={isBusy}
+                  >
+                    Reload from disk
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="external-change-button"
+                  onClick={keepLocalNoteVersion}
+                  disabled={isBusy}
+                >
+                  Keep my version
+                </button>
+                <button
+                  type="button"
+                  className="external-change-button external-change-button-primary"
+                  onClick={() => void saveLocalVersionAsNewNote()}
+                  disabled={isBusy}
+                >
+                  Save as new note
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           {linkDialog ? (
             <form
