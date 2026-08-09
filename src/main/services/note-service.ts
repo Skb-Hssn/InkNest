@@ -1,6 +1,7 @@
 import {
   access,
   mkdir,
+  open,
   readdir,
   readFile,
   rename,
@@ -8,9 +9,10 @@ import {
   stat,
   writeFile
 } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { DeletedNoteSummary, NoteContent, NoteSummary } from "../../shared/ipc";
-import { invalidPayload } from "../ipc/errors";
+import { invalidPayload, saveFailed } from "../ipc/errors";
 import {
   normalizeWorkspacePath,
   resolveInsideWorkspace,
@@ -175,12 +177,92 @@ export async function saveMarkdownNote(
 
   const resolvedPath = resolveMarkdownNotePath(workspaceRoot, notePath, "save");
 
-  await writeFile(resolvedPath, markdown, { encoding: "utf8" });
+  try {
+    await writeMarkdownNoteSafely(resolvedPath, markdown);
+  } catch (error) {
+    throw saveFailed(getSaveFailureMessage(error));
+  }
 
   return {
     path: toWorkspaceRelativePath(workspaceRoot, resolvedPath),
     markdown
   };
+}
+
+async function writeMarkdownNoteSafely(notePath: string, markdown: string) {
+  const temporaryPath = path.join(
+    path.dirname(notePath),
+    `.${path.basename(notePath)}.${randomUUID()}.tmp`
+  );
+  let temporaryFile: Awaited<ReturnType<typeof open>> | null = null;
+  let movedIntoPlace = false;
+  let fileMode = 0o666;
+
+  try {
+    fileMode = (await stat(notePath)).mode & 0o777;
+  } catch {
+    // A new target can still be created by the save contract.
+  }
+
+  try {
+    temporaryFile = await open(temporaryPath, "w", fileMode);
+    await temporaryFile.writeFile(markdown, "utf8");
+    await temporaryFile.sync();
+    await temporaryFile.close();
+    temporaryFile = null;
+
+    await rename(temporaryPath, notePath);
+    movedIntoPlace = true;
+    await flushDirectory(path.dirname(notePath));
+  } finally {
+    if (temporaryFile) {
+      await temporaryFile.close().catch(() => undefined);
+    }
+
+    if (!movedIntoPlace) {
+      await rm(temporaryPath, { force: true }).catch(() => undefined);
+    }
+  }
+}
+
+async function flushDirectory(directoryPath: string) {
+  if (process.platform === "win32") {
+    return;
+  }
+
+  let directory: Awaited<ReturnType<typeof open>> | null = null;
+
+  try {
+    directory = await open(directoryPath, "r");
+    await directory.sync();
+  } catch {
+    // Directory fsync is not supported by every platform/filesystem. The
+    // temporary file itself has already been flushed before the rename.
+  } finally {
+    await directory?.close().catch(() => undefined);
+  }
+}
+
+function getSaveFailureMessage(error: unknown) {
+  const code =
+    typeof error === "object" && error !== null && "code" in error
+      ? String(error.code)
+      : "";
+
+  if (code === "EACCES" || code === "EPERM") {
+    return "Permission denied while saving the note. Check the file and workspace permissions.";
+  }
+
+  if (code === "ENOSPC") {
+    return "Not enough disk space to save the note.";
+  }
+
+  if (code === "EROFS") {
+    return "The workspace is read-only. Choose a writable workspace to save the note.";
+  }
+
+  const detail = error instanceof Error ? error.message : "The file could not be written.";
+  return `Could not save the note: ${detail}`;
 }
 
 export async function moveMarkdownNoteToTrash(

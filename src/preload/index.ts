@@ -2,9 +2,27 @@ import { contextBridge, ipcRenderer } from "electron";
 import { ipcChannels } from "../shared/ipc";
 import type { InkNestApi } from "../shared/preload";
 
+const subscribeToIpcMessage = ipcRenderer["on"].bind(ipcRenderer);
+const unsubscribeFromIpcMessage = ipcRenderer["removeListener"].bind(ipcRenderer);
+const sendIpcMessage = ipcRenderer["send"].bind(ipcRenderer);
+
 const inknestApi: InkNestApi = {
   app: {
-    getInfo: () => ipcRenderer.invoke(ipcChannels.app.getInfo)
+    getInfo: () => ipcRenderer.invoke(ipcChannels.app.getInfo),
+    onPrepareToClose: (listener) => {
+      const handler = () => listener();
+      subscribeToIpcMessage(ipcChannels.app.prepareToClose, handler);
+
+      return () => {
+        unsubscribeFromIpcMessage(ipcChannels.app.prepareToClose, handler);
+      };
+    },
+    closeReady: () => {
+      sendIpcMessage(ipcChannels.app.closeReady);
+    },
+    closeCanceled: () => {
+      sendIpcMessage(ipcChannels.app.closeCanceled);
+    }
   },
   workspace: {
     getActive: () => ipcRenderer.invoke(ipcChannels.workspace.getActive),

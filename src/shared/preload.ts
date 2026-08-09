@@ -28,6 +28,9 @@ import type {
 export type InkNestApi = {
   app: {
     getInfo: () => Promise<IpcResult<AppInfo>>;
+    onPrepareToClose: (listener: () => void) => () => void;
+    closeReady: () => void;
+    closeCanceled: () => void;
   };
   workspace: {
     getActive: () => Promise<IpcResult<WorkspaceInfo>>;

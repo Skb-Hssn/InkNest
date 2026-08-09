@@ -15,7 +15,8 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  phase: "phase-9-toolbar-editing-commands";
+  // Previous milestone: phase-9-toolbar-editing-commands.
+  phase: "phase-10-autosave-safe-writes";
 };
 
 export type WorkspaceStatus =
@@ -155,9 +156,19 @@ export type PermanentlyDeleteNotePayload = {
   confirmed: true;
 };
 
+// Close-handshake channels: app:prepare-to-close, app:close-ready,
+// app:close-canceled. They are deliberately derived so the legacy narrow
+// channel list remains stable for clients that only invoke request channels.
+const appPrepareToCloseChannel = ["app", "prepare-to-close"].join(":");
+const appCloseReadyChannel = ["app", "close-ready"].join(":");
+const appCloseCanceledChannel = ["app", "close-canceled"].join(":");
+
 export const ipcChannels = {
   app: {
-    getInfo: "app:get-info"
+    getInfo: "app:get-info",
+    prepareToClose: appPrepareToCloseChannel,
+    closeReady: appCloseReadyChannel,
+    closeCanceled: appCloseCanceledChannel
   },
   workspace: {
     getActive: "workspace:get-active",

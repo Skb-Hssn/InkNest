@@ -18,3 +18,7 @@ export function workspaceRequired() {
     "Open a workspace before using this action."
   );
 }
+
+export function saveFailed(message: string) {
+  return new IpcRequestError("SAVE_FAILED", message);
+}
