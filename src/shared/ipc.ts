@@ -16,8 +16,9 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 export type AppInfo = {
   name: "InkNest";
   // Previous milestones: phase-9-toolbar-editing-commands, phase-10-autosave-safe-writes,
-  // phase-11-search-and-tags, phase-12-import-assets-links, and phase-13-export.
-  phase: "phase-14-settings-and-themes";
+  // phase-11-search-and-tags, phase-12-import-assets-links, phase-13-export,
+  // and phase-14-settings-and-themes.
+  phase: "phase-15-reliability-and-external-changes";
 };
 
 export type WorkspaceStatus =
@@ -90,6 +91,14 @@ export type WorkspaceFileModel = {
   folders: FolderSummary[];
   notes: NoteSummary[];
   metadata: WorkspaceMetadata;
+};
+
+export type WorkspaceChangeEvent = {
+  workspacePath: string;
+  createdPaths: string[];
+  changedPaths: string[];
+  deletedPaths: string[];
+  workspaceStatus: "ready" | "missing" | "permission-denied";
 };
 
 export type AppSettings = {
@@ -255,6 +264,7 @@ const notesImportFilesChannel = ["notes", "import-files"].join(":");
 const notesImportFolderChannel = ["notes", "import-folder"].join(":");
 const linksResolveLocalChannel = ["links", "resolve-local"].join(":");
 const dialogsSaveImageChannel = ["dialogs", "save-image"].join(":");
+const workspaceChangedChannel = ["workspace", "changed"].join(":");
 
 export const ipcChannels = {
   app: {
@@ -267,7 +277,8 @@ export const ipcChannels = {
     getActive: "workspace:get-active",
     choose: "workspace:choose",
     select: "workspace:select",
-    scan: "workspace:scan"
+    scan: "workspace:scan",
+    changed: workspaceChangedChannel
   },
   notes: {
     list: "notes:list",
