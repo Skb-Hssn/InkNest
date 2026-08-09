@@ -13,12 +13,18 @@ import type {
   NoteContent,
   NoteSummary,
   OpenExternalLinkPayload,
+  ImportNotesPayload,
+  ImportNotesResult,
   PermanentlyDeleteNotePayload,
+  ResolveLocalLinkPayload,
+  ResolvedLocalLink,
   RenameNotePayload,
   RenameFolderPayload,
   DeleteFolderPayload,
   RestoreNotePayload,
   SelectImageResult,
+  SaveImagePayload,
+  SavedImageAsset,
   SearchNotesPayload,
   SearchResult,
   SaveNotePayload,
@@ -49,6 +55,12 @@ export type InkNestApi = {
     duplicate: (payload: DuplicateNotePayload) => Promise<IpcResult<NoteContent>>;
     move: (payload: MoveNotePayload) => Promise<IpcResult<NoteSummary>>;
     save: (payload: SaveNotePayload) => Promise<IpcResult<NoteContent>>;
+    importFiles: (
+      payload?: ImportNotesPayload
+    ) => Promise<IpcResult<ImportNotesResult>>;
+    importFolder: (
+      payload?: ImportNotesPayload
+    ) => Promise<IpcResult<ImportNotesResult>>;
     delete: (payload: DeleteNotePayload) => Promise<IpcResult<DeletedNoteSummary>>;
     listTrash: () => Promise<IpcResult<DeletedNoteSummary[]>>;
     restore: (payload: RestoreNotePayload) => Promise<IpcResult<NoteContent>>;
@@ -76,9 +88,13 @@ export type InkNestApi = {
     openExternal: (
       payload: OpenExternalLinkPayload
     ) => Promise<IpcResult<{ opened: true }>>;
+    resolveLocal: (
+      payload: ResolveLocalLinkPayload
+    ) => Promise<IpcResult<ResolvedLocalLink>>;
   };
   dialogs: {
     selectImage: () => Promise<IpcResult<SelectImageResult>>;
+    saveImage: (payload: SaveImagePayload) => Promise<IpcResult<SavedImageAsset>>;
   };
   export: {
     note: (path: string) => Promise<IpcResult<{ queued: false; path: string }>>;

@@ -111,14 +111,14 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       ok: true,
       data: {
         name: "InkNest",
-        phase: "phase-11-search-and-tags"
+        phase: "phase-12-import-assets-links"
       }
     });
     expect(rendererNodeAccess).toEqual({
       hasRequire: false,
       hasProcess: false
     });
-    await expect(window.getByText("phase-11-search-and-tags")).toBeVisible();
+    await expect(window.getByText("phase-12-import-assets-links")).toBeVisible();
   } finally {
     await app.close();
   }

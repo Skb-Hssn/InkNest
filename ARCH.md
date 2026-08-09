@@ -1148,3 +1148,67 @@ query or tag.
 case-insensitive title/body/path/tag search, snippets, tag counts, IPC/preload
 contracts, and renderer search controls. `npm run check` remains the first
 lightweight validation command.
+
+## Phase 12 Architecture: Import, Assets, Images, And Links
+
+Phase 12 keeps native file access in the main process while adding the content
+workflows needed for portable notes: importing Markdown, saving pasted or
+selected images into the workspace, and opening links safely.
+
+### Markdown Import
+
+`src/main/services/import-service.ts` copies one or more `.md` files into the
+selected workspace folder. Folder imports recursively copy Markdown files while
+preserving their relative subfolders. Destination names are collision-safe,
+and non-Markdown or failed sources are reported in `skipped` rather than
+silently discarded. The search index is rebuilt after a successful import.
+
+The renderer invokes:
+
+```ts
+window.inknest.notes.importFiles({ folderPath });
+window.inknest.notes.importFolder({ folderPath });
+```
+
+The main process owns both native dialogs and the copy operation, so arbitrary
+source paths never become a renderer filesystem capability.
+
+### Workspace Assets
+
+`src/main/services/asset-service.ts` stores images in the existing workspace
+`asset/` folder. Selected images are copied there and clipboard images are
+received as validated bytes through `dialogs:save-image`. Asset names are
+sanitized and receive a numeric suffix when a name already exists. Notes store
+workspace-relative links such as `asset/diagram.png`, while the editor uses a
+file URL only for the current preview.
+
+Relative image resolution is anchored to the current note path and rejects
+paths that would escape the workspace. If a local image cannot be loaded, the
+renderer replaces it with a visible missing-image placeholder that serializes
+back to the original Markdown image link.
+
+### Link Safety
+
+External links continue through `links:open-external`, where the main process
+allows only `http:` and `https:` URLs and delegates to the operating system
+browser. Local Markdown links use `links:resolve-local`; the main process
+resolves them from the current note, enforces the active workspace boundary,
+requires a real `.md` file, and returns a workspace-relative note path for the
+renderer to open. Renderer Markdown links also reject executable URL schemes.
+
+### Phase 12 Data Flow
+
+```text
+Import or paste action
+  -> preload invokes a narrow typed API
+  -> main process opens a native dialog or validates image bytes
+  -> service copies data into workspace notes/asset paths safely
+  -> search index and renderer file model refresh
+
+Ctrl/Cmd-click link
+  -> external http(s) link goes to the system browser
+  -> local Markdown link is resolved inside the workspace
+  -> renderer opens the returned note through notes:read
+```
+
+`npm run check` remains the first lightweight validation command.

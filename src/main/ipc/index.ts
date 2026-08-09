@@ -30,7 +30,7 @@ export async function registerIpcHandlers() {
   registerFolderHandlers(activeWorkspace, searchIndex);
   registerSettingsHandlers();
   registerSearchHandlers(activeWorkspace, searchIndex);
-  registerLinkHandlers();
+  registerLinkHandlers(activeWorkspace);
   registerDialogHandlers(activeWorkspace);
   registerExportHandlers(activeWorkspace);
 }

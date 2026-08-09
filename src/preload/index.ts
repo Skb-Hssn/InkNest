@@ -38,6 +38,10 @@ const inknestApi: InkNestApi = {
     duplicate: (payload) => ipcRenderer.invoke(ipcChannels.notes.duplicate, payload),
     move: (payload) => ipcRenderer.invoke(ipcChannels.notes.move, payload),
     save: (payload) => ipcRenderer.invoke(ipcChannels.notes.save, payload),
+    importFiles: (payload = {}) =>
+      ipcRenderer.invoke(ipcChannels.notes.importFiles, payload),
+    importFolder: (payload = {}) =>
+      ipcRenderer.invoke(ipcChannels.notes.importFolder, payload),
     delete: (payload) => ipcRenderer.invoke(ipcChannels.notes.delete, payload),
     listTrash: () => ipcRenderer.invoke(ipcChannels.notes.listTrash),
     restore: (payload) => ipcRenderer.invoke(ipcChannels.notes.restore, payload),
@@ -56,10 +60,14 @@ const inknestApi: InkNestApi = {
   },
   links: {
     openExternal: (payload) =>
-      ipcRenderer.invoke(ipcChannels.links.openExternal, payload)
+      ipcRenderer.invoke(ipcChannels.links.openExternal, payload),
+    resolveLocal: (payload) =>
+      ipcRenderer.invoke(ipcChannels.links.resolveLocal, payload)
   },
   dialogs: {
-    selectImage: () => ipcRenderer.invoke(ipcChannels.dialogs.selectImage)
+    selectImage: () => ipcRenderer.invoke(ipcChannels.dialogs.selectImage),
+    saveImage: (payload) =>
+      ipcRenderer.invoke(ipcChannels.dialogs.saveImage, payload)
   },
   export: {
     note: (path) => ipcRenderer.invoke(ipcChannels.export.note, { path })
