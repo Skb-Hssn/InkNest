@@ -65,7 +65,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-8-visual-markdown-editor",
+    "phase-9-toolbar-editing-commands",
     "NoteContent",
     "DeletedNoteSummary",
     "CreateNotePayload",
@@ -97,7 +97,7 @@ test("phase 6 shared contract exposes note CRUD and trash channels", async () =>
   assert.match(preloadSource, /ipcChannels\.folders\.rename/);
   assert.match(preloadSource, /ipcChannels\.folders\.move/);
   assert.match(preloadSource, /ipcChannels\.folders\.delete/);
-  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
+  assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 
 test("phase 6 IPC handlers validate note CRUD payloads", async () => {

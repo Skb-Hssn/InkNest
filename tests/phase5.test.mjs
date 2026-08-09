@@ -66,7 +66,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-8-visual-markdown-editor",
+    "phase-9-toolbar-editing-commands",
     "FolderSummary",
     "WorkspaceMetadata",
     "WorkspaceFileModel",
@@ -75,7 +75,7 @@ test("phase 5 shared contract exposes the workspace file model", async () => {
   ]);
   assert.match(sharedPreload, /scan:\s*\(\)\s*=>\s*Promise<IpcResult<WorkspaceFileModel>>/);
   assert.match(preloadSource, /ipcChannels\.workspace\.scan/);
-  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
+  assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 
 test("phase 5 path utilities prevent traversal and sanitize filenames", async () => {
@@ -95,12 +95,12 @@ test("phase 5 path utilities prevent traversal and sanitize filenames", async ()
   assert.match(validationSource, /assertActiveWorkspace/);
 });
 
-test("phase 5 folder service creates metadata, assets, and trash conventions", async () => {
+test("phase 5 folder service creates metadata, asset, and trash conventions", async () => {
   const folderServiceSource = await readText("src/main/services/folder-service.ts");
 
   assertIncludesAll(folderServiceSource, [
     'workspaceMetadataFolderName = ".inknest"',
-    'workspaceAssetsFolderName = "assets"',
+    'workspaceAssetsFolderName = "asset"',
     'workspaceTrashFolderName = "trash"',
     "ensureWorkspaceStructure",
     "scanWorkspaceFolders",
@@ -154,7 +154,7 @@ test("phase 5 workspace scan wires services behind main-process IPC", async () =
     "workspace.scan()",
     "workspace:scan",
     ".inknest",
-    "assets/",
+    "asset/",
     ".inknest/trash",
     "workspace-relative",
     "tests/phase5.test.mjs"
@@ -172,7 +172,7 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
     await mkdir(path.join(workspaceRoot, ".inknest", "scratch"), {
       recursive: true
     });
-    await mkdir(path.join(workspaceRoot, "assets"), { recursive: true });
+    await mkdir(path.join(workspaceRoot, "asset"), { recursive: true });
     await writeFile(
       path.join(workspaceRoot, "Projects", "Nested", "unicode.md"),
       "# ঢাকা Notes\n\nUnicode body stays intact.",
@@ -189,7 +189,7 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
       "utf8"
     );
     await writeFile(
-      path.join(workspaceRoot, "assets", "asset-note.md"),
+      path.join(workspaceRoot, "asset", "asset-note.md"),
       "# Asset",
       "utf8"
     );
@@ -223,11 +223,11 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
 
     assert.deepEqual(fileModel.metadata, {
       metadataPath: ".inknest",
-      assetsPath: "assets",
+      assetsPath: "asset",
       trashPath: ".inknest/trash"
     });
     assert.equal(existsSync(path.join(workspaceRoot, ".inknest", "trash")), true);
-    assert.equal(existsSync(path.join(workspaceRoot, "assets")), true);
+    assert.equal(existsSync(path.join(workspaceRoot, "asset")), true);
     assert.deepEqual(
       fileModel.folders.map((folder) => folder.path),
       ["Projects", "Projects 2", "Projects 2/Nested", "Projects/Nested"]

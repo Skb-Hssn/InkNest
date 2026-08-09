@@ -64,7 +64,7 @@ test("phase 8 shared contract exposes note save and current app phase", async ()
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
   assertIncludesAll(sharedIpc, [
-    "phase-8-visual-markdown-editor",
+    "phase-9-toolbar-editing-commands",
     "SaveNotePayload",
     "markdown: string",
     'save: "notes:save"'
@@ -73,7 +73,7 @@ test("phase 8 shared contract exposes note save and current app phase", async ()
   assert.match(preloadSource, /ipcChannels\.notes\.save/);
   assert.match(notesHandlerSource, /saveMarkdownNote/);
   assert.match(notesHandlerSource, /assertString\(payload\.markdown, "markdown"\)/);
-  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
+  assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 
 test("phase 8 note service saves valid markdown inside the workspace", async () => {

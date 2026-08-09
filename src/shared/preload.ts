@@ -18,6 +18,7 @@ import type {
   RenameFolderPayload,
   DeleteFolderPayload,
   RestoreNotePayload,
+  SelectImageResult,
   SaveNotePayload,
   SaveSettingsPayload,
   WorkspaceFileModel,
@@ -67,7 +68,7 @@ export type InkNestApi = {
     ) => Promise<IpcResult<{ opened: true }>>;
   };
   dialogs: {
-    selectImage: () => Promise<IpcResult<{ canceled: true; path: null }>>;
+    selectImage: () => Promise<IpcResult<SelectImageResult>>;
   };
   export: {
     note: (path: string) => Promise<IpcResult<{ queued: false; path: string }>>;

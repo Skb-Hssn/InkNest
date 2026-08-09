@@ -18,7 +18,7 @@ function assertIncludesAll(source, expectedValues) {
 test("phase 3 app info reports the static layout milestone", async () => {
   const appHandlerSource = await readText("src/main/ipc/app.ts");
 
-  assert.match(appHandlerSource, /phase-8-visual-markdown-editor/);
+  assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 
 test("phase 3 renderer defines the permanent three-column app layout", async () => {
@@ -115,8 +115,9 @@ test("phase 3 renderer uses the preload boundary only", async () => {
   assert.match(appSource, /window\.inknest\.app\.getInfo\(\)/);
   assert.match(appSource, /window\.inknest\.workspace\.getActive\(\)/);
   assert.match(appSource, /window\.inknest\.notes\.read/);
+  assert.match(appSource, /window\.inknest\.links\.openExternal/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
-  assert.doesNotMatch(appSource, /window\.inknest\.(settings|links|dialogs|export)\./);
+  assert.doesNotMatch(appSource, /window\.inknest\.(settings|export)\./);
   assert.doesNotMatch(appSource, /ipcRenderer|shell\.openExternal/);
   assert.doesNotMatch(sharedIpcSource, /phase-3/);
 });
@@ -150,7 +151,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "note list column",
     "editor area",
     "status bar",
-    "phase-8-visual-markdown-editor",
+    "phase-9-toolbar-editing-commands",
     "tests/phase3.test.mjs"
   ]);
 });

@@ -1,9 +1,14 @@
 import {
   type CSSProperties,
+  type MouseEvent as ReactMouseEvent,
   type ClipboardEvent,
   type FormEvent,
+  type KeyboardEvent,
+  type MouseEvent,
   type ReactNode,
+  forwardRef,
   useEffect,
+  useImperativeHandle,
   useMemo,
   useRef,
   useState
@@ -11,11 +16,16 @@ import {
 import {
   AlertTriangle,
   BookOpenText,
+  Bold,
   Check,
   ChevronDown,
   ChevronRight,
+  CircleMinus,
+  CirclePlus,
+  Code2,
   Copy,
   Edit3,
+  Eraser,
   FileText,
   FilePlus2,
   Folder,
@@ -23,15 +33,33 @@ import {
   FolderOpen,
   FolderPlus,
   Hash,
+  Heading1,
+  Heading2,
+  Heading3,
+  Heading4,
+  Heading5,
+  Heading6,
+  Image,
+  Italic,
+  Link,
+  List,
+  ListChecks,
   ListFilter,
+  ListOrdered,
+  Minus,
   PanelLeft,
   PanelRightClose,
+  Quote,
   RotateCcw,
   Save,
   Search,
   Settings,
   SlidersHorizontal,
   SquarePen,
+  Strikethrough,
+  TableColumnsSplit,
+  TableProperties,
+  TableRowsSplit,
   Trash2,
   X
 } from "lucide-react";
@@ -44,8 +72,21 @@ import type {
   WorkspaceInfo
 } from "../../shared/ipc";
 import {
+  applyMarkdownEditorCommand,
+  applySlashCommandAtSelection,
   editorDomToMarkdown,
+  exitEditorBlockFromElement,
+  exitCurrentEditorBlock,
+  exitInlineAtomAtSelection,
+  handleListKeyAtSelection,
   insertPlainTextAtSelection,
+  insertCodeIndentAtSelection,
+  isSelectionInsideCodeBlock,
+  moveTableSelection,
+  normalizeEmptyBlockAtSelection,
+  updateCodeBlockLanguageFromSelect,
+  type MarkdownEditorCommand,
+  type MarkdownEditorCommandOptions,
   markdownToHtml
 } from "./markdown-editor";
 
@@ -63,17 +104,139 @@ const rootFolder: FolderSummary = {
   path: "."
 };
 
-const toolbarPlaceholders = [
-  "H1",
-  "B",
-  "I",
-  "List",
-  "Link",
-  "Image"
-] as const;
+type ToolbarCommand = {
+  id: MarkdownEditorCommand;
+  label: string;
+  icon: ReactNode;
+  group:
+    | "headings"
+    | "blocks"
+    | "lists"
+    | "inline"
+    | "code"
+    | "table"
+    | "links"
+    | "media"
+    | "insert";
+};
+
+type LinkDialogState = {
+  text: string;
+  url: string;
+  isEditing: boolean;
+  position: {
+    left: number;
+    top: number;
+  };
+  error?: string;
+};
+
+type LinkDialogDetails = {
+  text: string;
+  url: string;
+  isEditing: boolean;
+  position?: {
+    left: number;
+    top: number;
+  };
+};
+
+function tableActionIcon(baseIcon: ReactNode, badgeIcon: ReactNode) {
+  return (
+    <span className="toolbar-composite-icon">
+      {baseIcon}
+      <span className="toolbar-composite-badge">{badgeIcon}</span>
+    </span>
+  );
+}
+
+const addRowIcon = tableActionIcon(
+  <TableRowsSplit size={16} />,
+  <CirclePlus size={10} />
+);
+const deleteRowIcon = tableActionIcon(
+  <TableRowsSplit size={16} />,
+  <CircleMinus size={10} />
+);
+const addColumnIcon = tableActionIcon(
+  <TableColumnsSplit size={16} />,
+  <CirclePlus size={10} />
+);
+const deleteColumnIcon = tableActionIcon(
+  <TableColumnsSplit size={16} />,
+  <CircleMinus size={10} />
+);
+
+const toolbarPlaceholders: ToolbarCommand[] = [
+  { id: "bold", label: "B", icon: <Bold size={16} />, group: "inline" },
+  { id: "italic", label: "I", icon: <Italic size={16} />, group: "inline" },
+  { id: "strikethrough", label: "Strikethrough", icon: <Strikethrough size={16} />, group: "inline" },
+  { id: "inline-code", label: "Code", icon: <Code2 size={16} />, group: "inline" },
+  { id: "clear-format", label: "Clear formatting", icon: <Eraser size={16} />, group: "inline" },
+  { id: "heading-1", label: "H1", icon: <Heading1 size={16} />, group: "headings" },
+  { id: "heading-2", label: "H2", icon: <Heading2 size={16} />, group: "headings" },
+  { id: "heading-3", label: "H3", icon: <Heading3 size={16} />, group: "headings" },
+  { id: "heading-4", label: "H4", icon: <Heading4 size={16} />, group: "headings" },
+  { id: "heading-5", label: "H5", icon: <Heading5 size={16} />, group: "headings" },
+  { id: "heading-6", label: "H6", icon: <Heading6 size={16} />, group: "headings" },
+  { id: "unordered-list", label: "List", icon: <List size={16} />, group: "lists" },
+  { id: "ordered-list", label: "Numbered list", icon: <ListOrdered size={16} />, group: "lists" },
+  { id: "task-list", label: "Task list", icon: <ListChecks size={16} />, group: "lists" },
+  { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
+  { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
+  { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
+  { id: "table", label: "Insert table", icon: <TableProperties size={16} />, group: "table" },
+  { id: "table-add-row", label: "Add table row", icon: addRowIcon, group: "table" },
+  { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
+  { id: "table-add-column", label: "Add table column", icon: addColumnIcon, group: "table" },
+  { id: "table-delete-column", label: "Delete table column", icon: deleteColumnIcon, group: "table" },
+  { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
+  { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },
+  { id: "callout-info", label: "Info callout", icon: <BookOpenText size={16} />, group: "blocks" },
+  { id: "callout-success", label: "Success callout", icon: <Check size={16} />, group: "blocks" },
+  { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
+];
+
+function getToolbarGroups(commands: ToolbarCommand[]) {
+  return commands.reduce<Array<{ name: ToolbarCommand["group"]; commands: ToolbarCommand[] }>>(
+    (groups, command) => {
+      const currentGroup = groups[groups.length - 1];
+
+      if (currentGroup?.name === command.group) {
+        currentGroup.commands.push(command);
+      } else {
+        groups.push({
+          name: command.group,
+          commands: [command]
+        });
+      }
+
+      return groups;
+    },
+    []
+  );
+}
+
+function getViewportPopoverPosition(left: number, top: number) {
+  const popoverWidth = 320;
+  const popoverHeight = 220;
+  const viewportWidth = window.innerWidth || popoverWidth;
+  const viewportHeight = window.innerHeight || popoverHeight;
+
+  return {
+    left: Math.max(12, Math.min(left, viewportWidth - popoverWidth - 12)),
+    top: Math.max(12, Math.min(top, viewportHeight - popoverHeight - 12))
+  };
+}
+
+function fileNameFromPath(path: string) {
+  return path.split(/[\\/]/).pop() ?? "Image";
+}
 
 export function App() {
-  const [phase, setPhase] = useState("phase-8-visual-markdown-editor");
+  const [phase, setPhase] = useState("phase-9-toolbar-editing-commands");
+  const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
@@ -93,6 +256,10 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
+  const [activeToolbarCommands, setActiveToolbarCommands] = useState<
+    Set<MarkdownEditorCommand>
+  >(() => new Set());
 
   useEffect(() => {
     let isMounted = true;
@@ -251,6 +418,7 @@ export function App() {
     setSelectedNoteContent(null);
     setEditorMarkdown("");
     setLastSavedMarkdown("");
+    setActiveToolbarCommands(new Set());
   }
 
   async function openNote(notePath: string) {
@@ -294,6 +462,114 @@ export function App() {
     }
 
     setIsBusy(false);
+  }
+
+  async function runToolbarCommand(
+    command: ToolbarCommand,
+    event?: ReactMouseEvent<HTMLButtonElement>
+  ) {
+    if (!selectedNoteContent || isBusy) {
+      return;
+    }
+
+    if (command.id === "link") {
+      const buttonRect = event?.currentTarget.getBoundingClientRect();
+      const linkDetails = editorHandleRef.current?.getLinkDetails();
+
+      openLinkDialog({
+        text: linkDetails?.text ?? "",
+        url: linkDetails?.url ?? "",
+        isEditing: linkDetails?.isEditing ?? false,
+        position: getViewportPopoverPosition(
+          buttonRect?.left ?? 24,
+          buttonRect ? buttonRect.bottom + 8 : 120
+        )
+      });
+      return;
+    }
+
+    if (command.id === "code-block") {
+      editorHandleRef.current?.runCommand("code-block");
+      setStatusMessage("Inserted code block");
+      return;
+    }
+
+    const options: MarkdownEditorCommandOptions = {};
+
+    if (command.id === "image") {
+      const result = await window.inknest.dialogs.selectImage();
+
+      if (!result.ok) {
+        setStatusMessage("Image picker failed");
+        return;
+      }
+
+      if (result.data.canceled) {
+        return;
+      }
+
+      options.src = result.data.assetPath;
+      options.previewSrc = result.data.displaySrc;
+      options.alt = fileNameFromPath(result.data.path);
+    }
+
+    if (command.id === "math-edit") {
+      const equation = window.prompt("LaTeX math", "x^2 + y^2 = z^2");
+
+      if (!equation) {
+        return;
+      }
+
+      options.equation = equation;
+    }
+
+    editorHandleRef.current?.runCommand(command.id, options);
+    setStatusMessage(`Applied ${command.label}`);
+  }
+
+  function openLinkDialog(details: LinkDialogDetails) {
+    setLinkDialog({
+      text: details.text,
+      url: details.url,
+      isEditing: details.isEditing,
+      position: details.position ?? getViewportPopoverPosition(24, 120)
+    });
+  }
+
+  function submitLinkDialog(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!linkDialog) {
+      return;
+    }
+
+    const text = linkDialog.text.trim();
+    const url = linkDialog.url.trim();
+
+    if (!text || !url) {
+      setLinkDialog({
+        ...linkDialog,
+        error: "Enter both text and link."
+      });
+      return;
+    }
+
+    editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
+      label: text,
+      url
+    });
+    setStatusMessage(linkDialog.isEditing ? "Updated link" : "Inserted link");
+    setLinkDialog(null);
+  }
+
+  function removeLinkFromDialog() {
+    if (!linkDialog?.isEditing) {
+      return;
+    }
+
+    editorHandleRef.current?.runCommand("link-remove");
+    setStatusMessage("Removed link");
+    setLinkDialog(null);
   }
 
   async function createNote() {
@@ -603,7 +879,7 @@ export function App() {
   }
 
   return (
-    <main className="grid min-h-screen grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
+    <main className="grid h-screen overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900">
       <header className="flex min-w-0 items-center justify-between border-b border-ink-100 bg-white px-4">
         <div className="flex items-center gap-3">
           <button type="button" aria-label="Toggle sidebar" className="icon-button">
@@ -953,24 +1229,123 @@ export function App() {
             </div>
           </div>
 
-          <div className="flex h-11 items-center gap-1 border-b border-ink-100 px-4">
-            {toolbarPlaceholders.map((label) => (
-              <button key={label} type="button" className="toolbar-button" disabled>
-                {label}
-              </button>
-            ))}
+          <div className="toolbar-shell">
+            <div
+              className="markdown-toolbar"
+              aria-label="Markdown toolbar"
+            >
+              {getToolbarGroups(toolbarPlaceholders).map((group) => (
+                <div
+                  key={group.name}
+                  className="toolbar-group"
+                  aria-label={`${group.name} tools`}
+                >
+                  {group.commands.map((command) => {
+                    const isActive = activeToolbarCommands.has(command.id);
+
+                    return (
+                      <button
+                        key={command.id}
+                        type="button"
+                        className={`toolbar-button ${
+                          isActive ? "toolbar-button-active" : ""
+                        }`}
+                        aria-label={command.label}
+                        title={command.label}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onClick={(event) => runToolbarCommand(command, event)}
+                        disabled={!selectedNoteContent || isBusy}
+                      >
+                        {command.icon}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
           </div>
+
+          {linkDialog ? (
+            <form
+              className="link-popover"
+              style={{
+                "--link-popover-left": `${linkDialog.position.left}px`,
+                "--link-popover-top": `${linkDialog.position.top}px`
+              } as CSSProperties}
+              onSubmit={submitLinkDialog}
+            >
+              <label className="link-popover-field">
+                <span>Text</span>
+                <input
+                  type="text"
+                  value={linkDialog.text}
+                  onChange={(event) =>
+                    setLinkDialog({
+                      ...linkDialog,
+                      text: event.target.value,
+                      error: undefined
+                    })
+                  }
+                  autoFocus
+                />
+              </label>
+              <label className="link-popover-field">
+                <span>Link</span>
+                <input
+                  type="text"
+                  inputMode="url"
+                  value={linkDialog.url}
+                  onChange={(event) =>
+                    setLinkDialog({
+                      ...linkDialog,
+                      url: event.target.value,
+                      error: undefined
+                    })
+                  }
+                  placeholder="https://example.com"
+                />
+              </label>
+              {linkDialog.error ? (
+                <p className="link-popover-error">{linkDialog.error}</p>
+              ) : null}
+              <div className="link-popover-actions">
+                {linkDialog.isEditing ? (
+                  <button
+                    type="button"
+                    className="link-popover-remove"
+                    onClick={removeLinkFromDialog}
+                  >
+                    Remove
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  className="link-popover-secondary"
+                  onClick={() => setLinkDialog(null)}
+                >
+                  Cancel
+                </button>
+                <button type="submit" className="link-popover-primary">
+                  Apply
+                </button>
+              </div>
+            </form>
+          ) : null}
 
           {selectedNoteContent ? (
             <article className="min-h-0 flex-1 overflow-y-auto p-8">
               <VisualMarkdownEditor
+                ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
+                workspacePath={workspace.path}
                 disabled={isBusy}
                 onChange={(nextMarkdown) => {
                   setEditorMarkdown(nextMarkdown);
                   setStatusMessage("Editing");
                 }}
+                onSelectionFormatChange={setActiveToolbarCommands}
+                onLinkDialogRequest={openLinkDialog}
               />
             </article>
           ) : (
@@ -1002,38 +1377,575 @@ export function App() {
 
 type VisualMarkdownEditorProps = {
   markdown: string;
+  workspacePath: string | null;
   disabled: boolean;
   onChange: (markdown: string) => void;
+  onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
+  onLinkDialogRequest: (details: LinkDialogDetails) => void;
 };
 
-function VisualMarkdownEditor({
-  markdown,
-  disabled,
-  onChange
-}: VisualMarkdownEditorProps) {
+type VisualMarkdownEditorHandle = {
+  runCommand: (
+    command: MarkdownEditorCommand,
+    options?: MarkdownEditorCommandOptions
+  ) => void;
+  getLinkDetails: () => {
+    text: string;
+    url: string;
+    isEditing: boolean;
+  };
+};
+
+const VisualMarkdownEditor = forwardRef<
+  VisualMarkdownEditorHandle,
+  VisualMarkdownEditorProps
+>(function VisualMarkdownEditor(
+  {
+    markdown,
+    workspacePath,
+    disabled,
+    onChange,
+    onSelectionFormatChange,
+    onLinkDialogRequest
+  },
+  ref
+) {
   const editorRef = useRef<HTMLDivElement | null>(null);
   const lastRenderedMarkdown = useRef("");
+  const savedSelectionRange = useRef<Range | null>(null);
 
   useEffect(() => {
     if (!editorRef.current || lastRenderedMarkdown.current === markdown) {
       return;
     }
 
-    editorRef.current.innerHTML = markdownToHtml(markdown);
+    editorRef.current.innerHTML = markdownToHtml(markdown, {
+      workspacePath
+    });
     lastRenderedMarkdown.current = markdown;
-  }, [markdown]);
+  }, [markdown, workspacePath]);
 
-  function handleInput(event: FormEvent<HTMLDivElement>) {
-    const nextMarkdown = editorDomToMarkdown(event.currentTarget);
+  useEffect(() => {
+    function handleSelectionChange() {
+      rememberEditorSelection();
+    }
+
+    document.addEventListener("selectionchange", handleSelectionChange);
+
+    return () => {
+      document.removeEventListener("selectionchange", handleSelectionChange);
+    };
+  });
+
+  function getSelectionElement() {
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+      return null;
+    }
+
+    const anchorNode = selection.anchorNode;
+    return anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement ?? null;
+  }
+
+  function getSelectedOrNearbyLink() {
+    const editorElement = editorRef.current;
+    const element = getSelectionElement();
+    const link = element?.closest("a");
+
+    if (!(link instanceof HTMLAnchorElement) || !editorElement?.contains(link)) {
+      return null;
+    }
+
+    return link;
+  }
+
+  function getLinkDetailsFromSelection() {
+    const editorElement = editorRef.current;
+
+    if (!editorElement || disabled) {
+      return {
+        text: "",
+        url: "",
+        isEditing: false
+      };
+    }
+
+    editorElement.focus();
+    if (!restoreEditorSelection()) {
+      placeCaretAtEditorEnd(editorElement);
+    }
+
+    const link = getSelectedOrNearbyLink();
+
+    if (link) {
+      return {
+        text: link.textContent ?? "",
+        url: link.getAttribute("href") ?? "",
+        isEditing: true
+      };
+    }
+
+    return {
+      text: window.getSelection()?.toString() ?? "",
+      url: "",
+      isEditing: false
+    };
+  }
+
+  useImperativeHandle(ref, () => ({
+    runCommand(command, options) {
+      if (!editorRef.current || disabled) {
+        return;
+      }
+
+      editorRef.current.focus();
+      if (!restoreEditorSelection()) {
+        placeCaretAtEditorEnd(editorRef.current);
+      }
+      applyMarkdownEditorCommand(command, options);
+      syncMarkdownFromEditor(editorRef.current);
+    },
+    getLinkDetails() {
+      return getLinkDetailsFromSelection();
+    }
+  }));
+
+  function rememberEditorSelection() {
+    const editorElement = editorRef.current;
+    const selection = window.getSelection();
+
+    if (!editorElement || !selection || selection.rangeCount === 0) {
+      onSelectionFormatChange(new Set());
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+
+    if (editorElement.contains(range.commonAncestorContainer)) {
+      savedSelectionRange.current = range.cloneRange();
+      onSelectionFormatChange(collectActiveCommands(editorElement));
+    } else {
+      onSelectionFormatChange(new Set());
+    }
+  }
+
+  function restoreEditorSelection() {
+    const selection = window.getSelection();
+    const range = savedSelectionRange.current;
+
+    if (!selection || !range) {
+      return false;
+    }
+
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
+  }
+
+  function placeCaretAtEditorEnd(editorElement: HTMLDivElement) {
+    const range = document.createRange();
+    const selection = window.getSelection();
+
+    range.selectNodeContents(editorElement);
+    range.collapse(false);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+  }
+
+  function collectActiveCommands(editorElement: HTMLDivElement) {
+    const activeCommands = new Set<MarkdownEditorCommand>();
+    const selection = window.getSelection();
+
+    if (!selection || selection.rangeCount === 0) {
+      return activeCommands;
+    }
+
+    const anchorNode = selection.anchorNode;
+    const element =
+      anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement;
+
+    if (!element || !editorElement.contains(element)) {
+      return activeCommands;
+    }
+
+    if (document.queryCommandState("bold")) {
+      activeCommands.add("bold");
+    }
+
+    if (document.queryCommandState("italic")) {
+      activeCommands.add("italic");
+    }
+
+    if (document.queryCommandState("strikeThrough")) {
+      activeCommands.add("strikethrough");
+    }
+
+    const heading = element.closest("h1,h2,h3,h4,h5,h6");
+    if (heading) {
+      activeCommands.add(`heading-${heading.tagName.slice(1)}` as MarkdownEditorCommand);
+    }
+
+    if (element.closest("blockquote")) {
+      activeCommands.add("blockquote");
+    }
+
+    if (element.closest("ul")) {
+      activeCommands.add("unordered-list");
+    }
+
+    if (element.closest("ol")) {
+      activeCommands.add("ordered-list");
+    }
+
+    if (element.closest("li[data-task='true']")) {
+      activeCommands.add("task-list");
+    }
+
+    if (element.closest("pre")) {
+      activeCommands.add("code-block");
+    } else if (element.closest("code")) {
+      activeCommands.add("inline-code");
+    }
+
+    if (element.closest("a")) {
+      activeCommands.add("link");
+    }
+
+    if (element.closest("table")) {
+      activeCommands.add("table");
+    }
+
+    if (element.closest("img")) {
+      activeCommands.add("image");
+    }
+
+    const mathElement = element.closest("[data-math]");
+    if (mathElement instanceof HTMLElement) {
+      activeCommands.add(
+        mathElement.dataset.mathDisplay === "block" ? "block-math" : "inline-math"
+      );
+    }
+
+    return activeCommands;
+  }
+
+  function syncMarkdownFromEditor(editorElement: HTMLDivElement) {
+    const nextMarkdown = editorDomToMarkdown(editorElement);
 
     lastRenderedMarkdown.current = nextMarkdown;
     onChange(nextMarkdown);
+    rememberEditorSelection();
+  }
+
+  function handleInput(event: FormEvent<HTMLDivElement>) {
+    syncMarkdownFromEditor(event.currentTarget);
+  }
+
+  function handleChange(event: FormEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (
+      target instanceof HTMLSelectElement &&
+      target.dataset.codeLanguage === "true" &&
+      editorRef.current
+    ) {
+      updateCodeBlockLanguageFromSelect(target);
+      syncMarkdownFromEditor(editorRef.current);
+    }
   }
 
   function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
     event.preventDefault();
     insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
     handleInput(event);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Backspace") {
+      if (isSelectionInsideCodeBlock()) {
+        return;
+      }
+
+      const didNormalizeBlock = normalizeEmptyBlockAtSelection();
+
+      if (didNormalizeBlock && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
+      const didExitInlineAtom = exitInlineAtomAtSelection();
+      const didExitBlock = didExitInlineAtom ? false : exitCurrentEditorBlock();
+
+      if ((didExitInlineAtom || didExitBlock) && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if ((event.ctrlKey || event.metaKey) && event.key === "ArrowRight") {
+      const didExitInlineAtom = exitInlineAtomAtSelection();
+
+      if (didExitInlineAtom && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if (event.key === "Tab") {
+      const didInsertCodeIndent = insertCodeIndentAtSelection();
+      const didMoveTableCell = !didInsertCodeIndent
+        ? moveTableSelection(!event.shiftKey)
+        : false;
+      const didHandleList = !didInsertCodeIndent && !didMoveTableCell
+        ? handleListKeyAtSelection(event.key, event.shiftKey)
+        : false;
+
+      if ((didInsertCodeIndent || didMoveTableCell || didHandleList) && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (isSelectionInsideCodeBlock()) {
+        return;
+      }
+
+      const didHandleList = handleListKeyAtSelection(event.key, event.shiftKey);
+
+      if (didHandleList && editorRef.current) {
+        event.preventDefault();
+        syncMarkdownFromEditor(editorRef.current);
+      }
+
+      if (didHandleList) {
+        return;
+      }
+    }
+
+    if (event.key !== " " && event.key !== "Enter") {
+      return;
+    }
+
+    const command = applySlashCommandAtSelection();
+
+    if (!command || !editorRef.current) {
+      return;
+    }
+
+    event.preventDefault();
+    syncMarkdownFromEditor(editorRef.current);
+  }
+
+  function handleMouseDown(event: MouseEvent<HTMLDivElement>) {
+    if (!event.altKey) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement) || !target.closest("pre,blockquote")) {
+      return;
+    }
+
+    const didExitBlock = exitEditorBlockFromElement(target);
+
+    if (didExitBlock && editorRef.current) {
+      event.preventDefault();
+      syncMarkdownFromEditor(editorRef.current);
+    }
+  }
+
+  function selectImageForResize(image: HTMLImageElement) {
+    let frame = image.closest(".image-resize-frame") as HTMLSpanElement | null;
+
+    if (!frame) {
+      frame = document.createElement("span");
+      frame.className = "image-resize-frame";
+      frame.contentEditable = "false";
+      frame.dataset.imageResizeFrame = "true";
+      image.insertAdjacentElement("beforebegin", frame);
+      frame.append(image);
+    }
+
+    const imageWidth = image.getAttribute("width") ?? image.style.width.replace("px", "");
+    const width = Number.parseInt(imageWidth, 10) || Math.round(image.getBoundingClientRect().width) || 320;
+
+    frame.style.width = `${width}px`;
+    frame.classList.add("image-resize-frame-active");
+    image.style.width = "100%";
+    image.style.height = "auto";
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNode(frame);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedSelectionRange.current = range.cloneRange();
+
+    if (editorRef.current) {
+      onSelectionFormatChange(collectActiveCommands(editorRef.current));
+    }
+  }
+
+  function syncImageResizeFrames() {
+    if (!editorRef.current) {
+      return false;
+    }
+
+    let didResize = false;
+
+    for (const frame of Array.from(editorRef.current.querySelectorAll(".image-resize-frame"))) {
+      if (!(frame instanceof HTMLElement)) {
+        continue;
+      }
+
+      const image = frame.querySelector("img");
+
+      if (!(image instanceof HTMLImageElement)) {
+        continue;
+      }
+
+      const width = Math.round(frame.getBoundingClientRect().width);
+
+      if (width > 0 && image.getAttribute("width") !== String(width)) {
+        image.setAttribute("width", String(width));
+        image.style.width = "100%";
+        image.style.height = "auto";
+        didResize = true;
+      }
+    }
+
+    return didResize;
+  }
+
+  function handleMouseUp() {
+    if (syncImageResizeFrames() && editorRef.current) {
+      syncMarkdownFromEditor(editorRef.current);
+      return;
+    }
+
+    rememberEditorSelection();
+  }
+
+  async function copyTextToClipboard(text: string) {
+    try {
+      await navigator.clipboard?.writeText(text);
+
+      if (navigator.clipboard) {
+        return;
+      }
+    } catch {
+      // Fall back for Electron or browser contexts where async clipboard is unavailable.
+    }
+
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "true");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+
+  function handleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+    const codeCopyButton =
+      target instanceof HTMLElement ? target.closest("[data-code-copy='true']") : null;
+
+    if (codeCopyButton instanceof HTMLButtonElement) {
+      const code = codeCopyButton.closest("pre")?.querySelector("code")?.textContent ?? "";
+
+      event.preventDefault();
+      void copyTextToClipboard(code);
+      return;
+    }
+
+    const linkTarget = target instanceof HTMLElement ? target.closest("a") : null;
+
+    if (linkTarget instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      void window.inknest.links.openExternal({ url: linkTarget.href });
+      return;
+    }
+
+    if (
+      target instanceof HTMLImageElement ||
+      (target instanceof HTMLElement && target.closest("[data-math]"))
+    ) {
+      const selection = window.getSelection();
+      const range = document.createRange();
+      const selectableTarget =
+        target instanceof HTMLImageElement ? target : target.closest("[data-math]");
+
+      if (!selectableTarget) {
+        return;
+      }
+
+      range.selectNode(selectableTarget);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    }
+
+    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
+      return;
+    }
+
+    window.setTimeout(() => {
+      if (editorRef.current) {
+        syncMarkdownFromEditor(editorRef.current);
+      }
+    }, 0);
+  }
+
+  function handleDoubleClick(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target;
+
+    if (!(target instanceof HTMLElement)) {
+      return;
+    }
+
+    if (target instanceof HTMLImageElement) {
+      event.preventDefault();
+      selectImageForResize(target);
+      return;
+    }
+
+    const link = target.closest("a");
+
+    if (!(link instanceof HTMLAnchorElement) || !editorRef.current?.contains(link)) {
+      return;
+    }
+
+    event.preventDefault();
+
+    const selection = window.getSelection();
+    const range = document.createRange();
+    range.selectNodeContents(link);
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    savedSelectionRange.current = range.cloneRange();
+    onSelectionFormatChange(collectActiveCommands(editorRef.current));
+
+    onLinkDialogRequest({
+      text: link.textContent ?? "",
+      url: link.getAttribute("href") ?? "",
+      isEditing: true,
+      position: getViewportPopoverPosition(event.clientX, event.clientY + 8)
+    });
   }
 
   return (
@@ -1047,10 +1959,17 @@ function VisualMarkdownEditor({
       aria-multiline="true"
       data-placeholder="Start writing..."
       onInput={handleInput}
+      onChange={handleChange}
+      onClick={handleClick}
+      onDoubleClick={handleDoubleClick}
+      onKeyDown={handleKeyDown}
+      onKeyUp={rememberEditorSelection}
+      onMouseUp={handleMouseUp}
+      onMouseDown={handleMouseDown}
       onPaste={handlePaste}
     />
   );
-}
+});
 
 type EmptyStateProps = {
   icon: ReactNode;

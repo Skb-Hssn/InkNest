@@ -35,7 +35,7 @@ test("phase 5 scans workspace folders, markdown notes, metadata, and content", a
   await mkdir(path.join(workspaceDir, ".inknest", "scratch"), {
     recursive: true
   });
-  await mkdir(path.join(workspaceDir, "assets"), { recursive: true });
+  await mkdir(path.join(workspaceDir, "asset"), { recursive: true });
   await writeFile(
     path.join(workspaceDir, "Projects", "Nested", "unicode.md"),
     "# ঢাকা Notes\n\nUnicode body stays intact.",
@@ -48,7 +48,7 @@ test("phase 5 scans workspace folders, markdown notes, metadata, and content", a
     "utf8"
   );
   await writeFile(
-    path.join(workspaceDir, "assets", "asset-note.md"),
+    path.join(workspaceDir, "asset", "asset-note.md"),
     "# Asset",
     "utf8"
   );
@@ -82,7 +82,7 @@ test("phase 5 scans workspace folders, markdown notes, metadata, and content", a
       }
     });
     expect(existsSync(path.join(workspaceDir, ".inknest", "trash"))).toBe(true);
-    expect(existsSync(path.join(workspaceDir, "assets"))).toBe(true);
+    expect(existsSync(path.join(workspaceDir, "asset"))).toBe(true);
     expect(fileModel).toEqual({
       ok: true,
       data: {
@@ -107,7 +107,7 @@ test("phase 5 scans workspace folders, markdown notes, metadata, and content", a
         ],
         metadata: {
           metadataPath: ".inknest",
-          assetsPath: "assets",
+          assetsPath: "asset",
           trashPath: ".inknest/trash"
         }
       }

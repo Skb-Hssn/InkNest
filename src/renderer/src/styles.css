@@ -144,8 +144,84 @@ input {
     @apply flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-xs text-neutral-700 transition hover:bg-ink-50 hover:text-ink-900 disabled:cursor-not-allowed disabled:opacity-50;
   }
 
+  .toolbar-shell {
+    @apply relative shrink-0;
+  }
+
+  .markdown-toolbar {
+    @apply static flex max-h-28 shrink-0 flex-wrap items-start gap-1 overflow-y-auto border-b border-ink-100 bg-white px-4 py-1.5;
+  }
+
+  .toolbar-group {
+    @apply flex flex-wrap items-center gap-1 rounded-md border border-ink-100 bg-ink-50/60 px-1 py-1;
+  }
+
   .toolbar-button {
     @apply inline-flex h-8 min-w-8 items-center justify-center rounded-md border border-transparent px-2 text-xs font-semibold text-neutral-600 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
+  .toolbar-button-active {
+    @apply border-ink-500/50 bg-ink-100 text-ink-900 shadow-sm;
+  }
+
+  .toolbar-composite-icon {
+    @apply relative inline-flex h-4 w-4 items-center justify-center;
+  }
+
+  .toolbar-composite-badge {
+    @apply absolute -right-1 -top-1 flex h-2.5 w-2.5 items-center justify-center rounded-full bg-white text-ink-700;
+  }
+
+  .toolbar-separator {
+    @apply mx-1 h-5 w-px bg-ink-100;
+  }
+
+  .code-language-select {
+    @apply h-8 rounded-md border border-ink-100 bg-white px-2 text-sm text-ink-900 outline-none focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+  }
+
+  .link-popover {
+    @apply fixed z-40 w-80 rounded-md border border-ink-100 bg-white p-3 shadow-xl;
+    left: var(--link-popover-left, 1rem);
+    top: var(--link-popover-top, 7rem);
+  }
+
+  .link-popover-field {
+    @apply mb-2 block text-xs font-semibold text-neutral-600;
+  }
+
+  .link-popover-field span {
+    @apply mb-1 block;
+  }
+
+  .link-popover-field input {
+    @apply h-9 w-full rounded-md border border-ink-100 bg-white px-2 text-sm font-normal text-ink-900 outline-none transition focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+  }
+
+  .link-popover-error {
+    @apply mb-2 rounded-md bg-red-50 px-2 py-1 text-xs font-medium text-red-700;
+  }
+
+  .link-popover-actions {
+    @apply mt-3 flex items-center justify-end gap-2;
+  }
+
+  .link-popover-primary,
+  .link-popover-secondary,
+  .link-popover-remove {
+    @apply inline-flex h-8 items-center justify-center rounded-md border px-3 text-xs font-semibold transition focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+  }
+
+  .link-popover-primary {
+    @apply border-ink-700 bg-ink-700 text-white hover:bg-ink-900;
+  }
+
+  .link-popover-secondary {
+    @apply border-ink-100 bg-white text-ink-900 hover:bg-ink-50;
+  }
+
+  .link-popover-remove {
+    @apply mr-auto border-red-200 bg-red-50 text-red-700 hover:bg-red-100;
   }
 
   .status-pill {
@@ -162,6 +238,7 @@ input {
 
   .visual-editor {
     @apply min-h-full w-full rounded-md border border-ink-100 bg-white px-8 py-7 text-base leading-7 text-ink-900 outline-none transition focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+    overflow-wrap: anywhere;
   }
 
   .visual-editor:empty::before {
@@ -197,7 +274,15 @@ input {
   }
 
   .visual-editor ul {
-    @apply list-disc;
+    @apply list-disc leading-6;
+  }
+
+  .visual-editor ul ul {
+    list-style-type: circle;
+  }
+
+  .visual-editor ul ul ul {
+    list-style-type: square;
   }
 
   .visual-editor ol {
@@ -208,24 +293,91 @@ input {
     @apply my-1 pl-1;
   }
 
+  .visual-editor ul li {
+    @apply my-0 leading-6;
+  }
+
+  .visual-editor li[data-task="true"] {
+    list-style: none;
+  }
+
+  .visual-editor li > ul,
+  .visual-editor li > ol {
+    @apply my-1;
+  }
+
   .visual-editor input[type="checkbox"] {
     @apply mr-2 align-middle;
   }
 
   .visual-editor blockquote {
-    @apply my-4 border-l-4 border-ink-100 bg-ink-50 px-4 py-2 text-neutral-700;
+    @apply my-4 border-l-4 border-ink-500 bg-neutral-100 px-4 py-2 text-neutral-800;
+  }
+
+  .visual-editor blockquote blockquote {
+    @apply my-3 border-l-4 border-ink-700/60 bg-white/70 text-neutral-800;
+  }
+
+  .visual-editor blockquote[data-callout] {
+    @apply rounded-md border-l-4 bg-white shadow-sm;
+  }
+
+  .visual-editor blockquote[data-callout="note"] {
+    @apply border-l-ink-500 bg-ink-50;
+  }
+
+  .visual-editor blockquote[data-callout="warning"] {
+    @apply border-l-amber-500 bg-amber-50 text-amber-950;
+  }
+
+  .visual-editor blockquote[data-callout="info"] {
+    @apply border-l-sky-500 bg-sky-50 text-sky-950;
+  }
+
+  .visual-editor blockquote[data-callout="success"] {
+    @apply border-l-emerald-500 bg-emerald-50 text-emerald-950;
   }
 
   .visual-editor code {
-    @apply rounded bg-ink-50 px-1.5 py-0.5 font-mono text-sm text-ink-900;
+    @apply rounded bg-neutral-100 px-1.5 py-0.5 font-mono text-sm text-ink-900;
   }
 
   .visual-editor pre {
-    @apply my-4 overflow-x-auto rounded-md border border-ink-100 bg-ink-50 p-4;
+    @apply relative my-4 overflow-x-auto rounded-md border border-neutral-300 bg-neutral-100 p-4 pt-12 text-ink-900;
+  }
+
+  .visual-editor .code-copy-button {
+    @apply absolute right-3 top-2 rounded border border-neutral-300 bg-white px-2 py-0.5 text-[11px] font-medium text-neutral-700 transition hover:bg-neutral-200 hover:text-ink-900;
+  }
+
+  .visual-editor pre .code-language-select {
+    @apply absolute left-3 top-2 h-7 rounded border-neutral-300 bg-white px-2 text-xs font-medium text-neutral-700 focus:border-ink-500/40 focus:ring-ink-500/20;
   }
 
   .visual-editor pre code {
-    @apply bg-transparent p-0;
+    @apply bg-transparent p-0 text-ink-900;
+    white-space: pre;
+    tab-size: 2;
+  }
+
+  .visual-editor .syntax-keyword {
+    @apply font-semibold text-blue-700;
+  }
+
+  .visual-editor .syntax-string {
+    @apply text-emerald-700;
+  }
+
+  .visual-editor .syntax-number {
+    @apply text-amber-700;
+  }
+
+  .visual-editor .syntax-comment {
+    @apply text-neutral-500;
+  }
+
+  .visual-editor .syntax-attribute {
+    @apply text-violet-700;
   }
 
   .visual-editor table {
@@ -234,23 +386,73 @@ input {
 
   .visual-editor th,
   .visual-editor td {
-    @apply border border-ink-100 px-3 py-2 text-left align-top;
+    @apply border border-neutral-400 px-3 py-2 text-left align-top;
   }
 
   .visual-editor th {
-    @apply bg-ink-50 font-semibold;
+    @apply bg-neutral-100 font-semibold;
   }
 
   .visual-editor hr {
-    @apply my-6 border-0 border-t border-ink-100;
+    @apply my-6 border-0 border-t-2 border-neutral-500;
   }
 
   .visual-editor a {
-    @apply text-ink-700 underline underline-offset-2;
+    @apply cursor-pointer text-ink-700 underline underline-offset-2;
   }
 
   .visual-editor img {
     @apply my-4 max-w-full rounded-md border border-ink-100;
+  }
+
+  .visual-editor img[width] {
+    height: auto;
+  }
+
+  .visual-editor .image-resize-frame {
+    @apply my-4 inline-block max-w-full overflow-auto rounded-md border border-dashed border-ink-500 bg-white p-1 align-top;
+    min-width: 96px;
+    min-height: 72px;
+    resize: both;
+  }
+
+  .visual-editor .image-resize-frame-active {
+    @apply border-ink-700 shadow-sm ring-2 ring-ink-500/20;
+  }
+
+  .visual-editor .image-resize-frame img {
+    @apply m-0 max-w-none border-0;
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+
+  .visual-editor .math-node {
+    @apply rounded bg-ink-50 px-1.5 py-0.5 font-serif text-ink-900;
+  }
+
+  .visual-editor .math-node[data-math-display="block"] {
+    @apply my-4 block overflow-x-auto border border-ink-100 bg-white px-4 py-3 text-center text-lg;
+  }
+
+  .visual-editor .math-invalid {
+    @apply border border-red-200 bg-red-50 font-mono text-sm text-red-700;
+  }
+
+  .visual-editor .math-frac {
+    @apply inline-flex flex-col items-center px-1 align-middle text-sm leading-tight;
+  }
+
+  .visual-editor .math-frac > span:first-child {
+    @apply border-b border-current px-1;
+  }
+
+  .visual-editor .math-sqrt::before {
+    content: "√";
+  }
+
+  .visual-editor .math-fn {
+    @apply font-semibold;
   }
 
   button:disabled {
