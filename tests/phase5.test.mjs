@@ -260,6 +260,29 @@ test("phase 5 services scan a real workspace and preserve markdown content", asy
   }
 });
 
+test("phase 5 note summaries render Markdown headings as plain text", async () => {
+  const harness = await createServiceHarness();
+  const workspaceRoot = await mkdtemp(path.join(tmpdir(), "inknest-phase5-titles-"));
+
+  try {
+    await writeFile(
+      path.join(workspaceRoot, "formatted.md"),
+      '# **Useful** <mark style="background-color: yellow">marked</mark> [title](https://example.com)',
+      "utf8"
+    );
+
+    const { scanMarkdownNotes } = await harness.requireService(
+      "src/main/services/note-service.js"
+    );
+    const notes = await scanMarkdownNotes(workspaceRoot);
+
+    assert.equal(notes[0].title, "Useful marked title");
+  } finally {
+    await rm(workspaceRoot, { recursive: true, force: true });
+    await harness.cleanup();
+  }
+});
+
 test("phase 5 services reject unsafe paths and generate duplicate-safe filenames", async () => {
   const harness = await createServiceHarness();
   const workspaceRoot = await mkdtemp(path.join(tmpdir(), "inknest-phase5-paths-"));

@@ -492,7 +492,18 @@ function extractNoteTitle(markdown: string, fileName: string) {
   const heading = markdown.match(/^#\s+(.+)$/m);
 
   if (heading) {
-    return heading[1].trim();
+    const plainHeading = heading[1]
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/<[^>]*>/g, "")
+      .replace(/[`*_~]+/g, "")
+      .replace(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (plainHeading) {
+      return plainHeading;
+    }
   }
 
   return path.basename(fileName, path.extname(fileName));

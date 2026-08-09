@@ -73,7 +73,7 @@ input {
   }
 
   .secondary-button {
-    @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-white px-3 text-sm font-medium text-ink-900 transition hover:border-ink-500/30 hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
+    @apply inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-ink-100 bg-white px-3 text-sm font-medium text-ink-900 transition hover:border-ink-500/30 hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
   .secondary-button.danger {
@@ -214,11 +214,25 @@ input {
   }
 
   .markdown-toolbar {
-    @apply static flex max-h-28 shrink-0 flex-wrap items-start gap-1 overflow-y-auto border-b border-ink-100 bg-white px-4 py-1.5;
+    @apply static flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-ink-100 bg-white px-4 py-1.5;
+    scrollbar-color: var(--app-border) transparent;
+    scrollbar-width: thin;
+  }
+
+  .markdown-toolbar::-webkit-scrollbar,
+  .app-editor-header-actions::-webkit-scrollbar {
+    height: 5px;
+  }
+
+  .markdown-toolbar::-webkit-scrollbar-thumb,
+  .app-editor-header-actions::-webkit-scrollbar-thumb {
+    border-radius: 999px;
+    background: var(--app-border);
   }
 
   .toolbar-group {
-    @apply flex flex-wrap items-center gap-1 rounded-md border border-ink-100 bg-ink-50/60 px-1 py-1;
+    @apply flex flex-none flex-nowrap items-center gap-1 rounded-md border border-ink-100 px-1 py-1;
+    background-color: var(--app-surface-muted);
   }
 
   .toolbar-button {
@@ -655,6 +669,34 @@ main[style] {
 
 .app-status-bar > * {
   min-width: 0;
+}
+
+.editor-pane {
+  container-name: editor-pane;
+  container-type: inline-size;
+}
+
+.app-editor-header-copy {
+  flex: 1 1 auto;
+}
+
+@container editor-pane (max-width: 700px) {
+  .app-editor-header {
+    display: grid;
+    height: auto;
+    min-height: 3.5rem;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.5rem;
+    padding-block: 0.65rem;
+  }
+
+  .app-editor-header-actions {
+    width: 100%;
+    overflow-x: auto;
+    padding-block: 0.125rem;
+    scrollbar-color: var(--app-border) transparent;
+    scrollbar-width: thin;
+  }
 }
 
 .status-bar-mode {

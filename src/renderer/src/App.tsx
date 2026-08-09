@@ -2005,7 +2005,7 @@ export function App() {
 
       <section
         data-layout="app-layout-columns"
-        className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
+        className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(300px,340px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
       >
         <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
@@ -2360,9 +2360,9 @@ export function App() {
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-col bg-white">
+        <section className="editor-pane flex min-h-0 flex-col bg-white">
           <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
-            <div className="min-w-0">
+            <div className="app-editor-header-copy min-w-0">
               {selectedNote ? (
                 <input
                   type="text"

@@ -82,3 +82,57 @@ test("phase 16 runs workspace actions from the command palette and adapts its la
     await app.close();
   }
 });
+
+test("phase 16 keeps the default dark desktop layout compact and readable", async ({}, testInfo) => {
+  const workspaceDir = testInfo.outputPath("workspace");
+  await mkdir(workspaceDir, { recursive: true });
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    await window.evaluate((workspacePath) => window.inknest.workspace.select(workspacePath), workspaceDir);
+    await window.evaluate(() => window.inknest.settings.save({ theme: "dark" }));
+    await window.reload();
+    await window.setViewportSize({ width: 1280, height: 800 });
+    await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "New note", exact: true }).first()).toBeEnabled();
+
+    const metrics = await window.evaluate(() => {
+      const toolbar = document.querySelector<HTMLElement>(".markdown-toolbar")!;
+      const toolbarGroup = document.querySelector<HTMLElement>(".toolbar-group")!;
+      const editorHeader = document.querySelector<HTMLElement>(".app-editor-header")!;
+      const headerCopy = document.querySelector<HTMLElement>(".app-editor-header-copy")!;
+      const headerActions = document.querySelector<HTMLElement>(".app-editor-header-actions")!;
+      const importFolder = Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+        .find((button) => button.textContent?.trim() === "Import folder")!;
+      const copyRect = headerCopy.getBoundingClientRect();
+      const actionsRect = headerActions.getBoundingClientRect();
+      const headerRect = editorHeader.getBoundingClientRect();
+
+      return {
+        toolbarHeight: toolbar.getBoundingClientRect().height,
+        toolbarFlexWrap: getComputedStyle(toolbar).flexWrap,
+        toolbarOverflowX: getComputedStyle(toolbar).overflowX,
+        toolbarGroupBackground: getComputedStyle(toolbarGroup).backgroundColor,
+        importFolderWhiteSpace: getComputedStyle(importFolder).whiteSpace,
+        headerContainsChildren:
+          copyRect.left >= headerRect.left &&
+          actionsRect.right <= headerRect.right &&
+          actionsRect.bottom <= headerRect.bottom,
+        headerRowsDoNotOverlap: copyRect.bottom <= actionsRect.top
+      };
+    });
+
+    expect(metrics.toolbarHeight).toBeLessThanOrEqual(66);
+    expect(metrics).toMatchObject({
+      toolbarFlexWrap: "nowrap",
+      toolbarOverflowX: "auto",
+      toolbarGroupBackground: "rgb(27, 34, 30)",
+      importFolderWhiteSpace: "nowrap",
+      headerContainsChildren: true,
+      headerRowsDoNotOverlap: true
+    });
+  } finally {
+    await app.close();
+  }
+});
