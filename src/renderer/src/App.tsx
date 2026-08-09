@@ -333,6 +333,7 @@ export function App() {
   const saveStateRef = useRef<SaveState>(saveState);
   const externalNoteChangeRef = useRef<ExternalNoteChange | null>(externalNoteChange);
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
@@ -734,22 +735,35 @@ export function App() {
     }));
     setStatusMessage("Saving settings");
 
-    const result = await window.inknest.settings.save(patch);
+    const savePromise = window.inknest.settings.save(patch);
+    pendingSettingsSavesRef.current.add(savePromise);
 
-    if (result.ok) {
-      setSettings(result.data);
-      setStatusMessage("Settings saved");
-      setWorkspaceError(null);
-      return true;
-    }
+    try {
+      const result = await savePromise;
 
-    const latestSettings = await window.inknest.settings.get();
-    if (latestSettings.ok) {
-      setSettings(latestSettings.data);
+      if (result.ok) {
+        setSettings(result.data);
+        setStatusMessage("Settings saved");
+        setWorkspaceError(null);
+        return true;
+      }
+
+      const latestSettings = await window.inknest.settings.get();
+      if (latestSettings.ok) {
+        setSettings(latestSettings.data);
+      }
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Settings failed");
+      return false;
+    } finally {
+      pendingSettingsSavesRef.current.delete(savePromise);
     }
-    setWorkspaceError(result.error.message);
-    setStatusMessage("Settings failed");
-    return false;
+  }
+
+  async function flushPendingSettings() {
+    while (pendingSettingsSavesRef.current.size > 0) {
+      await Promise.allSettled([...pendingSettingsSavesRef.current]);
+    }
   }
 
   function closeCommandPalette() {
@@ -1307,6 +1321,7 @@ export function App() {
       void (async () => {
         try {
           const didFlush = await flushCurrentNote();
+          await flushPendingSettings();
 
           if (didFlush) {
             window.inknest.app.closeReady();
