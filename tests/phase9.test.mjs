@@ -413,3 +413,28 @@ test("phase 9 architecture document describes toolbar commands", async () => {
     "tests/phase9.test.mjs"
   ]);
 });
+
+test("phase 9 e2e coverage exercises toolbar commands and saved Markdown", async () => {
+  const e2eSource = await readText("tests/e2e/phase9.spec.ts");
+
+  assertIncludesAll(e2eSource, [
+    'name: "Visual Markdown editor"',
+    'name: "B", exact: true',
+    'name: "H3", exact: true',
+    "toolbar-button-active",
+    'name: "Code block", exact: true',
+    'name: "Code block language"',
+    'selectOption(\n      "typescript"',
+    ".syntax-keyword",
+    'name: "Insert table", exact: true',
+    'name: "Add table row", exact: true',
+    'name: "Add table column", exact: true',
+    'writeFile(notePath, "/todo\\n"',
+    'name: "Link", exact: true',
+    "await link.dblclick()",
+    'name: "Save", exact: true',
+    "readFile(notePath, \"utf8\")",
+    "```typescript\\nconst value = 1;\\n```",
+    "[Edited docs](https://example.com/edited)"
+  ]);
+});
