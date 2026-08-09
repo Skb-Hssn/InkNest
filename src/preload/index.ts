@@ -70,7 +70,11 @@ const inknestApi: InkNestApi = {
       ipcRenderer.invoke(ipcChannels.dialogs.saveImage, payload)
   },
   export: {
-    note: (path) => ipcRenderer.invoke(ipcChannels.export.note, { path })
+    note: (payload) =>
+      ipcRenderer.invoke(
+        ipcChannels.export.note,
+        typeof payload === "string" ? { path: payload } : payload
+      )
   },
   search: {
     query: (payload = {}) => ipcRenderer.invoke(ipcChannels.search.query, payload),
