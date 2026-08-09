@@ -449,8 +449,7 @@ async function createNoteSummary(
     id: relativePath,
     title: extractNoteTitle(markdown, path.basename(notePath)),
     path: relativePath,
-    folderPath: getFolderPath(relativePath),
-    tags: extractFrontmatterTags(markdown)
+    folderPath: getFolderPath(relativePath)
   };
 }
 

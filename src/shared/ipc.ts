@@ -39,7 +39,6 @@ export type NoteSummary = {
   title: string;
   path: string;
   folderPath: string;
-  tags: string[];
 };
 
 export type NoteContent = {

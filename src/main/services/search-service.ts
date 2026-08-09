@@ -11,6 +11,7 @@ import {
 import { resolveInsideWorkspace } from "./path-utils";
 
 export type IndexedNote = NoteSummary & {
+  tags: string[];
   body: string;
   content: string;
   searchText: string;

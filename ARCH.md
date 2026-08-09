@@ -1112,8 +1112,8 @@ include the number of notes using each tag.
 `note-service.ts` extracts the optional YAML `tags` field from frontmatter.
 Both inline lists such as `tags: [writing, work]` and block lists are accepted.
 Tags are deduplicated case-insensitively while preserving their first display
-spelling. Note summaries now carry their parsed tags for the sidebar and search
-result chips.
+spelling. Search index entries and search results carry the parsed tags without
+changing the existing workspace scan note-summary contract.
 
 ### Index Lifecycle
 

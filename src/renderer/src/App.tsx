@@ -2729,7 +2729,7 @@ function NoteRow({
         <p className="mt-1 truncate text-xs text-neutral-500">
           {"snippet" in note ? note.snippet : note.path}
         </p>
-        {note.tags.length > 0 ? (
+        {"tags" in note && note.tags.length > 0 ? (
           <div className="note-tag-list" aria-label="Note tags">
             {note.tags.map((tag) => (
               <span key={tag} className="note-tag">
