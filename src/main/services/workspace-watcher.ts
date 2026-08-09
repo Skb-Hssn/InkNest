@@ -37,6 +37,21 @@ export class WorkspaceWatcher {
     this.unavailableStatus = null;
   }
 
+  async sync() {
+    const workspacePath = this.activeWorkspacePath;
+
+    if (!workspacePath) {
+      return;
+    }
+
+    try {
+      this.snapshot = await snapshotWorkspace(workspacePath);
+      this.unavailableStatus = null;
+    } catch {
+      // The next poll reports workspace availability through the normal event path.
+    }
+  }
+
   private async checkForChanges() {
     const workspacePath = this.activeWorkspacePath;
 

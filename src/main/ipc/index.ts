@@ -43,7 +43,7 @@ export async function registerIpcHandlers() {
 
   registerAppHandlers();
   registerWorkspaceHandlers(activeWorkspace, searchIndex, workspaceWatcher);
-  registerNoteHandlers(activeWorkspace, searchIndex);
+  registerNoteHandlers(activeWorkspace, searchIndex, workspaceWatcher);
   registerFolderHandlers(activeWorkspace, searchIndex);
   registerSettingsHandlers();
   registerSearchHandlers(activeWorkspace, searchIndex);

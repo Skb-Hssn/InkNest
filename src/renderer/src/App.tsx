@@ -22,6 +22,7 @@ import {
   ChevronRight,
   CircleMinus,
   CirclePlus,
+  Command,
   Code2,
   Copy,
   Edit3,
@@ -270,12 +271,20 @@ type ExternalNoteChange = {
   kind: "changed" | "deleted";
   path: string;
 };
+type CommandPaletteCommand = {
+  id: string;
+  label: string;
+  description: string;
+  shortcut?: string;
+  icon: ReactNode;
+  disabled: boolean;
+};
 
 // Keep the debounce inside the product's 500ms-1000ms autosave range.
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-15-reliability-and-external-changes");
+  const [phase, setPhase] = useState("phase-16-accessibility-and-ui-polish");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -308,6 +317,9 @@ export function App() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [externalNoteChange, setExternalNoteChange] =
     useState<ExternalNoteChange | null>(null);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
+  const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
+  const [activeCommandIndex, setActiveCommandIndex] = useState(0);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
@@ -320,6 +332,8 @@ export function App() {
   const selectedNoteContentRef = useRef(selectedNoteContent);
   const saveStateRef = useRef<SaveState>(saveState);
   const externalNoteChangeRef = useRef<ExternalNoteChange | null>(externalNoteChange);
+  const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
@@ -407,6 +421,7 @@ export function App() {
     workspace.path ??
     workspace.lastWorkspacePath ??
     "Open a local Markdown folder to begin";
+  const currentFilePath = selectedNote?.path ?? selectedNoteContent?.path ?? workspacePath;
   const selectedFolderLabel =
     folders.find((folder) => folder.path === selectedFolderPath)?.name ??
     selectedFolderPath;
@@ -416,6 +431,92 @@ export function App() {
       : workspace.status === "permission-denied"
         ? "Workspace access needed"
         : "No workspace selected";
+  const currentMode = selectedNoteContent ? "Visual Markdown" : "Workspace overview";
+
+  const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(
+    () => [
+      {
+        id: "new-note",
+        label: "Create new note",
+        description: "Create a Markdown note in the current folder.",
+        icon: <FilePlus2 size={16} />,
+        disabled: !hasWorkspace || isBusy
+      },
+      {
+        id: "new-folder",
+        label: "Create new folder",
+        description: "Create a folder in the current workspace.",
+        icon: <FolderPlus size={16} />,
+        disabled: !hasWorkspace || isBusy
+      },
+      {
+        id: "choose-workspace",
+        label: "Choose workspace",
+        description: "Open or create a local Markdown workspace.",
+        icon: <FolderOpen size={16} />,
+        disabled: isBusy
+      },
+      {
+        id: "focus-search",
+        label: "Focus note search",
+        description: "Jump to the note search field.",
+        shortcut: "/",
+        icon: <Search size={16} />,
+        disabled: !settings.sidebarVisible
+      },
+      {
+        id: "save-note",
+        label: "Save current note",
+        description: "Write the current note to disk.",
+        shortcut: "⌘/Ctrl+S",
+        icon: <Save size={16} />,
+        disabled: !selectedNoteContent || !isDirty || isBusy || isSaving
+      },
+      {
+        id: "toggle-sidebar",
+        label: settings.sidebarVisible ? "Hide sidebar" : "Show sidebar",
+        description: "Toggle the workspace and note panels.",
+        icon: <PanelLeft size={16} />,
+        disabled: false
+      },
+      {
+        id: "open-settings",
+        label: "Open settings",
+        description: "Change theme, editor, and layout preferences.",
+        icon: <Settings size={16} />,
+        disabled: false
+      },
+      {
+        id: "export-markdown",
+        label: "Export Markdown",
+        description: "Save the current note as Markdown.",
+        icon: <FileText size={16} />,
+        disabled: !selectedNoteContent || isBusy
+      },
+      {
+        id: "export-html",
+        label: "Export HTML",
+        description: "Save a readable HTML version of the current note.",
+        icon: <FileText size={16} />,
+        disabled: !selectedNoteContent || isBusy
+      },
+      {
+        id: "export-pdf",
+        label: "Export PDF",
+        description: "Print the current note to PDF.",
+        icon: <FileText size={16} />,
+        disabled: !selectedNoteContent || isBusy
+      }
+    ],
+    [hasWorkspace, isBusy, isDirty, isSaving, selectedNoteContent, settings.sidebarVisible]
+  );
+  const filteredCommandPaletteCommands = commandPaletteCommands.filter((command) => {
+    const query = commandPaletteQuery.trim().toLocaleLowerCase();
+    return (
+      !query ||
+      `${command.label} ${command.description}`.toLocaleLowerCase().includes(query)
+    );
+  });
 
   useEffect(() => {
     setNoteTitleDraft(selectedNote?.title ?? "");
@@ -634,22 +735,89 @@ export function App() {
     }));
     setStatusMessage("Saving settings");
 
-    const result = await window.inknest.settings.save(patch);
+    const savePromise = window.inknest.settings.save(patch);
+    pendingSettingsSavesRef.current.add(savePromise);
 
-    if (result.ok) {
-      setSettings(result.data);
-      setStatusMessage("Settings saved");
-      setWorkspaceError(null);
-      return true;
-    }
+    try {
+      const result = await savePromise;
 
-    const latestSettings = await window.inknest.settings.get();
-    if (latestSettings.ok) {
-      setSettings(latestSettings.data);
+      if (result.ok) {
+        setSettings(result.data);
+        setStatusMessage("Settings saved");
+        setWorkspaceError(null);
+        return true;
+      }
+
+      const latestSettings = await window.inknest.settings.get();
+      if (latestSettings.ok) {
+        setSettings(latestSettings.data);
+      }
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Settings failed");
+      return false;
+    } finally {
+      pendingSettingsSavesRef.current.delete(savePromise);
     }
-    setWorkspaceError(result.error.message);
-    setStatusMessage("Settings failed");
-    return false;
+  }
+
+  async function flushPendingSettings() {
+    while (pendingSettingsSavesRef.current.size > 0) {
+      await Promise.allSettled([...pendingSettingsSavesRef.current]);
+    }
+  }
+
+  function closeCommandPalette() {
+    setIsCommandPaletteOpen(false);
+    setCommandPaletteQuery("");
+    setActiveCommandIndex(0);
+  }
+
+  async function runCommandPaletteCommand(commandId: string) {
+    closeCommandPalette();
+
+    switch (commandId) {
+      case "new-note":
+        await createNote();
+        break;
+      case "new-folder":
+        await createFolder();
+        break;
+      case "choose-workspace":
+        await chooseWorkspace();
+        break;
+      case "focus-search":
+        if (!settings.sidebarVisible) {
+          await updateAppSettings({ sidebarVisible: true });
+        }
+        window.setTimeout(() => {
+          const searchInput = document.querySelector<HTMLInputElement>(
+            'input[aria-label="Search notes"]'
+          );
+          searchInput?.focus();
+          searchInput?.select();
+        }, 0);
+        break;
+      case "save-note":
+        await saveCurrentNote();
+        break;
+      case "toggle-sidebar":
+        await updateAppSettings({ sidebarVisible: !settings.sidebarVisible });
+        break;
+      case "open-settings":
+        setIsSettingsOpen(true);
+        break;
+      case "export-markdown":
+        await exportCurrentNote("markdown");
+        break;
+      case "export-html":
+        await exportCurrentNote("html");
+        break;
+      case "export-pdf":
+        await exportCurrentNote("pdf");
+        break;
+      default:
+        break;
+    }
   }
 
   async function importNotes(mode: "files" | "folder") {
@@ -1082,6 +1250,42 @@ export function App() {
 
   useEffect(() => {
     const handleShortcut = (event: globalThis.KeyboardEvent) => {
+      const target = event.target;
+      const isTypingTarget =
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLTextAreaElement ||
+        (target instanceof HTMLElement && target.isContentEditable);
+
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setIsCommandPaletteOpen(true);
+        setIsSettingsOpen(false);
+        return;
+      }
+
+      if (event.key === "Escape") {
+        if (isCommandPaletteOpen) {
+          event.preventDefault();
+          closeCommandPalette();
+          return;
+        }
+
+        if (isSettingsOpen) {
+          event.preventDefault();
+          setIsSettingsOpen(false);
+          return;
+        }
+      }
+
+      if (event.key === "/" && !isTypingTarget && settings.sidebarVisible) {
+        event.preventDefault();
+        const searchInput = document.querySelector<HTMLInputElement>(
+          'input[aria-label="Search notes"]'
+        );
+        searchInput?.focus();
+        return;
+      }
+
       if (
         (event.ctrlKey || event.metaKey) &&
         event.key.toLowerCase() === "s"
@@ -1093,13 +1297,31 @@ export function App() {
 
     window.addEventListener("keydown", handleShortcut);
     return () => window.removeEventListener("keydown", handleShortcut);
-  }, []);
+  }, [isCommandPaletteOpen, isSettingsOpen, settings.sidebarVisible]);
+
+  useEffect(() => {
+    setActiveCommandIndex(0);
+  }, [commandPaletteQuery]);
+
+  useEffect(() => {
+    if (!isCommandPaletteOpen) {
+      return;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      commandPaletteInputRef.current?.focus();
+      commandPaletteInputRef.current?.select();
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [isCommandPaletteOpen]);
 
   useEffect(() => {
     return window.inknest.app.onPrepareToClose(() => {
       void (async () => {
         try {
           const didFlush = await flushCurrentNote();
+          await flushPendingSettings();
 
           if (didFlush) {
             window.inknest.app.closeReady();
@@ -1577,7 +1799,7 @@ export function App() {
 
   return (
     <main
-      className="grid h-screen overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
       style={{
         "--app-font-size": `${settings.fontSize}px`,
         "--app-font-family": fontFamilyCssValue(settings.fontFamily)
@@ -1603,7 +1825,7 @@ export function App() {
           </div>
         </div>
 
-        <div className="relative flex items-center gap-2">
+        <div className="app-header-actions relative flex items-center gap-2">
           <button
             type="button"
             className="command-button"
@@ -1635,10 +1857,24 @@ export function App() {
             type="button"
             aria-label="Settings"
             aria-pressed={isSettingsOpen}
+            title="Settings"
             className="icon-button"
             onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
           >
             <Settings size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Open command palette"
+            title="Open command palette (Ctrl+K)"
+            aria-keyshortcuts="Control+K"
+            className="icon-button"
+            onClick={() => {
+              setIsCommandPaletteOpen(true);
+              setIsSettingsOpen(false);
+            }}
+          >
+            <Command size={18} />
           </button>
           {isSettingsOpen ? (
             <div className="settings-popover" role="dialog" aria-label="Settings">
@@ -1768,6 +2004,7 @@ export function App() {
       </header>
 
       <section
+        data-layout="app-layout-columns"
         className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
       >
         <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
@@ -2124,7 +2361,7 @@ export function App() {
         </aside>
 
         <section className="flex min-h-0 flex-col bg-white">
-          <div className="flex h-14 items-center justify-between border-b border-ink-100 px-5">
+          <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
             <div className="min-w-0">
               {selectedNote ? (
                 <input
@@ -2149,12 +2386,13 @@ export function App() {
                 {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
               </p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="app-editor-header-actions flex items-center gap-2">
               <button
                 type="button"
                 className="secondary-button"
                 onClick={() => void saveCurrentNote()}
                 disabled={!selectedNoteContent || !isDirty || isBusy || isSaving}
+                aria-keyshortcuts="Control+S"
               >
                 <Save size={15} />
                 <span>Save</span>
@@ -2383,10 +2621,13 @@ export function App() {
         </section>
       </section>
 
-      <footer className="grid grid-cols-[1fr_auto_1fr] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
-        <span className="truncate">{workspacePath}</span>
+      <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
+        <span className="status-bar-path truncate" title={currentFilePath}>
+          {currentFilePath}
+        </span>
+        <span className="status-bar-mode">{currentMode}</span>
         <span>{phase}</span>
-        <span className="justify-self-end">
+        <span className="status-bar-details justify-self-end truncate">
           {settings.showWordCount ? (
             <>{saveStatusLabel} - {wordCount} words - {characterCount} characters</>
           ) : (
@@ -2395,6 +2636,95 @@ export function App() {
           {saveError ? `: ${saveError}` : ""}
         </span>
       </footer>
+
+      {isCommandPaletteOpen ? (
+        <div
+          className="command-palette-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              closeCommandPalette();
+            }
+          }}
+        >
+          <div
+            className="command-palette"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Command palette"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="command-palette-search">
+              <Command size={18} aria-hidden="true" />
+              <input
+                ref={commandPaletteInputRef}
+                type="search"
+                role="combobox"
+                aria-label="Command palette search"
+                aria-expanded="true"
+                aria-controls="command-palette-results"
+                placeholder="Search commands..."
+                value={commandPaletteQuery}
+                onChange={(event) => setCommandPaletteQuery(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "ArrowDown") {
+                    event.preventDefault();
+                    setActiveCommandIndex((currentIndex) =>
+                      Math.min(currentIndex + 1, Math.max(filteredCommandPaletteCommands.length - 1, 0))
+                    );
+                  } else if (event.key === "ArrowUp") {
+                    event.preventDefault();
+                    setActiveCommandIndex((currentIndex) => Math.max(currentIndex - 1, 0));
+                  } else if (event.key === "Enter") {
+                    event.preventDefault();
+                    const command = filteredCommandPaletteCommands[activeCommandIndex];
+                    if (command && !command.disabled) {
+                      void runCommandPaletteCommand(command.id);
+                    }
+                  } else if (event.key === "Escape") {
+                    event.preventDefault();
+                    closeCommandPalette();
+                  }
+                }}
+              />
+              <kbd>Esc</kbd>
+            </div>
+            <div id="command-palette-results" className="command-palette-results">
+              {filteredCommandPaletteCommands.length === 0 ? (
+                <p className="command-palette-empty">No matching commands.</p>
+              ) : (
+                filteredCommandPaletteCommands.map((command, index) => (
+                  <button
+                    key={command.id}
+                    id={`command-palette-${command.id}`}
+                    type="button"
+                    className={`command-palette-item ${
+                      index === activeCommandIndex ? "command-palette-item-active" : ""
+                    }`}
+                    aria-selected={index === activeCommandIndex}
+                    disabled={command.disabled}
+                    onMouseEnter={() => setActiveCommandIndex(index)}
+                    onClick={() => void runCommandPaletteCommand(command.id)}
+                  >
+                    <span className="command-palette-item-icon" aria-hidden="true">
+                      {command.icon}
+                    </span>
+                    <span className="command-palette-item-copy">
+                      <strong>{command.label}</strong>
+                      <small>{command.description}</small>
+                    </span>
+                    {command.shortcut ? <kbd>{command.shortcut}</kbd> : null}
+                  </button>
+                ))
+              )}
+            </div>
+            <div className="command-palette-footer">
+              <span>↑↓ Navigate</span>
+              <span>Enter Run</span>
+              <span>Esc Close</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   );
 }
