@@ -1,6 +1,8 @@
+import { dialog } from "electron";
 import {
   ipcChannels,
   type DeletedNoteSummary,
+  type ImportNotesResult,
   type NoteContent,
   type NoteSummary
 } from "../../shared/ipc";
@@ -17,6 +19,10 @@ import {
   scanMarkdownNotes,
   scanTrashNotes
 } from "../services/note-service";
+import {
+  importMarkdownFiles,
+  importMarkdownFolder
+} from "../services/import-service";
 import { InMemorySearchIndex } from "../services/search-service";
 import { invalidPayload } from "./errors";
 import {
@@ -56,6 +62,59 @@ export function registerNoteHandlers(
     await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
     return result;
   });
+
+  registerIpcHandler<ImportNotesResult>(
+    ipcChannels.notes.importFiles,
+    async (payload = {}) => {
+      assertPlainObject(payload);
+      const selection = await dialog.showOpenDialog({
+        title: "Import Markdown notes",
+        buttonLabel: "Import notes",
+        properties: ["openFile", "multiSelections"],
+        filters: [{ name: "Markdown", extensions: ["md"] }]
+      });
+
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return { imported: [], skipped: [] };
+      }
+
+      const workspaceRoot = assertActiveWorkspace(activeWorkspace);
+      const result = await importMarkdownFiles(
+        workspaceRoot,
+        selection.filePaths,
+        assertOptionalString(payload.folderPath, "folderPath") ?? "."
+      );
+
+      await refreshSearchIndex(searchIndex, workspaceRoot);
+      return result;
+    }
+  );
+
+  registerIpcHandler<ImportNotesResult>(
+    ipcChannels.notes.importFolder,
+    async (payload = {}) => {
+      assertPlainObject(payload);
+      const selection = await dialog.showOpenDialog({
+        title: "Import Markdown folder",
+        buttonLabel: "Import folder",
+        properties: ["openDirectory"]
+      });
+
+      if (selection.canceled || selection.filePaths.length === 0) {
+        return { imported: [], skipped: [] };
+      }
+
+      const workspaceRoot = assertActiveWorkspace(activeWorkspace);
+      const result = await importMarkdownFolder(
+        workspaceRoot,
+        selection.filePaths[0],
+        assertOptionalString(payload.folderPath, "folderPath") ?? "."
+      );
+
+      await refreshSearchIndex(searchIndex, workspaceRoot);
+      return result;
+    }
+  );
 
   registerIpcHandler<NoteSummary>(ipcChannels.notes.rename, async (payload) => {
     assertPlainObject(payload);

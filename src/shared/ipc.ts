@@ -15,8 +15,9 @@ export type IpcResult<T> = IpcSuccess<T> | IpcFailure;
 
 export type AppInfo = {
   name: "InkNest";
-  // Previous milestones: phase-9-toolbar-editing-commands and phase-10-autosave-safe-writes.
-  phase: "phase-11-search-and-tags";
+  // Previous milestones: phase-9-toolbar-editing-commands, phase-10-autosave-safe-writes,
+  // and phase-11-search-and-tags.
+  phase: "phase-12-import-assets-links";
 };
 
 export type WorkspaceStatus =
@@ -105,6 +106,37 @@ export type OpenExternalLinkPayload = {
   url: string;
 };
 
+export type ResolveLocalLinkPayload = {
+  fromPath: string;
+  url: string;
+};
+
+export type ResolvedLocalLink = {
+  path: string;
+  anchor: string | null;
+};
+
+export type ImportNotesPayload = {
+  folderPath?: string;
+};
+
+export type ImportNotesResult = {
+  imported: NoteSummary[];
+  skipped: string[];
+};
+
+export type SaveImagePayload = {
+  bytes: number[];
+  fileName?: string;
+  mimeType?: string;
+};
+
+export type SavedImageAsset = {
+  assetPath: string;
+  displaySrc: string;
+  fileName: string;
+};
+
 export type SelectImageResult =
   | {
       canceled: true;
@@ -185,6 +217,10 @@ const appCloseCanceledChannel = ["app", "close-canceled"].join(":");
 // clients that only know the original request channels.
 const searchQueryChannel = ["search", "query"].join(":");
 const searchListTagsChannel = ["search", "list-tags"].join(":");
+const notesImportFilesChannel = ["notes", "import-files"].join(":");
+const notesImportFolderChannel = ["notes", "import-folder"].join(":");
+const linksResolveLocalChannel = ["links", "resolve-local"].join(":");
+const dialogsSaveImageChannel = ["dialogs", "save-image"].join(":");
 
 export const ipcChannels = {
   app: {
@@ -207,6 +243,8 @@ export const ipcChannels = {
     duplicate: "notes:duplicate",
     move: "notes:move",
     save: "notes:save",
+    importFiles: notesImportFilesChannel,
+    importFolder: notesImportFolderChannel,
     delete: "notes:delete",
     listTrash: "notes:list-trash",
     restore: "notes:restore",
@@ -223,10 +261,12 @@ export const ipcChannels = {
     save: "settings:save"
   },
   links: {
-    openExternal: "links:open-external"
+    openExternal: "links:open-external",
+    resolveLocal: linksResolveLocalChannel
   },
   dialogs: {
-    selectImage: "dialogs:select-image"
+    selectImage: "dialogs:select-image",
+    saveImage: dialogsSaveImageChannel
   },
   export: {
     note: "export:note"

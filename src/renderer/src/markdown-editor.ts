@@ -2,6 +2,7 @@ const blockSeparator = "\n\n";
 
 type MarkdownRenderOptions = {
   workspacePath?: string | null;
+  notePath?: string | null;
 };
 
 export type MarkdownEditorCommand =
@@ -324,7 +325,7 @@ export function applyMarkdownEditorCommand(
 
     if (url) {
       insertHtmlAtSelection(
-        `<a href="${escapeAttribute(url)}">${escapeHtml(label)}</a>`
+        `<a href="${escapeAttribute(sanitizeMarkdownHref(url))}">${escapeHtml(label)}</a>`
       );
     }
 
@@ -852,6 +853,12 @@ function inlineNodeToMarkdown(node: Node): string {
       : `![${alt}](${src})`;
   }
 
+  if (node.dataset.brokenImage === "true") {
+    const alt = node.dataset.imageAlt ?? "Missing image";
+    const src = node.dataset.markdownSrc ?? "";
+    return `![${alt}](${src})`;
+  }
+
   return inlineChildrenToMarkdown(node);
 }
 
@@ -1258,7 +1265,11 @@ function inlineMarkdownToHtml(
     return `\u0000${tokens.length - 1}\u0000`;
   });
   source = source.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
-    tokens.push(`<a href="${href}">${label}</a>`);
+    const safeHref = sanitizeMarkdownHref(String(href));
+    const linkKind = /^https?:\/\//i.test(safeHref) ? "external" : "local";
+    tokens.push(
+      `<a href="${escapeAttribute(safeHref)}" data-link-kind="${linkKind}">${label}</a>`
+    );
     return `\u0000${tokens.length - 1}\u0000`;
   });
   source = source.replace(/`([^`]+)`/g, "<code>$1</code>");
@@ -1296,7 +1307,7 @@ function imageToHtml(
     ? ` width="${escapeAttribute(width)}" style="width: ${escapeAttribute(width)}px; height: auto;"`
     : "";
 
-  return `<img src="${escapeAttribute(displaySrc)}" alt="${escapeAttribute(alt)}" data-markdown-src="${escapeAttribute(markdownSrc)}"${widthAttributes}>`;
+  return `<img src="${escapeAttribute(displaySrc)}" alt="${escapeAttribute(alt)}" data-markdown-src="${escapeAttribute(markdownSrc)}" data-local-image="true"${widthAttributes}>`;
 }
 
 function resolveImageDisplaySrc(
@@ -1307,11 +1318,56 @@ function resolveImageDisplaySrc(
     return src;
   }
 
-  if (!options.workspacePath) {
+  if (!options.workspacePath || !isSafeWorkspaceRelativePath(src, options.notePath)) {
     return src;
   }
 
-  return `${workspacePathToFileUrl(options.workspacePath)}/${encodeURI(src)}`;
+  const workspaceUrl = `${workspacePathToFileUrl(options.workspacePath)}/`;
+  const noteDirectory = options.notePath
+    ? options.notePath.split(/[\\/]/).slice(0, -1).join("/")
+    : "";
+
+  return new URL(encodeURI(src), `${workspaceUrl}${encodeURI(noteDirectory)}/`).toString();
+}
+
+function sanitizeMarkdownHref(value: string) {
+  const href = value.trim();
+
+  if (/^(?:javascript|data|vbscript):/i.test(href)) {
+    return "#";
+  }
+
+  return href || "#";
+}
+
+function isSafeWorkspaceRelativePath(src: string, notePath?: string | null) {
+  if (/^(?:data:|https?:|file:|blob:)/i.test(src) || src.startsWith("/")) {
+    return false;
+  }
+
+  const segments = [
+    ...(notePath ? notePath.split(/[\\/]/).slice(0, -1) : []),
+    ...src.split(/[\\/]/)
+  ];
+  let depth = 0;
+
+  for (const segment of segments) {
+    if (!segment || segment === ".") {
+      continue;
+    }
+
+    if (segment === "..") {
+      depth -= 1;
+    } else {
+      depth += 1;
+    }
+
+    if (depth < 0) {
+      return false;
+    }
+  }
+
+  return true;
 }
 
 function workspacePathToFileUrl(workspacePath: string) {

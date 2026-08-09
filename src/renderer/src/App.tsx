@@ -68,6 +68,7 @@ import type {
   FolderSummary,
   NoteContent,
   NoteSummary,
+  type SaveImagePayload,
   SearchResult,
   TagSummary,
   WorkspaceFileModel,
@@ -242,7 +243,7 @@ type SaveState = "saved" | "unsaved" | "saving" | "failed";
 const autoSaveDelayMs = 750;
 
 export function App() {
-  const [phase, setPhase] = useState("phase-11-search-and-tags");
+  const [phase, setPhase] = useState("phase-12-import-assets-links");
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
@@ -459,6 +460,85 @@ export function App() {
 
     setWorkspaceError(result.error.message);
     return null;
+  }
+
+  async function importNotes(mode: "files" | "folder") {
+    if (!(await flushCurrentNote())) {
+      return;
+    }
+
+    setIsBusy(true);
+    setWorkspaceError(null);
+    const result =
+      mode === "files"
+        ? await window.inknest.notes.importFiles({ folderPath: selectedFolderPath })
+        : await window.inknest.notes.importFolder({ folderPath: selectedFolderPath });
+
+    if (result.ok) {
+      await refreshWorkspace();
+      const firstImportedNote = result.data.imported[0];
+
+      if (firstImportedNote) {
+        setSelectedFolderPath(firstImportedNote.folderPath);
+        await openNote(firstImportedNote.path);
+      }
+
+      const importedCount = result.data.imported.length;
+      const skippedCount = result.data.skipped.length;
+      setStatusMessage(
+        skippedCount > 0
+          ? `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}; skipped ${skippedCount}`
+          : `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}`
+      );
+    } else {
+      setWorkspaceError(result.error.message);
+    }
+
+    setIsBusy(false);
+  }
+
+  async function insertPastedImage(payload: SaveImagePayload) {
+    if (!selectedNoteContent || isBusy) {
+      return;
+    }
+
+    const result = await window.inknest.dialogs.saveImage(payload);
+
+    if (!result.ok) {
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Image paste failed");
+      return;
+    }
+
+    editorHandleRef.current?.runCommand("image", {
+      src: result.data.assetPath,
+      previewSrc: result.data.displaySrc,
+      alt: fileNameFromPath(result.data.fileName)
+    });
+    setStatusMessage("Image inserted");
+  }
+
+  async function openLocalLink(url: string) {
+    if (!selectedNoteContent) {
+      return;
+    }
+
+    const result = await window.inknest.links.resolveLocal({
+      fromPath: selectedNoteContent.path,
+      url
+    });
+
+    if (!result.ok) {
+      setWorkspaceError(result.error.message);
+      return;
+    }
+
+    setSelectedFolderPath(
+      result.data.path.includes("/")
+        ? result.data.path.slice(0, result.data.path.lastIndexOf("/")) || "."
+        : "."
+    );
+    await openNote(result.data.path);
   }
 
   async function chooseWorkspace() {
@@ -1242,6 +1322,15 @@ export function App() {
           <button
             type="button"
             className="secondary-button"
+            onClick={() => void importNotes("files")}
+            disabled={!hasWorkspace || isBusy}
+          >
+            <FileText size={16} />
+            <span>Import</span>
+          </button>
+          <button
+            type="button"
+            className="secondary-button"
             onClick={() => void createFolder()}
             disabled={!hasWorkspace || isBusy}
           >
@@ -1343,6 +1432,26 @@ export function App() {
               >
                 <FolderPlus size={16} />
                 <span>New folder</span>
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                className="secondary-button justify-center"
+                onClick={() => void importNotes("files")}
+                disabled={!hasWorkspace || isBusy}
+              >
+                <FileText size={15} />
+                <span>Import files</span>
+              </button>
+              <button
+                type="button"
+                className="secondary-button justify-center"
+                onClick={() => void importNotes("folder")}
+                disabled={!hasWorkspace || isBusy}
+              >
+                <FolderInput size={15} />
+                <span>Import folder</span>
               </button>
             </div>
           </div>
@@ -1741,6 +1850,7 @@ export function App() {
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
                 workspacePath={workspace.path}
+                notePath={selectedNoteContent.path}
                 disabled={isBusy}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
@@ -1753,6 +1863,8 @@ export function App() {
                 }}
                 onSelectionFormatChange={setActiveToolbarCommands}
                 onLinkDialogRequest={openLinkDialog}
+                onImagePaste={(payload) => void insertPastedImage(payload)}
+                onLocalLinkRequest={(url) => void openLocalLink(url)}
               />
             </article>
           ) : (
@@ -1786,10 +1898,13 @@ export function App() {
 type VisualMarkdownEditorProps = {
   markdown: string;
   workspacePath: string | null;
+  notePath: string;
   disabled: boolean;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
   onLinkDialogRequest: (details: LinkDialogDetails) => void;
+  onImagePaste: (payload: SaveImagePayload) => void;
+  onLocalLinkRequest: (url: string) => void;
 };
 
 type VisualMarkdownEditorHandle = {
@@ -1811,10 +1926,13 @@ const VisualMarkdownEditor = forwardRef<
   {
     markdown,
     workspacePath,
+    notePath,
     disabled,
     onChange,
     onSelectionFormatChange,
-    onLinkDialogRequest
+    onLinkDialogRequest,
+    onImagePaste,
+    onLocalLinkRequest
   },
   ref
 ) {
@@ -1828,10 +1946,11 @@ const VisualMarkdownEditor = forwardRef<
     }
 
     editorRef.current.innerHTML = markdownToHtml(markdown, {
-      workspacePath
+      workspacePath,
+      notePath
     });
     lastRenderedMarkdown.current = markdown;
-  }, [markdown, workspacePath]);
+  }, [markdown, notePath, workspacePath]);
 
   useEffect(() => {
     function handleSelectionChange() {
@@ -1871,6 +1990,48 @@ const VisualMarkdownEditor = forwardRef<
 
     return () => {
       editorElement.removeEventListener("change", handleNativeChange);
+    };
+  });
+
+  useEffect(() => {
+    const editorElement = editorRef.current;
+
+    if (!editorElement) {
+      return;
+    }
+
+    function handleImageError(event: Event) {
+      const target = event.target;
+
+      if (!(target instanceof HTMLImageElement)) {
+        return;
+      }
+
+      const markdownSrc = target.dataset.markdownSrc ?? target.getAttribute("src") ?? "";
+
+      if (
+        /^(?:data:|https?:|file:|blob:)/i.test(markdownSrc) ||
+        markdownSrc.startsWith("/") ||
+        target.dataset.imageBroken === "true"
+      ) {
+        return;
+      }
+
+      const placeholder = document.createElement("span");
+      placeholder.className = "broken-image-placeholder";
+      placeholder.contentEditable = "false";
+      placeholder.dataset.brokenImage = "true";
+      placeholder.dataset.markdownSrc = markdownSrc;
+      placeholder.dataset.imageAlt = target.alt;
+      placeholder.title = markdownSrc;
+      placeholder.textContent = `Missing image: ${target.alt || markdownSrc}`;
+      target.replaceWith(placeholder);
+    }
+
+    editorElement.addEventListener("error", handleImageError, true);
+
+    return () => {
+      editorElement.removeEventListener("error", handleImageError, true);
     };
   });
 
@@ -2092,7 +2253,26 @@ const VisualMarkdownEditor = forwardRef<
     }
   }
 
-  function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+  async function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
+    const imageItem = Array.from(event.clipboardData.items).find(
+      (item) => item.kind === "file" && item.type.startsWith("image/")
+    );
+
+    if (imageItem) {
+      const file = imageItem.getAsFile();
+
+      if (file) {
+        event.preventDefault();
+        const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
+        onImagePaste({
+          bytes,
+          fileName: file.name || undefined,
+          mimeType: file.type || imageItem.type
+        });
+        return;
+      }
+    }
+
     event.preventDefault();
     insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
     handleInput(event);
@@ -2315,7 +2495,13 @@ const VisualMarkdownEditor = forwardRef<
 
     if (linkTarget instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
-      void window.inknest.links.openExternal({ url: linkTarget.href });
+      const href = linkTarget.getAttribute("href") ?? "";
+
+      if (/^(?:https?:)?\/\//i.test(href)) {
+        void window.inknest.links.openExternal({ url: linkTarget.href });
+      } else {
+        onLocalLinkRequest(href);
+      }
       return;
     }
 
