@@ -32,10 +32,12 @@ import {
   type ActiveWorkspaceState
 } from "./validation";
 import { registerIpcHandler } from "./register";
+import type { WorkspaceWatcher } from "../services/workspace-watcher";
 
 export function registerNoteHandlers(
   activeWorkspace: ActiveWorkspaceState,
-  searchIndex?: InMemorySearchIndex
+  searchIndex?: InMemorySearchIndex,
+  workspaceWatcher?: WorkspaceWatcher
 ) {
   registerIpcHandler<NoteSummary[]>(ipcChannels.notes.list, () => {
     return scanMarkdownNotes(assertActiveWorkspace(activeWorkspace));
@@ -59,7 +61,11 @@ export function registerNoteHandlers(
       assertOptionalString(payload.title, "title") ?? "Untitled"
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -85,7 +91,7 @@ export function registerNoteHandlers(
         assertOptionalString(payload.folderPath, "folderPath") ?? "."
       );
 
-      await refreshSearchIndex(searchIndex, workspaceRoot);
+      await refreshWorkspaceState(searchIndex, workspaceWatcher, workspaceRoot);
       return result;
     }
   );
@@ -111,7 +117,7 @@ export function registerNoteHandlers(
         assertOptionalString(payload.folderPath, "folderPath") ?? "."
       );
 
-      await refreshSearchIndex(searchIndex, workspaceRoot);
+      await refreshWorkspaceState(searchIndex, workspaceWatcher, workspaceRoot);
       return result;
     }
   );
@@ -125,7 +131,11 @@ export function registerNoteHandlers(
       assertString(payload.title, "title")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -137,7 +147,11 @@ export function registerNoteHandlers(
       assertString(payload.path, "path")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -150,7 +164,11 @@ export function registerNoteHandlers(
       assertString(payload.folderPath, "folderPath")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -163,7 +181,11 @@ export function registerNoteHandlers(
       assertString(payload.markdown, "markdown")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -175,7 +197,11 @@ export function registerNoteHandlers(
       assertString(payload.path, "path")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -191,7 +217,11 @@ export function registerNoteHandlers(
       assertString(payload.trashPath, "trashPath")
     );
 
-    await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+    await refreshWorkspaceState(
+      searchIndex,
+      workspaceWatcher,
+      assertActiveWorkspace(activeWorkspace)
+    );
     return result;
   });
 
@@ -209,17 +239,23 @@ export function registerNoteHandlers(
         assertString(payload.trashPath, "trashPath")
       );
 
-      await refreshSearchIndex(searchIndex, assertActiveWorkspace(activeWorkspace));
+      await refreshWorkspaceState(
+        searchIndex,
+        workspaceWatcher,
+        assertActiveWorkspace(activeWorkspace)
+      );
       return result;
     }
   );
 }
 
-async function refreshSearchIndex(
+async function refreshWorkspaceState(
   searchIndex: InMemorySearchIndex | undefined,
+  workspaceWatcher: WorkspaceWatcher | undefined,
   workspaceRoot: string
 ) {
   await searchIndex?.rebuild(workspaceRoot);
+  await workspaceWatcher?.sync();
 }
 
 function assertOptionalString(value: unknown, fieldName: string) {

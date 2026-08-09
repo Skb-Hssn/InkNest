@@ -1331,6 +1331,46 @@ WorkspaceWatcher snapshots the active folder
 the Phase 15 Electron tests exercise external edit, conflict, deletion, and
 trash recovery flows.
 
+## Phase 16 Architecture: Accessibility, Keyboard Support, And UI Polish
+
+Phase 16 makes the existing renderer shell usable across keyboard and window
+sizes while preserving the local-first data flow. Interactive controls expose
+accessible names, icon buttons keep tooltips for discoverability, and a shared
+`:focus-visible` treatment makes the active control clear in both light and
+dark themes. The main window allows a narrower minimum size, and responsive
+layout rules collapse the workspace panels before text can collide with the
+editor or header actions.
+
+### Keyboard And Command Palette
+
+The renderer handles `Ctrl+K` by opening a command palette containing the core
+workspace, note, settings, search, sidebar, and export actions. The palette
+filters by label and description, keeps disabled actions visible with their
+reason implied by context, and supports Arrow Up/Down, Enter, and Escape. The
+`/` shortcut focuses note search when the user is not already typing in a
+control, while `Ctrl+S` continues to save the active note through the existing
+preload API.
+
+### Status And Responsive Layout
+
+The status bar is a compact four-part readout for the active file path (or the
+workspace prompt when no note is open), current editor mode, app phase, and save
+details. Save details include the current save state and, when enabled, word
+and character counts. CSS media queries move the path to its own row and hide
+secondary panels at narrow widths, keeping the editor usable without changing
+the underlying workspace model.
+
+```text
+Keyboard shortcut or command button
+  -> renderer focuses the requested control or runs an existing app action
+  -> action continues through the typed preload bridge
+  -> status bar reports mode, path, save state, and document counts
+```
+
+`tests/phase16.test.mjs` checks the accessibility and responsive contracts;
+the Phase 16 Electron tests exercise command-palette keyboard routing,
+workspace note creation, and narrow/wide layout changes.
+
 ## Phase 13 Architecture: Export
 
 Phase 13 keeps export filesystem access and PDF printing in the main process.
