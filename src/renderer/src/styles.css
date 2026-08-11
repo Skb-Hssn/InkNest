@@ -80,6 +80,56 @@ input {
     @apply border-red-200 text-red-700 hover:border-red-300 hover:bg-red-50;
   }
 
+  .action-menu {
+    @apply relative;
+  }
+
+  .action-menu > summary {
+    list-style: none;
+    cursor: pointer;
+  }
+
+  .action-menu > summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .action-menu[open] > summary {
+    @apply border-ink-500/30 bg-ink-50;
+  }
+
+  .action-menu-popover {
+    @apply absolute right-0 top-10 z-40 w-60 rounded-lg border border-ink-100 bg-white p-1.5 shadow-xl;
+  }
+
+  .action-menu-item {
+    @apply flex w-full items-center gap-3 rounded-md px-2.5 py-2 text-left text-ink-900 transition hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/30;
+  }
+
+  .action-menu-item > span {
+    @apply min-w-0;
+  }
+
+  .action-menu-item strong,
+  .action-menu-item small {
+    @apply block truncate;
+  }
+
+  .action-menu-item strong {
+    @apply text-xs font-semibold;
+  }
+
+  .action-menu-item small {
+    @apply mt-0.5 text-[11px] text-neutral-500;
+  }
+
+  .compact-menu-item {
+    @apply min-h-8 py-1.5;
+  }
+
+  .menu-check {
+    @apply flex h-4 w-4 shrink-0 items-center justify-center text-ink-700;
+  }
+
   .workspace-button {
     @apply flex w-full items-center gap-3 rounded-md border border-ink-100 bg-ink-50 px-3 py-2 text-left transition hover:border-ink-500/30 hover:bg-white focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
@@ -173,12 +223,57 @@ input {
     @apply flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm text-neutral-700 transition hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
 
+  .section-heading {
+    @apply flex h-10 items-center justify-between px-3;
+  }
+
+  .section-toggle {
+    @apply inline-flex h-7 w-7 items-center justify-center rounded-md text-neutral-500 transition hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/30;
+  }
+
+  .folder-filter-input {
+    @apply mx-3 mt-2 flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-white px-2 text-neutral-500 focus-within:border-ink-500/40 focus-within:ring-2 focus-within:ring-ink-500/20;
+  }
+
+  .folder-filter-input input {
+    @apply min-w-0 flex-1 bg-transparent text-xs text-ink-900 outline-none placeholder:text-neutral-400;
+  }
+
+  .folder-filter-input button {
+    @apply inline-flex h-5 w-5 items-center justify-center rounded text-neutral-500 hover:bg-ink-50 hover:text-ink-900;
+  }
+
+  .collapsible-section-trigger {
+    @apply flex min-h-10 cursor-pointer list-none items-center gap-2 px-3 text-xs font-semibold uppercase text-neutral-500 transition hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ink-500/30;
+  }
+
+  .collapsible-section-trigger::-webkit-details-marker {
+    display: none;
+  }
+
+  .collapsible-section-trigger .collapsible-chevron,
+  .collapsible-section-trigger > svg:last-child {
+    @apply ml-auto shrink-0 transition-transform;
+  }
+
+  .collapsible-section[open] .collapsible-chevron {
+    transform: rotate(90deg);
+  }
+
+  .section-count {
+    @apply ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-ink-50 px-1.5 text-[10px] font-semibold text-neutral-500;
+  }
+
+  .section-empty-label {
+    @apply ml-auto text-[11px] font-normal normal-case text-neutral-500;
+  }
+
   .note-row {
-    @apply relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-md border border-ink-100 bg-white px-3 py-3 text-sm text-neutral-700 transition hover:border-ink-500/30 hover:bg-ink-50 focus-within:border-ink-500/30 focus-within:bg-ink-50 focus-within:ring-2 focus-within:ring-ink-500/40;
+    @apply relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-2 rounded-lg border border-transparent bg-transparent px-3 py-2.5 text-sm text-neutral-700 transition hover:bg-ink-50 focus-within:bg-ink-50 focus-within:ring-2 focus-within:ring-ink-500/30;
   }
 
   .note-row-active {
-    @apply border-ink-500/40 bg-ink-50 text-ink-900;
+    @apply border-ink-500/20 bg-ink-50 text-ink-900;
   }
 
   .note-open-area {
@@ -214,9 +309,17 @@ input {
   }
 
   .markdown-toolbar {
-    @apply static flex shrink-0 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-ink-100 bg-white px-4 py-1.5;
+    @apply static flex min-h-11 shrink-0 flex-nowrap items-center gap-2 overflow-x-auto overflow-y-hidden border-b border-ink-100 bg-white px-3 py-1.5;
     scrollbar-color: var(--app-border) transparent;
     scrollbar-width: thin;
+  }
+
+  .markdown-toolbar-collapsed {
+    @apply bg-ink-50 py-1;
+  }
+
+  .toolbar-collapse-button {
+    @apply inline-flex h-8 flex-none items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium text-neutral-500 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/30;
   }
 
   .markdown-toolbar::-webkit-scrollbar,
@@ -328,11 +431,15 @@ input {
   }
 
   .trash-row {
-    @apply grid grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1 rounded-md border border-ink-100 bg-white p-2;
+    @apply grid grid-cols-[minmax(0,1fr)_32px_32px] items-center gap-1 rounded-md bg-ink-50 p-2;
+  }
+
+  .editor-scroll {
+    @apply min-h-0 flex-1 overflow-y-auto px-6 py-5;
   }
 
   .visual-editor {
-    @apply min-h-full w-full rounded-md border border-ink-100 bg-white px-8 py-7 text-base leading-7 text-ink-900 outline-none transition focus:border-ink-500/40 focus:ring-2 focus:ring-ink-500/20;
+    @apply mx-auto min-h-full w-full max-w-4xl rounded-lg border border-transparent bg-white px-10 py-8 text-base leading-7 text-ink-900 outline-none transition focus:border-ink-500/20 focus:ring-2 focus:ring-ink-500/10;
     overflow-wrap: anywhere;
     font-family: var(--app-font-family, inherit);
     font-size: var(--app-font-size, 1rem);
@@ -667,6 +774,23 @@ main[style] {
   min-width: 0;
 }
 
+[data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="visible"] {
+  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) !important;
+}
+
+[data-layout="app-layout-columns"][data-workspace-sidebar="visible"][data-notes-sidebar="hidden"] {
+  grid-template-columns: 300px minmax(0, 1fr) !important;
+}
+
+[data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="hidden"] {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+[data-layout="app-layout-columns"][data-workspace-sidebar="hidden"] > .workspace-sidebar,
+[data-layout="app-layout-columns"][data-notes-sidebar="hidden"] > .notes-sidebar {
+  display: none;
+}
+
 .app-status-bar > * {
   min-width: 0;
 }
@@ -848,13 +972,23 @@ main[style] {
     display: none;
   }
 
+  [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="visible"] {
+    grid-template-columns: minmax(280px, 320px) minmax(0, 1fr) !important;
+  }
+
+  [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="visible"] > .notes-sidebar {
+    display: flex;
+  }
+
   .app-header-actions > .command-button > span,
-  .app-header-actions > .secondary-button > span {
+  .app-header-actions > .secondary-button > span,
+  .app-header-actions > .action-menu > .secondary-button > span {
     display: none;
   }
 
   .app-header-actions > .command-button,
-  .app-header-actions > .secondary-button {
+  .app-header-actions > .secondary-button,
+  .app-header-actions > .action-menu > .secondary-button {
     padding-inline: 0.55rem;
   }
 }
@@ -864,8 +998,9 @@ main[style] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
 
-  [data-layout="app-layout-columns"] > aside {
-    display: none;
+  [data-layout="app-layout-columns"] > .workspace-sidebar,
+  [data-layout="app-layout-columns"] > .notes-sidebar {
+    display: none !important;
   }
 
   .app-editor-header {
@@ -909,6 +1044,7 @@ main[style] {
 @media (max-width: 620px) {
   .app-header-actions > .command-button,
   .app-header-actions > .secondary-button,
+  .app-header-actions > .action-menu > .secondary-button,
   .app-header-actions > .icon-button {
     height: 2rem;
   }

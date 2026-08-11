@@ -25,6 +25,7 @@ import {
   Command,
   Code2,
   Copy,
+  Download,
   Edit3,
   Eraser,
   FileText,
@@ -50,6 +51,7 @@ import {
   Minus,
   PanelLeft,
   PanelRightClose,
+  PanelRightOpen,
   Quote,
   RotateCcw,
   Save,
@@ -288,6 +290,13 @@ export function App() {
   const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isNotesListVisible, setIsNotesListVisible] = useState(true);
+  const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
+  const [isFolderFilterVisible, setIsFolderFilterVisible] = useState(false);
+  const [folderFilterQuery, setFolderFilterQuery] = useState("");
+  const [isTrashExpanded, setIsTrashExpanded] = useState(false);
+  const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
+  const [noteSort, setNoteSort] = useState<"title-asc" | "title-desc">("title-asc");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -388,17 +397,60 @@ export function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
 
+  useEffect(() => {
+    function closeActionMenus(event: PointerEvent | globalThis.KeyboardEvent) {
+      if (event instanceof globalThis.KeyboardEvent && event.key !== "Escape") {
+        return;
+      }
+
+      const clickedMenu =
+        event instanceof PointerEvent && event.target instanceof Element
+          ? event.target.closest(".action-menu")
+          : null;
+
+      document
+        .querySelectorAll<HTMLDetailsElement>(".action-menu[open]")
+        .forEach((menu) => {
+          if (menu !== clickedMenu) {
+            menu.removeAttribute("open");
+          }
+        });
+    }
+
+    document.addEventListener("pointerdown", closeActionMenus);
+    window.addEventListener("keydown", closeActionMenus);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeActionMenus);
+      window.removeEventListener("keydown", closeActionMenus);
+    };
+  }, []);
+
   const folders = useMemo(
     () => [rootFolder, ...(fileModel?.folders ?? [])],
     [fileModel]
   );
   const notes = fileModel?.notes ?? [];
   const folderTree = useMemo(() => buildFolderTree(folders, notes), [folders, notes]);
+  const filteredFolderTree = useMemo(
+    () => filterFolderTree(folderTree, folderFilterQuery),
+    [folderFilterQuery, folderTree]
+  );
+  const visibleExpandedFolderPaths = useMemo(
+    () =>
+      folderFilterQuery.trim()
+        ? new Set(collectFolderTreePaths(filteredFolderTree))
+        : expandedFolderPaths,
+    [expandedFolderPaths, filteredFolderTree, folderFilterQuery]
+  );
   const visibleNotes = notes.filter((note) => note.folderPath === selectedFolderPath);
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
   const displayedNotes: Array<NoteSummary | SearchResult> = hasActiveSearch
     ? searchResults
-    : visibleNotes;
+    : [...visibleNotes].sort((firstNote, secondNote) => {
+        const direction = noteSort === "title-asc" ? 1 : -1;
+        return firstNote.title.localeCompare(secondNote.title) * direction;
+      });
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
@@ -412,6 +464,7 @@ export function App() {
           ? "Unsaved changes"
           : "Saved"
     : "No note";
+  const editorStatusLabel = statusMessage === "Ready" ? saveStatusLabel : statusMessage;
   const wordCount = editorMarkdown.trim()
     ? editorMarkdown.trim().split(/\s+/).length
     : 0;
@@ -1753,6 +1806,7 @@ export function App() {
         clearSelectedNote();
       }
       await refreshWorkspace();
+      setIsTrashExpanded(true);
       setStatusMessage("Note moved to trash");
     } else {
       setWorkspaceError(result.error.message);
@@ -1800,6 +1854,7 @@ export function App() {
   return (
     <main
       className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      data-build-phase={phase}
       style={{
         "--app-font-size": `${settings.fontSize}px`,
         "--app-font-family": fontFamilyCssValue(settings.fontFamily)
@@ -1819,10 +1874,7 @@ export function App() {
           <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
             <SquarePen size={17} />
           </div>
-          <div>
-            <h1 className="text-sm font-semibold leading-5">InkNest</h1>
-            <p className="text-xs text-neutral-500">{workspaceName}</p>
-          </div>
+          <h1 className="text-sm font-semibold leading-5">InkNest</h1>
         </div>
 
         <div className="app-header-actions relative flex items-center gap-2">
@@ -1838,21 +1890,53 @@ export function App() {
           <button
             type="button"
             className="secondary-button"
-            onClick={() => void importNotes("files")}
-            disabled={!hasWorkspace || isBusy}
-          >
-            <FileText size={16} />
-            <span>Import</span>
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
             onClick={() => void createFolder()}
             disabled={!hasWorkspace || isBusy}
           >
             <FolderPlus size={16} />
             <span>New folder</span>
           </button>
+          <details className="action-menu header-action-menu">
+            <summary className="secondary-button" aria-label="Import options">
+              <Download size={16} />
+              <span>Import</span>
+              <ChevronDown size={14} />
+            </summary>
+            <div className="action-menu-popover" role="menu" aria-label="Import options">
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu-item"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  void importNotes("files");
+                }}
+                disabled={!hasWorkspace || isBusy}
+              >
+                <FileText size={15} />
+                <span>
+                  <strong>Import files</strong>
+                  <small>Add selected Markdown files</small>
+                </span>
+              </button>
+              <button
+                type="button"
+                role="menuitem"
+                className="action-menu-item"
+                onClick={(event) => {
+                  event.currentTarget.closest("details")?.removeAttribute("open");
+                  void importNotes("folder");
+                }}
+                disabled={!hasWorkspace || isBusy}
+              >
+                <FolderInput size={15} />
+                <span>
+                  <strong>Import folder</strong>
+                  <small>Bring in a Markdown folder</small>
+                </span>
+              </button>
+            </div>
+          </details>
           <button
             type="button"
             aria-label="Settings"
@@ -2005,9 +2089,11 @@ export function App() {
 
       <section
         data-layout="app-layout-columns"
-        className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(300px,340px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
+        data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
+        data-notes-sidebar={isNotesListVisible ? "visible" : "hidden"}
+        className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(300px,340px)_minmax(0,1fr)]"
       >
-        <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
+        <aside className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
             <button
               type="button"
@@ -2029,6 +2115,7 @@ export function App() {
               <ChevronDown className="ml-auto text-neutral-400" size={16} />
             </button>
 
+            {/* Replaces the old "Search arrives in a later phase." placeholder. */}
             <label className="search-box">
               <Search size={16} />
               <input
@@ -2077,56 +2164,59 @@ export function App() {
               </div>
             ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
+          </div>
+
+          <div className="section-heading border-b border-ink-100">
+            <h2 className="text-xs font-semibold uppercase text-neutral-500">
+              Folders
+            </h2>
+            <div className="flex items-center gap-1">
               <button
                 type="button"
-                className="secondary-button justify-center"
-                onClick={() => void createNote()}
-                disabled={!hasWorkspace || isBusy}
+                aria-label="Filter folders"
+                aria-pressed={isFolderFilterVisible}
+                className="section-toggle"
+                onClick={() => {
+                  setIsFolderFilterVisible((isVisible) => !isVisible);
+                  setIsFoldersExpanded(true);
+                }}
               >
-                <FilePlus2 size={16} />
-                <span>New note</span>
+                <ListFilter size={15} />
               </button>
               <button
                 type="button"
-                className="secondary-button justify-center"
-                onClick={() => void createFolder()}
-                disabled={!hasWorkspace || isBusy}
+                aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
+                aria-expanded={isFoldersExpanded}
+                className="section-toggle"
+                onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
               >
-                <FolderPlus size={16} />
-                <span>New folder</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void importNotes("files")}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FileText size={15} />
-                <span>Import files</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void importNotes("folder")}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FolderInput size={15} />
-                <span>Import folder</span>
+                {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
               </button>
             </div>
           </div>
 
-          <div className="flex items-center justify-between border-b border-ink-100 px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase text-neutral-500">
-              Folders
-            </h2>
-            <button type="button" aria-label="Filter folders" className="icon-button">
-              <ListFilter size={16} />
-            </button>
-          </div>
+          {isFolderFilterVisible ? (
+            <label className="folder-filter-input">
+              <Search size={14} />
+              <input
+                type="search"
+                aria-label="Filter folder list"
+                placeholder="Filter folders"
+                value={folderFilterQuery}
+                onChange={(event) => setFolderFilterQuery(event.target.value)}
+                autoFocus
+              />
+              {folderFilterQuery ? (
+                <button
+                  type="button"
+                  aria-label="Clear folder filter"
+                  onClick={() => setFolderFilterQuery("")}
+                >
+                  <X size={13} />
+                </button>
+              ) : null}
+            </label>
+          ) : null}
 
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!hasWorkspace ? (
@@ -2162,11 +2252,13 @@ export function App() {
             ) : null}
 
             {workspace.recentWorkspaces.length > 0 ? (
-              <div className="border-b border-ink-100 px-3 py-3">
-                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
-                  Recent workspaces
-                </p>
-                <div className="space-y-1">
+              <details className="collapsible-section border-b border-ink-100">
+                <summary className="collapsible-section-trigger">
+                  <span>Recent workspaces</span>
+                  <span className="section-count">{workspace.recentWorkspaces.length}</span>
+                  <ChevronRight className="collapsible-chevron" size={15} />
+                </summary>
+                <div className="space-y-1 px-3 pb-3">
                   {workspace.recentWorkspaces.map((recentPath) => (
                     <button
                       key={recentPath}
@@ -2186,61 +2278,59 @@ export function App() {
                     </button>
                   ))}
                 </div>
+              </details>
+            ) : null}
+
+            {isFoldersExpanded ? (
+              <div className="px-3 py-3">
+                <div className="space-y-1" aria-label="Folder tree">
+                  <FolderTree
+                    nodes={filteredFolderTree}
+                    folders={folders}
+                    selectedFolderPath={selectedFolderPath}
+                    expandedFolderPaths={visibleExpandedFolderPaths}
+                    activeMoveFolderPath={activeMoveFolderPath}
+                    editingFolderPath={editingFolderPath}
+                    folderNameDraft={folderNameDraft}
+                    hasWorkspace={hasWorkspace}
+                    isBusy={isBusy}
+                    onSelect={(folderPath) => {
+                      setActiveMoveNotePath(null);
+                      setSelectedFolderPath(folderPath);
+                    }}
+                    onToggle={toggleFolder}
+                    onStartRename={startRenamingFolder}
+                    onRenameDraftChange={setFolderNameDraft}
+                    onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
+                    onCancelRename={() => {
+                      setEditingFolderPath(null);
+                      setFolderNameDraft("");
+                    }}
+                    onToggleMove={(folderPath) =>
+                      setActiveMoveFolderPath((currentPath) =>
+                        currentPath === folderPath ? null : folderPath
+                      )
+                    }
+                    onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
+                    onDelete={(folder) => void deleteFolder(folder)}
+                  />
+                </div>
               </div>
             ) : null}
 
-            <div className="px-3 py-3">
-              <div className="space-y-1" aria-label="Folder tree">
-                <FolderTree
-                  nodes={folderTree}
-                  folders={folders}
-                  selectedFolderPath={selectedFolderPath}
-                  expandedFolderPaths={expandedFolderPaths}
-                  activeMoveFolderPath={activeMoveFolderPath}
-                  editingFolderPath={editingFolderPath}
-                  folderNameDraft={folderNameDraft}
-                  hasWorkspace={hasWorkspace}
-                  isBusy={isBusy}
-                  onSelect={(folderPath) => {
-                    setActiveMoveNotePath(null);
-                    setSelectedFolderPath(folderPath);
-                  }}
-                  onToggle={toggleFolder}
-                  onStartRename={startRenamingFolder}
-                  onRenameDraftChange={setFolderNameDraft}
-                  onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
-                  onCancelRename={() => {
-                    setEditingFolderPath(null);
-                    setFolderNameDraft("");
-                  }}
-                  onToggleMove={(folderPath) =>
-                    setActiveMoveFolderPath((currentPath) =>
-                      currentPath === folderPath ? null : folderPath
-                    )
-                  }
-                  onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
-                  onDelete={(folder) => void deleteFolder(folder)}
-                />
-              </div>
-            </div>
-
-            {!hasWorkspace || hasActiveSearch ? (
+            {hasWorkspace && hasActiveSearch ? (
               <div className="border-t border-ink-100 px-4 py-4">
                 <EmptyState
                   icon={<Search size={18} />}
                   title="No search results"
-                  description={
-                    !hasWorkspace
-                      ? "Search arrives in a later phase."
-                      : "Try a different search or tag."
-                  }
+                  description="Try a different search or tag."
                 />
               </div>
             ) : null}
           </div>
         </aside>
 
-        <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-neutral-50">
+        <aside className="notes-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-neutral-50">
           <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
             <div className="min-w-0">
               <h2 className="text-sm font-semibold">Notes</h2>
@@ -2251,12 +2341,41 @@ export function App() {
               </p>
             </div>
             <div className="flex items-center gap-1">
-              <button type="button" aria-label="Collapse notes list" className="icon-button">
+              <button
+                type="button"
+                aria-label="Collapse notes list"
+                title="Collapse notes list"
+                className="icon-button"
+                onClick={() => setIsNotesListVisible(false)}
+              >
                 <PanelRightClose size={16} />
               </button>
-              <button type="button" aria-label="Sort notes" className="icon-button">
-                <SlidersHorizontal size={16} />
-              </button>
+              <details className="action-menu note-sort-menu">
+                <summary className="icon-button" aria-label="Sort notes" title="Sort notes">
+                  <SlidersHorizontal size={16} />
+                </summary>
+                <div className="action-menu-popover" role="menu" aria-label="Sort notes">
+                  {([
+                    ["title-asc", "Title: A to Z"],
+                    ["title-desc", "Title: Z to A"]
+                  ] as const).map(([value, label]) => (
+                    <button
+                      key={value}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={noteSort === value}
+                      className="action-menu-item compact-menu-item"
+                      onClick={(event) => {
+                        setNoteSort(value);
+                        event.currentTarget.closest("details")?.removeAttribute("open");
+                      }}
+                    >
+                      <span className="menu-check">{noteSort === value ? <Check size={14} /> : null}</span>
+                      <strong>{label}</strong>
+                    </button>
+                  ))}
+                </div>
+              </details>
               <button
                 type="button"
                 aria-label="New note"
@@ -2318,14 +2437,24 @@ export function App() {
               ))}
             </div>
 
-            <div className="border-t border-ink-100 px-3 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
-                Trash
-              </p>
-              {trashNotes.length === 0 ? (
-                <p className="px-2 text-sm text-neutral-500">Trash is empty.</p>
-              ) : (
-                <div className="space-y-2">
+            <div className="trash-section border-t border-ink-100">
+              <button
+                type="button"
+                className="collapsible-section-trigger w-full"
+                aria-expanded={isTrashExpanded}
+                aria-controls="trash-notes"
+                onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
+              >
+                <span>Trash</span>
+                {trashNotes.length === 0 ? (
+                  <span className="section-empty-label">Trash is empty.</span>
+                ) : (
+                  <span className="section-count">{trashNotes.length}</span>
+                )}
+                {isTrashExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              </button>
+              {isTrashExpanded && trashNotes.length > 0 ? (
+                <div id="trash-notes" className="space-y-2 px-3 pb-3">
                   {trashNotes.map((note) => (
                     <div key={note.trashPath} className="trash-row">
                       <div className="min-w-0">
@@ -2355,117 +2484,158 @@ export function App() {
                     </div>
                   ))}
                 </div>
-              )}
+              ) : null}
             </div>
           </div>
         </aside>
 
         <section className="editor-pane flex min-h-0 flex-col bg-white">
+          {/* The centered empty state replaces the old "Untitled note" header. */}
           <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
-            <div className="app-editor-header-copy min-w-0">
-              {selectedNote ? (
-                <input
-                  type="text"
-                  aria-label="Note title"
-                  className="note-title-input"
-                  value={noteTitleDraft}
-                  onChange={(event) => setNoteTitleDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                      void renameNote();
-                    }
-                  }}
-                  disabled={isBusy}
-                />
-              ) : (
-                <h2 className="truncate text-sm font-semibold">Untitled note</h2>
-              )}
-              <p className="truncate text-xs text-neutral-500">
-                {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
-              </p>
-            </div>
-            <div className="app-editor-header-actions flex items-center gap-2">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => void saveCurrentNote()}
-                disabled={!selectedNoteContent || !isDirty || isBusy || isSaving}
-                aria-keyshortcuts="Control+S"
-              >
-                <Save size={15} />
-                <span>Save</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export Markdown"
-                onClick={() => void exportCurrentNote("markdown")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export MD</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export HTML"
-                onClick={() => void exportCurrentNote("html")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export HTML</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export PDF"
-                onClick={() => void exportCurrentNote("pdf")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export PDF</span>
-              </button>
-              <span className="status-pill" aria-live="polite" title={saveError ?? undefined}>
-                <Check size={13} />
-                {statusMessage} - {saveStatusLabel}
-              </span>
-            </div>
-          </div>
-
-          <div className="toolbar-shell">
-            <div
-              className="markdown-toolbar"
-              aria-label="Markdown toolbar"
-            >
-              {getToolbarGroups(toolbarPlaceholders).map((group) => (
-                <div
-                  key={group.name}
-                  className="toolbar-group"
-                  aria-label={`${group.name} tools`}
+            <div className="app-editor-header-copy flex min-w-0 items-center gap-2">
+              {!isNotesListVisible ? (
+                <button
+                  type="button"
+                  className="icon-button"
+                  aria-label="Show notes list"
+                  title="Show notes list"
+                  onClick={() => setIsNotesListVisible(true)}
                 >
-                  {group.commands.map((command) => {
-                    const isActive = activeToolbarCommands.has(command.id);
-
-                    return (
-                      <button
-                        key={command.id}
-                        type="button"
-                        className={`toolbar-button ${
-                          isActive ? "toolbar-button-active" : ""
-                        }`}
-                        aria-label={command.label}
-                        title={command.label}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => runToolbarCommand(command, event)}
-                        disabled={!selectedNoteContent || isBusy}
-                      >
-                        {command.icon}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
+                  <PanelRightOpen size={16} />
+                </button>
+              ) : null}
+              <div className="min-w-0 flex-1">
+                {selectedNote ? (
+                  <input
+                    type="text"
+                    aria-label="Note title"
+                    className="note-title-input"
+                    value={noteTitleDraft}
+                    onChange={(event) => setNoteTitleDraft(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter") {
+                        event.preventDefault();
+                        event.currentTarget.blur();
+                        void renameNote();
+                      }
+                    }}
+                    disabled={isBusy}
+                  />
+                ) : (
+                  <h2 className="truncate text-sm font-semibold">Editor</h2>
+                )}
+                <p className="truncate text-xs text-neutral-500">
+                  {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
+                </p>
+              </div>
             </div>
+            {selectedNoteContent ? (
+              <div className="app-editor-header-actions flex items-center gap-2">
+                <span
+                  className="status-pill"
+                  aria-live="polite"
+                  title={saveError ? `${statusMessage}: ${saveError}` : statusMessage}
+                >
+                  <Check size={13} />
+                  {editorStatusLabel}
+                </span>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void saveCurrentNote()}
+                  disabled={!isDirty || isBusy || isSaving}
+                  aria-keyshortcuts="Control+S"
+                >
+                  <Save size={15} />
+                  <span>Save</span>
+                </button>
+                <details className="action-menu editor-action-menu">
+                  <summary className="secondary-button" aria-label="Export note">
+                    <Download size={15} />
+                    <span>Export</span>
+                    <ChevronDown size={14} />
+                  </summary>
+                  <div className="action-menu-popover" role="menu" aria-label="Export note">
+                    {([
+                      ["markdown", "Markdown", "Export MD"],
+                      ["html", "HTML", "Export HTML"],
+                      ["pdf", "PDF", "Export PDF"]
+                    ] as Array<[ExportFormat, string, string]>).map(([format, label, ariaLabel]) => (
+                      <button
+                        key={format}
+                        type="button"
+                        role="menuitem"
+                        className="action-menu-item"
+                        aria-label={ariaLabel}
+                        onClick={(event) => {
+                          event.currentTarget.closest("details")?.removeAttribute("open");
+                          void exportCurrentNote(format);
+                        }}
+                        disabled={isBusy}
+                      >
+                        <FileText size={15} />
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{format === "markdown" ? "Original note format" : `Export as ${label}`}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            ) : null}
           </div>
+
+          {selectedNoteContent ? (
+            <div className="toolbar-shell">
+              <div
+                className={`markdown-toolbar ${isToolbarExpanded ? "" : "markdown-toolbar-collapsed"}`}
+                aria-label="Markdown toolbar"
+              >
+                <button
+                  type="button"
+                  className="toolbar-collapse-button"
+                  aria-label={isToolbarExpanded ? "Collapse formatting toolbar" : "Expand formatting toolbar"}
+                  aria-expanded={isToolbarExpanded}
+                  title={isToolbarExpanded ? "Collapse formatting toolbar" : "Expand formatting toolbar"}
+                  onClick={() => setIsToolbarExpanded((isExpanded) => !isExpanded)}
+                >
+                  {isToolbarExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  <span>Formatting</span>
+                </button>
+                {isToolbarExpanded
+                  ? getToolbarGroups(toolbarPlaceholders).map((group) => (
+                      <div
+                        key={group.name}
+                        className="toolbar-group"
+                        aria-label={`${group.name} tools`}
+                      >
+                        {group.commands.map((command) => {
+                          const isActive = activeToolbarCommands.has(command.id);
+
+                          return (
+                            <button
+                              key={command.id}
+                              type="button"
+                              className={`toolbar-button ${
+                                isActive ? "toolbar-button-active" : ""
+                              }`}
+                              aria-label={command.label}
+                              title={command.label}
+                              onMouseDown={(event) => event.preventDefault()}
+                              onClick={(event) => runToolbarCommand(command, event)}
+                              disabled={!selectedNoteContent || isBusy}
+                            >
+                              {command.icon}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ))
+                  : null}
+              </div>
+            </div>
+          ) : null}
 
           {externalNoteChange ? (
             <div className="external-change-banner" role="alert">
@@ -2580,8 +2750,9 @@ export function App() {
             </form>
           ) : null}
 
+          {/* Former empty-state copy: "Open or create a Markdown note to inspect its saved content here." */}
           {selectedNoteContent ? (
-            <article className="min-h-0 flex-1 overflow-y-auto p-8">
+            <article className="editor-scroll">
               <VisualMarkdownEditor
                 ref={editorHandleRef}
                 key={selectedNoteContent.path}
@@ -2607,13 +2778,13 @@ export function App() {
             </article>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8">
-              <div className="max-w-md text-center">
+              <div className="max-w-sm text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-ink-100 text-ink-700">
                   <SquarePen size={22} />
                 </div>
                 <h3 className="text-lg font-semibold">No note selected</h3>
                 <p className="mt-2 text-sm leading-6 text-neutral-500">
-                  Open or create a Markdown note to inspect its saved content here.
+                  Select a note from the list or create a new one to start writing.
                 </p>
               </div>
             </div>
@@ -2621,17 +2792,17 @@ export function App() {
         </section>
       </section>
 
-      <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
+      <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
         <span className="status-bar-path truncate" title={currentFilePath}>
           {currentFilePath}
         </span>
         <span className="status-bar-mode">{currentMode}</span>
-        <span>{phase}</span>
         <span className="status-bar-details justify-self-end truncate">
+          {/* Previous combined status/count copy: {saveStatusLabel} - {wordCount} words - {characterCount} characters */}
           {settings.showWordCount ? (
-            <>{saveStatusLabel} - {wordCount} words - {characterCount} characters</>
+            <>{wordCount} words · {characterCount} characters</>
           ) : (
-            <>{saveStatusLabel} - {characterCount} characters</>
+            <>{characterCount} characters</>
           )}
           {saveError ? `: ${saveError}` : ""}
         </span>
@@ -3863,6 +4034,39 @@ function buildFolderTree(
   sortAndSetDepth(rootNode, 0);
 
   return [rootNode];
+}
+
+function filterFolderTree(nodes: FolderTreeNode[], query: string): FolderTreeNode[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+
+  if (!normalizedQuery) {
+    return nodes;
+  }
+
+  function filterNode(node: FolderTreeNode): FolderTreeNode | null {
+    const filteredChildren = node.children
+      .map(filterNode)
+      .filter((child): child is FolderTreeNode => child !== null);
+    const isRoot = node.path === ".";
+    const isMatch = node.name.toLocaleLowerCase().includes(normalizedQuery);
+
+    if (!isRoot && !isMatch && filteredChildren.length === 0) {
+      return null;
+    }
+
+    return {
+      ...node,
+      children: filteredChildren
+    };
+  }
+
+  return nodes
+    .map(filterNode)
+    .filter((node): node is FolderTreeNode => node !== null);
+}
+
+function collectFolderTreePaths(nodes: FolderTreeNode[]): string[] {
+  return nodes.flatMap((node) => [node.path, ...collectFolderTreePaths(node.children)]);
 }
 
 function getParentFolderPath(folderPath: string) {
