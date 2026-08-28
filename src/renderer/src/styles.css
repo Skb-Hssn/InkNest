@@ -192,15 +192,16 @@ input {
   }
 
   .tree-count {
-    @apply ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-white px-1 text-[11px] font-medium text-neutral-500;
+    @apply ml-auto inline-flex h-5 min-w-5 items-center justify-center rounded-md bg-white px-1 text-[11px] font-medium text-neutral-500 transition-transform duration-200 ease-out;
   }
 
   .folder-actions {
-    @apply pointer-events-none flex items-center gap-1 opacity-0 transition group-hover:pointer-events-auto group-hover:opacity-100;
+    @apply pointer-events-none flex min-w-0 items-center gap-1 overflow-hidden opacity-0 transition-all duration-200 ease-out group-hover:pointer-events-auto group-hover:opacity-100 group-hover:max-w-[5.25rem] group-focus-within:pointer-events-auto group-focus-within:opacity-100 group-focus-within:max-w-[5.25rem];
+    max-width: 0;
   }
 
   .folder-actions-visible {
-    @apply pointer-events-auto opacity-100;
+    @apply pointer-events-auto max-w-[5.25rem] opacity-100;
   }
 
   .folder-action-button {
@@ -253,7 +254,7 @@ input {
 
   .collapsible-section-trigger .collapsible-chevron,
   .collapsible-section-trigger > svg:last-child {
-    @apply ml-auto shrink-0 transition-transform;
+    @apply shrink-0 transition-transform;
   }
 
   .collapsible-section[open] .collapsible-chevron {
@@ -774,21 +775,49 @@ main[style] {
   min-width: 0;
 }
 
+[data-layout="app-layout-columns"] {
+  grid-template-columns: minmax(0, 300px) minmax(0, 340px) minmax(0, 1fr) !important;
+  transition: grid-template-columns 220ms ease;
+}
+
+[data-layout="app-layout-columns"] > .workspace-sidebar,
+[data-layout="app-layout-columns"] > .notes-sidebar {
+  min-width: 0;
+  overflow: hidden;
+  opacity: 1;
+  visibility: visible;
+  transform: translateX(0);
+  transition:
+    opacity 160ms ease,
+    transform 220ms ease,
+    border-color 220ms ease,
+    visibility 0s linear;
+}
+
 [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="visible"] {
-  grid-template-columns: minmax(300px, 340px) minmax(0, 1fr) !important;
+  grid-template-columns: minmax(0, 0) minmax(0, 340px) minmax(0, 1fr) !important;
 }
 
 [data-layout="app-layout-columns"][data-workspace-sidebar="visible"][data-notes-sidebar="hidden"] {
-  grid-template-columns: 300px minmax(0, 1fr) !important;
+  grid-template-columns: minmax(0, 300px) minmax(0, 0) minmax(0, 1fr) !important;
 }
 
 [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"][data-notes-sidebar="hidden"] {
-  grid-template-columns: minmax(0, 1fr) !important;
+  grid-template-columns: minmax(0, 0) minmax(0, 0) minmax(0, 1fr) !important;
 }
 
 [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"] > .workspace-sidebar,
 [data-layout="app-layout-columns"][data-notes-sidebar="hidden"] > .notes-sidebar {
-  display: none;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-12px);
+  border-color: transparent !important;
+  transition:
+    opacity 160ms ease,
+    transform 220ms ease,
+    border-color 220ms ease,
+    visibility 0s linear 220ms;
 }
 
 .app-status-bar > * {
@@ -963,12 +992,24 @@ main[style] {
   font-size: 0.68rem;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  [data-layout="app-layout-columns"],
+  [data-layout="app-layout-columns"] > .workspace-sidebar,
+  [data-layout="app-layout-columns"] > .notes-sidebar {
+    transition: none !important;
+  }
+}
+
 @media (max-width: 1100px) {
   [data-layout="app-layout-columns"] {
     grid-template-columns: 240px minmax(0, 1fr) !important;
   }
 
   [data-layout="app-layout-columns"] > aside:nth-of-type(2) {
+    display: none;
+  }
+
+  [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"] > .workspace-sidebar {
     display: none;
   }
 

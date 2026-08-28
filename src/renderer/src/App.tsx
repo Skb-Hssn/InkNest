@@ -256,6 +256,10 @@ function fileNameFromPath(path: string) {
   return path.split(/[\\/]/).pop() ?? "Image";
 }
 
+function noteNameFromPath(notePath: string) {
+  return fileNameFromPath(notePath).replace(/\.md$/i, "");
+}
+
 function fontFamilyCssValue(fontFamily: AppSettings["fontFamily"]) {
   if (fontFamily === "serif") {
     return "Georgia, Cambria, 'Times New Roman', serif";
@@ -449,10 +453,13 @@ export function App() {
     ? searchResults
     : [...visibleNotes].sort((firstNote, secondNote) => {
         const direction = noteSort === "title-asc" ? 1 : -1;
-        return firstNote.title.localeCompare(secondNote.title) * direction;
+        return noteNameFromPath(firstNote.path).localeCompare(
+          noteNameFromPath(secondNote.path)
+        ) * direction;
       });
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
+  const selectedNoteName = selectedNote ? noteNameFromPath(selectedNote.path) : null;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
   const isDirty = selectedNoteContent !== null && editorMarkdown !== lastSavedMarkdown;
   const saveStatusLabel = selectedNoteContent
@@ -572,8 +579,8 @@ export function App() {
   });
 
   useEffect(() => {
-    setNoteTitleDraft(selectedNote?.title ?? "");
-  }, [selectedNote?.title]);
+    setNoteTitleDraft(selectedNoteName ?? "");
+  }, [selectedNoteName]);
 
   useEffect(() => {
     if (!fileModel) {
@@ -1711,7 +1718,7 @@ export function App() {
       return;
     }
 
-    const title = noteTitleDraft.trim();
+    const title = noteNameFromPath(noteTitleDraft.trim());
 
     if (!title) {
       setWorkspaceError("Note title cannot be empty.");
@@ -1788,7 +1795,7 @@ export function App() {
   async function deleteNote(note: NoteSummary) {
     setActiveMoveNotePath(null);
 
-    if (!window.confirm(`Move "${note.title}" to trash?`)) {
+    if (!window.confirm(`Move "${noteNameFromPath(note.path)}" to trash?`)) {
       return;
     }
 
@@ -1815,9 +1822,13 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function restoreNote(trashPath: string) {
+  async function restoreNote(note: DeletedNoteSummary) {
+    if (!window.confirm(`Restore "${noteNameFromPath(note.originalPath)}"?`)) {
+      return;
+    }
+
     setIsBusy(true);
-    const result = await window.inknest.notes.restore({ trashPath });
+    const result = await window.inknest.notes.restore({ trashPath: note.trashPath });
 
     if (result.ok) {
       await refreshWorkspace();
@@ -2165,59 +2176,6 @@ export function App() {
             ) : null}
 
           </div>
-
-          <div className="section-heading border-b border-ink-100">
-            <h2 className="text-xs font-semibold uppercase text-neutral-500">
-              Folders
-            </h2>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Filter folders"
-                aria-pressed={isFolderFilterVisible}
-                className="section-toggle"
-                onClick={() => {
-                  setIsFolderFilterVisible((isVisible) => !isVisible);
-                  setIsFoldersExpanded(true);
-                }}
-              >
-                <ListFilter size={15} />
-              </button>
-              <button
-                type="button"
-                aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
-                aria-expanded={isFoldersExpanded}
-                className="section-toggle"
-                onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
-              >
-                {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
-            </div>
-          </div>
-
-          {isFolderFilterVisible ? (
-            <label className="folder-filter-input">
-              <Search size={14} />
-              <input
-                type="search"
-                aria-label="Filter folder list"
-                placeholder="Filter folders"
-                value={folderFilterQuery}
-                onChange={(event) => setFolderFilterQuery(event.target.value)}
-                autoFocus
-              />
-              {folderFilterQuery ? (
-                <button
-                  type="button"
-                  aria-label="Clear folder filter"
-                  onClick={() => setFolderFilterQuery("")}
-                >
-                  <X size={13} />
-                </button>
-              ) : null}
-            </label>
-          ) : null}
-
           <div className="min-h-0 flex-1 overflow-y-auto">
             {!hasWorkspace ? (
               <div className="border-b border-ink-100 px-4 py-4">
@@ -2281,6 +2239,58 @@ export function App() {
               </details>
             ) : null}
 
+            <div className="section-heading border-b border-ink-100">
+              <h2 className="text-xs font-semibold uppercase text-neutral-500">
+                Folders
+              </h2>
+              <div className="flex items-center gap-1">
+                <button
+                  type="button"
+                  aria-label="Filter folders"
+                  aria-pressed={isFolderFilterVisible}
+                  className="section-toggle"
+                  onClick={() => {
+                    setIsFolderFilterVisible((isVisible) => !isVisible);
+                    setIsFoldersExpanded(true);
+                  }}
+                >
+                  <ListFilter size={15} />
+                </button>
+                <button
+                  type="button"
+                  aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
+                  aria-expanded={isFoldersExpanded}
+                  className="section-toggle"
+                  onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
+                >
+                  {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </button>
+              </div>
+            </div>
+
+            {isFolderFilterVisible ? (
+              <label className="folder-filter-input">
+                <Search size={14} />
+                <input
+                  type="search"
+                  aria-label="Filter folder list"
+                  placeholder="Filter folders"
+                  value={folderFilterQuery}
+                  onChange={(event) => setFolderFilterQuery(event.target.value)}
+                  autoFocus
+                />
+                {folderFilterQuery ? (
+                  <button
+                    type="button"
+                    aria-label="Clear folder filter"
+                    onClick={() => setFolderFilterQuery("")}
+                  >
+                    <X size={13} />
+                  </button>
+                ) : null}
+              </label>
+            ) : null}
+
             {isFoldersExpanded ? (
               <div className="px-3 py-3">
                 <div className="space-y-1" aria-label="Folder tree">
@@ -2325,6 +2335,58 @@ export function App() {
                   title="No search results"
                   description="Try a different search or tag."
                 />
+              </div>
+            ) : null}
+          </div>
+
+          <div className="trash-section workspace-trash-section shrink-0 border-t border-ink-100">
+            <button
+              type="button"
+              className="collapsible-section-trigger w-full"
+              aria-label="Trash"
+              aria-expanded={isTrashExpanded}
+              aria-controls="trash-notes"
+              onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
+            >
+              <Trash2 size={15} />
+              <span>Trash</span>
+              {trashNotes.length === 0 ? (
+                <span className="section-empty-label">Trash is empty.</span>
+              ) : (
+                <span className="section-count">{trashNotes.length}</span>
+              )}
+              {isTrashExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+            </button>
+            {isTrashExpanded && trashNotes.length > 0 ? (
+              <div id="trash-notes" className="space-y-1 overflow-y-auto px-3 pb-3">
+                {trashNotes.map((note) => (
+                  <div key={note.trashPath} className="trash-row">
+                    <p
+                      className="min-w-0 truncate text-sm font-medium"
+                      title={noteNameFromPath(note.originalPath)}
+                    >
+                      {noteNameFromPath(note.originalPath)}
+                    </p>
+                    <button
+                      type="button"
+                      aria-label="Restore note"
+                      className="icon-button"
+                      onClick={() => void restoreNote(note)}
+                      disabled={isBusy}
+                    >
+                      <RotateCcw size={15} />
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="Permanently delete note"
+                      className="icon-button danger"
+                      onClick={() => void permanentlyDeleteNote(note.trashPath)}
+                      disabled={isBusy}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                ))}
               </div>
             ) : null}
           </div>
@@ -2437,55 +2499,6 @@ export function App() {
               ))}
             </div>
 
-            <div className="trash-section border-t border-ink-100">
-              <button
-                type="button"
-                className="collapsible-section-trigger w-full"
-                aria-expanded={isTrashExpanded}
-                aria-controls="trash-notes"
-                onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
-              >
-                <span>Trash</span>
-                {trashNotes.length === 0 ? (
-                  <span className="section-empty-label">Trash is empty.</span>
-                ) : (
-                  <span className="section-count">{trashNotes.length}</span>
-                )}
-                {isTrashExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
-              {isTrashExpanded && trashNotes.length > 0 ? (
-                <div id="trash-notes" className="space-y-2 px-3 pb-3">
-                  {trashNotes.map((note) => (
-                    <div key={note.trashPath} className="trash-row">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{note.title}</p>
-                        <p className="truncate text-xs text-neutral-500">
-                          {note.originalPath}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label="Restore note"
-                        className="icon-button"
-                        onClick={() => void restoreNote(note.trashPath)}
-                        disabled={isBusy}
-                      >
-                        <RotateCcw size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Permanently delete note"
-                        className="icon-button danger"
-                        onClick={() => void permanentlyDeleteNote(note.trashPath)}
-                        disabled={isBusy}
-                      >
-                        <Trash2 size={15} />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-            </div>
           </div>
         </aside>
 
@@ -2511,6 +2524,7 @@ export function App() {
                     aria-label="Note title"
                     className="note-title-input"
                     value={noteTitleDraft}
+                    title={selectedNoteName ?? undefined}
                     onChange={(event) => setNoteTitleDraft(event.target.value)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") {
@@ -2524,9 +2538,7 @@ export function App() {
                 ) : (
                   <h2 className="truncate text-sm font-semibold">Editor</h2>
                 )}
-                <p className="truncate text-xs text-neutral-500">
-                  {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
-                </p>
+                {/* The header intentionally omits the former "No file selected" path line. */}
               </div>
             </div>
             {selectedNoteContent ? (
@@ -3779,7 +3791,9 @@ function FolderTreeRow({
             disabled={!hasWorkspace}
           >
             {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
-            <span className="truncate">{node.name}</span>
+            <span className="truncate" title={node.name}>
+              {node.name}
+            </span>
             <span className="tree-count">{node.noteCount}</span>
           </button>
         )}
@@ -3839,7 +3853,9 @@ function FolderTreeRow({
                           onClick={() => onMove(node, folder.path)}
                         >
                           <Folder size={13} />
-                          <span className="truncate">{folder.name}</span>
+                          <span className="truncate" title={folder.name}>
+                            {folder.name}
+                          </span>
                         </button>
                       ))}
                     </div>
@@ -3917,10 +3933,16 @@ function NoteRow({
       <button type="button" className="note-open-area" onClick={onOpen}>
         <div className="flex items-center gap-2">
           <FileText size={15} />
-          <span className="truncate font-medium">{note.title}</span>
+          <span className="truncate font-medium" title={noteNameFromPath(note.path)}>
+            {noteNameFromPath(note.path)}
+          </span>
         </div>
         <p className="mt-1 truncate text-xs text-neutral-500">
-          {"snippet" in note ? note.snippet : note.path}
+          {"snippet" in note
+            ? note.snippet
+            : note.folderPath === "."
+              ? "Workspace root"
+              : note.folderPath}
         </p>
         {"tags" in note && note.tags.length > 0 ? (
           <div className="note-tag-list" aria-label="Note tags">
@@ -3967,7 +3989,9 @@ function NoteRow({
                   disabled={folder.path === note.folderPath || isBusy}
                 >
                   <Folder size={13} />
-                  <span className="truncate">{folder.name}</span>
+                  <span className="truncate" title={folder.name}>
+                    {folder.name}
+                  </span>
                 </button>
               ))}
             </div>
