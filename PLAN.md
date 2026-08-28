@@ -264,11 +264,11 @@ Build the primary writing surface: a formatted editor that saves valid Markdown.
 
 Work:
 
-- Render Markdown as editable formatted content.
-- Convert editor DOM changes back into valid Markdown.
+- Parse Markdown into a schema-backed editable document.
+- Serialize schema transactions back into valid Markdown.
 - Preserve Markdown structures such as headings, paragraphs, lists, task lists, links, images, blockquotes, inline code, code blocks, tables, and horizontal rules.
-- Keep undo and redo usable.
-- Preserve selection during edits where possible.
+- Keep transaction-based undo and redo usable.
+- Preserve selection as editor state rather than cached DOM ranges.
 - Track word count, character count, and note dirty state.
 
 Detailed behavior:
@@ -305,7 +305,7 @@ Detailed behavior:
 
 - Toolbar actions should update the visual editor immediately.
 - Link and image flows should use explicit dialogs, not browser prompts.
-- Dialogs must restore the editor selection before applying changes.
+- Dialogs must apply changes to the editor's current transaction selection.
 - Table and code actions should target the active table or code block when one is selected.
 
 Done when:

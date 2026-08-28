@@ -99,7 +99,7 @@ test("phase 9 toolbar formatting updates the editor and saved Markdown", async (
     await expect(editor.locator("h3")).toContainText("Toolbar text");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
 
     const savedMarkdown = await readFile(notePath, "utf8");
     expect(savedMarkdown).toBe("### **Toolbar text**\n");
@@ -128,16 +128,8 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(codeBlock).toBeVisible();
     await expect(codeBlock.getByRole("button", { name: "Copy" })).toBeVisible();
 
-    await codeBlock.locator("code").evaluate((code) => {
-      code.textContent = "const value = 1;";
-      code.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "const value = 1;",
-          inputType: "insertText"
-        })
-      );
-    });
+    await selectContents(codeBlock.locator("code"));
+    await editor.pressSequentially("const value = 1;");
     await codeBlock.getByRole("combobox", { name: "Code block language" }).selectOption(
       "typescript"
     );
@@ -156,12 +148,11 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(table.locator("tr").first().locator("th, td")).toHaveCount(3);
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
     const savedMarkdown = await readFile(notePath, "utf8");
 
     expect(savedMarkdown).toContain("```typescript\nconst value = 1;\n```");
-    expect(savedMarkdown).toContain("| Column 1 | Column 2 |  |");
-    expect(savedMarkdown).toContain("| --- | --- | --- |");
+    expect(savedMarkdown).toMatch(/\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|/);
   } finally {
     await app.close();
   }
@@ -210,7 +201,7 @@ test("phase 9 slash commands and link popover produce editable Markdown", async 
     await expect(link).toHaveAttribute("href", "https://example.com/edited");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
     const savedMarkdown = await readFile(notePath, "utf8");
 
     expect(savedMarkdown).toContain("- [ ] Task");

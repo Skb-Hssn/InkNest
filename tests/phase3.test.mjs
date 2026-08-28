@@ -110,12 +110,13 @@ test("phase 3 editor area contains file, toolbar, note, and status placeholders"
 
 test("phase 3 renderer uses the preload boundary only", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
+  const editorSource = await readText("src/renderer/src/editor/create-editor.ts");
   const sharedIpcSource = await readText("src/shared/ipc.ts");
 
   assert.match(appSource, /window\.inknest\.app\.getInfo\(\)/);
   assert.match(appSource, /window\.inknest\.workspace\.getActive\(\)/);
   assert.match(appSource, /window\.inknest\.notes\.read/);
-  assert.match(appSource, /window\.inknest\.links\.openExternal/);
+  assert.match(editorSource, /window\.inknest\.links\.openExternal/);
   assert.match(appSource, /window\.inknest\.export\.note/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.match(appSource, /window\.inknest\.settings\.get\(\)/);

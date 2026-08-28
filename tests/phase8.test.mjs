@@ -116,55 +116,69 @@ test("phase 8 note service saves valid markdown inside the workspace", async () 
   }
 });
 
-test("phase 8 renderer exposes an editable visual markdown surface", async () => {
+test("phase 8 renderer exposes a transactional modular Markdown editor", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
-  const editorSource = await readText("src/renderer/src/markdown-editor.ts");
-  const stylesSource = await readText("src/renderer/src/styles.css");
+  const componentSource = await readText(
+    "src/renderer/src/editor/MarkdownEditor.tsx"
+  );
+  const editorSource = await readText("src/renderer/src/editor/create-editor.ts");
+  const controllerSource = await readText(
+    "src/renderer/src/editor/editor-controller.ts"
+  );
+  const stylesSource = await readText("src/renderer/src/editor/editor.css");
 
   assertIncludesAll(appSource, [
-    "VisualMarkdownEditor",
-    "contentEditable={!disabled}",
-    "editorDomToMarkdown",
-    "markdownToHtml",
-    "insertPlainTextAtSelection",
+    "MarkdownEditor",
+    "MarkdownEditorHandle",
+    "syncEditorMarkdownSnapshot",
     "window.inknest.notes.save",
     "isDirty",
     "saveStatusLabel",
-    "Unsaved changes",
-    "Visual Markdown editor"
+    "Unsaved changes"
+  ]);
+  assertIncludesAll(componentSource, [
+    "createMarkdownEditor",
+    "splitMarkdownDocument",
+    "joinMarkdownDocument",
+    "replaceAll",
+    "getMarkdown"
   ]);
   assertIncludesAll(editorSource, [
-    "markdownToHtml",
-    "editorDomToMarkdown",
-    "insertPlainTextAtSelection",
-    "blockquote",
-    "data-task=\"true\"",
-    "tableMarkdownToHtml",
-    "tableElementToMarkdown",
-    "```"
+    "Editor.make()",
+    ".use(commonmark)",
+    ".use(gfm)",
+    ".use(history)",
+    "aria-label\": \"Visual Markdown editor",
+    "createDocumentObserverPlugin"
+  ]);
+  assertIncludesAll(controllerSource, [
+    "toggleStrongCommand",
+    "wrapInBulletListCommand",
+    "insertTableCommand"
   ]);
   assertIncludesAll(stylesSource, [
-    ".visual-editor",
-    ".visual-editor table",
-    ".visual-editor blockquote",
-    ".visual-editor pre",
-    ".visual-editor input[type=\"checkbox\"]"
+    ".inknest-editor",
+    ".inknest-editor table",
+    ".inknest-editor blockquote",
+    ".inknest-editor pre",
+    "li[data-item-type=\"task\"]"
   ]);
+  assert.doesNotMatch(componentSource + editorSource + controllerSource, /document\.execCommand/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.doesNotMatch(appSource, /ipcRenderer|showOpenDialog/);
 });
 
-test("phase 8 architecture document describes the visual markdown editor", async () => {
+test("phase 8 architecture document describes the transactional editor", async () => {
   const archSource = await readText("ARCH.md");
 
   assertIncludesAll(archSource, [
-    "Phase 8 Architecture: Visual Markdown Editor",
+    "Markdown Editor Rewrite: Transactional Architecture",
     "window.inknest.notes.save(payload)",
     "notes:save",
     "saveMarkdownNote",
-    "VisualMarkdownEditor",
-    "markdownToHtml",
-    "editorDomToMarkdown",
+    "MarkdownEditor",
+    "Milkdown",
+    "document-envelope.ts",
     "tests/phase8.test.mjs"
   ]);
 });

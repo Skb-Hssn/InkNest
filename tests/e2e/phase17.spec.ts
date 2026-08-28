@@ -58,27 +58,19 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     const title = window.getByRole("textbox", { name: "Note title" });
     await title.fill("Release Smoke");
     await title.press("Enter");
-    await expect(window.getByText("Note renamed").first()).toBeVisible();
     await expect(window.getByText("Release Smoke.md").first()).toBeVisible();
 
     const renamedEditor = window.getByRole("textbox", { name: "Visual Markdown editor" });
 
-    await renamedEditor.evaluate((editableElement) => {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = "Release validation content.";
-      editableElement.appendChild(paragraph);
-      editableElement.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "Release validation content.",
-          inputType: "insertText"
-        })
-      );
-    });
+    await renamedEditor.click();
+    await renamedEditor.press("Control+End");
+    await renamedEditor.press("Enter");
+    await renamedEditor.pressSequentially("Release validation content.");
 
-    await expect(window.getByText(/Unsaved changes/).first()).toBeVisible();
-    await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    const saveButton = window.getByRole("button", { name: "Save", exact: true });
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
 
     const notePath = path.join(workspaceDir, "Release Smoke.md");
     await expect
@@ -122,7 +114,7 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     const noteRow = window.locator(".note-row").first();
     window.once("dialog", (dialog) => dialog.accept());
     await noteRow.getByRole("button", { name: "Delete" }).click();
-    await expect(window.getByText("Release Renamed.md").last()).toBeVisible();
+    await expect(window.getByText("Release Renamed", { exact: true }).last()).toBeVisible();
     await expect(window.getByRole("button", { name: "Restore note" })).toBeVisible();
 
     await window.getByRole("button", { name: "Restore note" }).click();

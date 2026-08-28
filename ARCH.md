@@ -830,11 +830,12 @@ workspace boundary, file model, and note CRUD behavior.
 
 `npm run check` remains the lightweight validation command.
 
-## Phase 8 Architecture: Visual Markdown Editor
+## Markdown Editor Rewrite: Transactional Architecture
 
-Phase 8 turns the editor area from a read-only Markdown inspection surface into
-the primary writing surface. The renderer owns DOM editing and Markdown
-round-tripping, while the main process still owns the actual filesystem write.
+The Phase 8 and Phase 9 editor has been replaced with a schema-driven Milkdown
+editor. The renderer still owns the active document and the main process still
+owns filesystem writes, but editing no longer depends on hand-built HTML,
+`document.execCommand`, DOM normalization, or DOM-to-Markdown traversal.
 
 ### Note Save Contract
 
@@ -868,36 +869,39 @@ Phase 10 extends this save contract with debounced autosave and a safer
 temporary-file write flow. The contract remains the same for manual saves and
 autosaves.
 
-### Renderer Editor Model
+### Renderer Editor Modules
 
-The editor implementation is split between:
+- `editor/MarkdownEditor.tsx` is the React lifecycle and controlled-value
+  boundary. Its imperative handle exposes only commands, link details,
+  Markdown snapshots, and focus.
+- `editor/create-editor.ts` composes Milkdown presets and editor extensions.
+- `editor/editor-controller.ts` maps toolbar actions to ProseMirror
+  transactions and derives active toolbar state from `EditorState`.
+- `editor/document-envelope.ts` separates YAML frontmatter from the editable
+  body and preserves BOM and CRLF/LF style when recomposing a note.
+- `editor/extensions/` contains isolated NodeViews and plugins for task items,
+  code-block controls, images, callout decoration, slash commands, and syntax
+  decoration. A document observer serializes changed editor states and reports
+  selection changes without reading the rendered DOM.
+- `editor/editor.css` owns editor-only presentation; application chrome remains
+  in `styles.css`.
 
-- `src/renderer/src/App.tsx` for selected-note state, dirty state, counts,
-  manual save, and the `VisualMarkdownEditor` component.
-- `src/renderer/src/markdown-editor.ts` for Markdown-to-DOM rendering and
-  DOM-to-Markdown serialization helpers.
-- `src/renderer/src/styles.css` for readable editable styles covering
-  headings, paragraphs, lists, task lists, blockquotes, inline code, code
-  blocks, tables, horizontal rules, links, and images.
+Milkdown's CommonMark and GFM schemas are the canonical in-memory model.
+Formatting, list operations, table changes, checkboxes, links, and slash
+commands dispatch ProseMirror transactions. Markdown serialization happens
+from that model, not from mutable browser DOM.
 
-The editor uses a native `contenteditable` surface, so browser undo and redo
-remain available during normal typing. Input changes are serialized back to
-Markdown with `editorDomToMarkdown`, and opening a note renders saved Markdown
-with `markdownToHtml`.
-
-Paste handling inserts plain text at the current selection. This keeps normal
-paste behavior predictable and avoids importing arbitrary HTML into the saved
-Markdown.
-
-### Phase 8 Data Flow
+### Editor Data Flow
 
 ```text
 User opens a note
   -> renderer calls window.inknest.notes.read(path)
   -> main process returns saved Markdown
-  -> renderer converts Markdown to editable formatted HTML
-  -> user edits the contenteditable surface
-  -> renderer serializes the edited DOM back to Markdown
+  -> document-envelope.ts separates frontmatter from the editable body
+  -> Milkdown parses the body into a ProseMirror document
+  -> typing and toolbar commands dispatch transactions
+  -> Milkdown serializes the document back to Markdown
+  -> document-envelope.ts restores frontmatter and newline style
   -> user clicks Save
   -> renderer calls window.inknest.notes.save({ path, markdown })
   -> main process validates the path and writes the Markdown file
@@ -906,20 +910,17 @@ User opens a note
 
 ### Tests
 
-`tests/phase8.test.mjs` verifies the note save contract, workspace-bound save
-service behavior, visual editor wiring, Markdown conversion helper coverage,
-and this architecture section. Earlier phase tests continue to protect the
-shell, workspace boundary, file model, note CRUD behavior, and folder
-organization.
+`tests/phase8.test.mjs` verifies the save boundary and modular editor wiring.
+`tests/editor-architecture.test.mjs` behaviorally verifies frontmatter, BOM,
+and newline preservation and guards against reintroducing the deleted DOM
+algorithm.
 
 `npm run check` remains the lightweight validation command.
 
 ## Phase 9 Architecture: Toolbar And Editing Commands
 
-Phase 9 replaces the disabled toolbar placeholders with real Markdown editing
-commands for the visual editor. It stays renderer-owned because toolbar actions
-change the editable DOM and the already-established manual save flow remains
-responsible for writing Markdown through the main process.
+The toolbar remains renderer-owned and uses the new transaction command
+boundary. It never edits HTML directly.
 
 ### Toolbar Command Model
 
@@ -936,44 +937,37 @@ toolbar exposes visible buttons for:
 - horizontal dividers
 
 Toolbar buttons use icon controls with `aria-label` and `title` attributes.
-Mouse down prevents the button from stealing the current contenteditable
-selection before the command runs.
+Mouse down prevents the button from stealing the current editor selection
+before the command runs.
 
 ### Editor Command Boundary
 
-`VisualMarkdownEditor` exposes a small imperative handle with
-`runCommand(command, options)`. The parent app owns the toolbar, while the
-editor owns focus, DOM mutation, and Markdown synchronization.
+`MarkdownEditor.runCommand(command, options)` is the toolbar boundary. The
+parent owns dialogs and toolbar layout; `editor-controller.ts` owns focus,
+schema commands, and ProseMirror transactions. Active states are derived from
+the current selection rather than remembered DOM ranges.
 
-`src/renderer/src/markdown-editor.ts` contains `applyMarkdownEditorCommand`.
-The helper applies common contenteditable commands, inserts structured HTML for
-task lists, inline code, code blocks, dividers, links, and images, then the
-editor serializes the updated DOM with `editorDomToMarkdown`.
-
-Link and image commands ask for the needed URL/path and display text/alt text in
-the renderer. Phase 12 will replace this simple insertion path with asset import
-and safer local asset handling.
+Links and imported images continue through the existing preload IPC boundary.
+Local image display is handled by an image NodeView while the saved Markdown
+retains the workspace-relative source.
 
 ### Phase 9 Data Flow
 
 ```text
 User places the cursor or selects content
   -> user clicks a toolbar button
-  -> toolbar preserves the editor selection on mouse down
-  -> App calls VisualMarkdownEditor.runCommand(command, options)
-  -> editor focuses the contenteditable surface
-  -> applyMarkdownEditorCommand mutates the DOM
-  -> editorDomToMarkdown serializes the new content
+  -> toolbar preserves editor focus on mouse down
+  -> App calls MarkdownEditor.runCommand(command, options)
+  -> editor-controller dispatches a schema transaction
+  -> Milkdown updates active command state and serialized Markdown
   -> App marks the note dirty and keeps manual Save available
 ```
 
 ### Tests
 
-`tests/phase9.test.mjs` verifies the phase marker, toolbar command metadata,
-imperative editor command bridge, command helper coverage, toolbar styling, and
-this architecture section. Earlier phase tests continue to protect the shell,
-workspace boundary, file model, note CRUD behavior, folder organization, and
-visual Markdown save behavior.
+`tests/phase9.test.mjs` verifies the command boundary, extension modules,
+scoped styles, and Electron behavior coverage. Earlier phase tests continue to
+protect the shell, workspace boundary, file model, and persistence workflow.
 
 `npm run check` remains the lightweight validation command.
 

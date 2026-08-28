@@ -157,7 +157,7 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "Delete folder",
     "folder-actions",
     "event.key === \"Enter\"",
-    "visual-editor"
+    "MarkdownEditor"
   ]);
   assert.doesNotMatch(appSource, /New note title/);
   assert.doesNotMatch(appSource, /Rename note/);

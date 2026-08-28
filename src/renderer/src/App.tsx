@@ -1,14 +1,9 @@
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
-  type ClipboardEvent,
   type FormEvent,
-  type KeyboardEvent,
-  type MouseEvent,
   type ReactNode,
-  forwardRef,
   useEffect,
-  useImperativeHandle,
   useMemo,
   useRef,
   useState
@@ -82,23 +77,12 @@ import type {
   WorkspaceInfo
 } from "../../shared/ipc";
 import {
-  applyMarkdownEditorCommand,
-  applySlashCommandAtSelection,
-  editorDomToMarkdown,
-  exitEditorBlockFromElement,
-  exitCurrentEditorBlock,
-  exitInlineAtomAtSelection,
-  handleListKeyAtSelection,
-  insertPlainTextAtSelection,
-  insertCodeIndentAtSelection,
-  isSelectionInsideCodeBlock,
-  moveTableSelection,
-  normalizeEmptyBlockAtSelection,
-  updateCodeBlockLanguageFromSelect,
+  MarkdownEditor,
+  type LinkDialogDetails,
   type MarkdownEditorCommand,
   type MarkdownEditorCommandOptions,
-  markdownToHtml
-} from "./markdown-editor";
+  type MarkdownEditorHandle
+} from "./editor";
 
 const initialWorkspace: WorkspaceInfo = {
   path: null,
@@ -151,16 +135,6 @@ type LinkDialogState = {
     top: number;
   };
   error?: string;
-};
-
-type LinkDialogDetails = {
-  text: string;
-  url: string;
-  isEditing: boolean;
-  position?: {
-    left: number;
-    top: number;
-  };
 };
 
 function tableActionIcon(baseIcon: ReactNode, badgeIcon: ReactNode) {
@@ -291,7 +265,7 @@ const autoSaveDelayMs = 750;
 
 export function App() {
   const [phase, setPhase] = useState("phase-16-accessibility-and-ui-polish");
-  const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
+  const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isNotesListVisible, setIsNotesListVisible] = useState(true);
@@ -757,6 +731,7 @@ export function App() {
     const noteWasChanged = openNotePath
       ? change.changedPaths.includes(openNotePath)
       : false;
+    syncEditorMarkdownSnapshot();
     const hasLocalChanges =
       editorMarkdownRef.current !== lastSavedMarkdownRef.current;
 
@@ -1021,6 +996,23 @@ export function App() {
     return note !== null && editorMarkdownRef.current !== lastSavedMarkdownRef.current;
   }
 
+  function syncEditorMarkdownSnapshot() {
+    const note = selectedNoteContentRef.current;
+    const nextMarkdown = editorHandleRef.current?.getMarkdown();
+
+    if (!note || nextMarkdown === undefined || nextMarkdown === editorMarkdownRef.current) {
+      return editorMarkdownRef.current;
+    }
+
+    editorMarkdownRef.current = nextMarkdown;
+    setEditorMarkdown(nextMarkdown);
+    if (saveStateRef.current !== "saving") {
+      updateSaveState("unsaved");
+    }
+
+    return nextMarkdown;
+  }
+
   function clearAutoSaveTimer() {
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
@@ -1082,7 +1074,7 @@ export function App() {
 
   async function saveCurrentNote(): Promise<boolean> {
     const note = selectedNoteContentRef.current;
-    const markdownToSave = editorMarkdownRef.current;
+    const markdownToSave = syncEditorMarkdownSnapshot();
 
     if (externalNoteChangeRef.current) {
       setStatusMessage("Resolve the external change first");
@@ -1261,7 +1253,7 @@ export function App() {
     if (!result.ok) {
       setWorkspaceError(result.error.message);
       setStatusMessage("Export failed");
-    } else if (result.data.exported) {
+    } else if ("exported" in result.data && result.data.exported) {
       setStatusMessage(`Exported ${format === "markdown" ? "Markdown" : format.toUpperCase()}`);
     }
 
@@ -1270,6 +1262,7 @@ export function App() {
 
   async function flushCurrentNote() {
     clearAutoSaveTimer();
+    syncEditorMarkdownSnapshot();
 
     while (true) {
       if (saveInFlightRef.current) {
@@ -2765,13 +2758,13 @@ export function App() {
           {/* Former empty-state copy: "Open or create a Markdown note to inspect its saved content here." */}
           {selectedNoteContent ? (
             <article className="editor-scroll">
-              <VisualMarkdownEditor
+              <MarkdownEditor
                 ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
                 workspacePath={workspace.path}
                 notePath={selectedNoteContent.path}
-                disabled={isBusy}
+                disabled={false}
                 lineWrap={settings.lineWrap}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
@@ -2911,707 +2904,6 @@ export function App() {
     </main>
   );
 }
-
-type VisualMarkdownEditorProps = {
-  markdown: string;
-  workspacePath: string | null;
-  notePath: string;
-  disabled: boolean;
-  lineWrap: boolean;
-  onChange: (markdown: string) => void;
-  onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
-  onLinkDialogRequest: (details: LinkDialogDetails) => void;
-  onImagePaste: (payload: SaveImagePayload) => void;
-  onLocalLinkRequest: (url: string) => void;
-};
-
-type VisualMarkdownEditorHandle = {
-  runCommand: (
-    command: MarkdownEditorCommand,
-    options?: MarkdownEditorCommandOptions
-  ) => void;
-  getLinkDetails: () => {
-    text: string;
-    url: string;
-    isEditing: boolean;
-  };
-};
-
-const VisualMarkdownEditor = forwardRef<
-  VisualMarkdownEditorHandle,
-  VisualMarkdownEditorProps
->(function VisualMarkdownEditor(
-  {
-    markdown,
-    workspacePath,
-    notePath,
-    disabled,
-    lineWrap,
-    onChange,
-    onSelectionFormatChange,
-    onLinkDialogRequest,
-    onImagePaste,
-    onLocalLinkRequest
-  },
-  ref
-) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-  const lastRenderedMarkdown = useRef("");
-  const savedSelectionRange = useRef<Range | null>(null);
-
-  useEffect(() => {
-    if (!editorRef.current || lastRenderedMarkdown.current === markdown) {
-      return;
-    }
-
-    editorRef.current.innerHTML = markdownToHtml(markdown, {
-      workspacePath,
-      notePath
-    });
-    lastRenderedMarkdown.current = markdown;
-  }, [markdown, notePath, workspacePath]);
-
-  useEffect(() => {
-    function handleSelectionChange() {
-      rememberEditorSelection();
-    }
-
-    document.addEventListener("selectionchange", handleSelectionChange);
-
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-    };
-  });
-
-  useEffect(() => {
-    const editorElement = editorRef.current;
-
-    if (!editorElement) {
-      return;
-    }
-
-    function handleNativeChange(event: Event) {
-      const target = event.target;
-
-      if (
-        !(target instanceof HTMLSelectElement) ||
-        target.dataset.codeLanguage !== "true" ||
-        !editorRef.current
-      ) {
-        return;
-      }
-
-      updateCodeBlockLanguageFromSelect(target);
-      syncMarkdownFromEditor(editorRef.current);
-    }
-
-    editorElement.addEventListener("change", handleNativeChange);
-
-    return () => {
-      editorElement.removeEventListener("change", handleNativeChange);
-    };
-  });
-
-  useEffect(() => {
-    const editorElement = editorRef.current;
-
-    if (!editorElement) {
-      return;
-    }
-
-    function handleImageError(event: Event) {
-      const target = event.target;
-
-      if (!(target instanceof HTMLImageElement)) {
-        return;
-      }
-
-      const markdownSrc = target.dataset.markdownSrc ?? target.getAttribute("src") ?? "";
-
-      if (
-        /^(?:data:|https?:|file:|blob:)/i.test(markdownSrc) ||
-        markdownSrc.startsWith("/") ||
-        target.dataset.imageBroken === "true"
-      ) {
-        return;
-      }
-
-      const placeholder = document.createElement("span");
-      placeholder.className = "broken-image-placeholder";
-      placeholder.contentEditable = "false";
-      placeholder.dataset.brokenImage = "true";
-      placeholder.dataset.markdownSrc = markdownSrc;
-      placeholder.dataset.imageAlt = target.alt;
-      placeholder.title = markdownSrc;
-      placeholder.textContent = `Missing image: ${target.alt || markdownSrc}`;
-      target.replaceWith(placeholder);
-    }
-
-    editorElement.addEventListener("error", handleImageError, true);
-
-    return () => {
-      editorElement.removeEventListener("error", handleImageError, true);
-    };
-  });
-
-  function getSelectionElement() {
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-      return null;
-    }
-
-    const anchorNode = selection.anchorNode;
-    return anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement ?? null;
-  }
-
-  function getSelectedOrNearbyLink() {
-    const editorElement = editorRef.current;
-    const element = getSelectionElement();
-    const link = element?.closest("a");
-
-    if (!(link instanceof HTMLAnchorElement) || !editorElement?.contains(link)) {
-      return null;
-    }
-
-    return link;
-  }
-
-  function getLinkDetailsFromSelection() {
-    const editorElement = editorRef.current;
-
-    if (!editorElement || disabled) {
-      return {
-        text: "",
-        url: "",
-        isEditing: false
-      };
-    }
-
-    editorElement.focus();
-    if (!restoreEditorSelection()) {
-      placeCaretAtEditorEnd(editorElement);
-    }
-
-    const link = getSelectedOrNearbyLink();
-
-    if (link) {
-      return {
-        text: link.textContent ?? "",
-        url: link.getAttribute("href") ?? "",
-        isEditing: true
-      };
-    }
-
-    return {
-      text: window.getSelection()?.toString() ?? "",
-      url: "",
-      isEditing: false
-    };
-  }
-
-  useImperativeHandle(ref, () => ({
-    runCommand(command, options) {
-      if (!editorRef.current || disabled) {
-        return;
-      }
-
-      editorRef.current.focus();
-      if (!restoreEditorSelection()) {
-        placeCaretAtEditorEnd(editorRef.current);
-      }
-      applyMarkdownEditorCommand(command, options);
-      syncMarkdownFromEditor(editorRef.current);
-    },
-    getLinkDetails() {
-      return getLinkDetailsFromSelection();
-    }
-  }));
-
-  function rememberEditorSelection() {
-    const editorElement = editorRef.current;
-    const selection = window.getSelection();
-
-    if (!editorElement || !selection || selection.rangeCount === 0) {
-      onSelectionFormatChange(new Set());
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-
-    if (editorElement.contains(range.commonAncestorContainer)) {
-      savedSelectionRange.current = range.cloneRange();
-      onSelectionFormatChange(collectActiveCommands(editorElement));
-    } else {
-      onSelectionFormatChange(new Set());
-    }
-  }
-
-  function restoreEditorSelection() {
-    const selection = window.getSelection();
-    const range = savedSelectionRange.current;
-
-    if (!selection || !range) {
-      return false;
-    }
-
-    selection.removeAllRanges();
-    selection.addRange(range);
-    return true;
-  }
-
-  function placeCaretAtEditorEnd(editorElement: HTMLDivElement) {
-    const range = document.createRange();
-    const selection = window.getSelection();
-
-    range.selectNodeContents(editorElement);
-    range.collapse(false);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }
-
-  function collectActiveCommands(editorElement: HTMLDivElement) {
-    const activeCommands = new Set<MarkdownEditorCommand>();
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-      return activeCommands;
-    }
-
-    const anchorNode = selection.anchorNode;
-    const element =
-      anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement;
-
-    if (!element || !editorElement.contains(element)) {
-      return activeCommands;
-    }
-
-    if (document.queryCommandState("bold")) {
-      activeCommands.add("bold");
-    }
-
-    if (document.queryCommandState("italic")) {
-      activeCommands.add("italic");
-    }
-
-    if (document.queryCommandState("strikeThrough")) {
-      activeCommands.add("strikethrough");
-    }
-
-    const heading = element.closest("h1,h2,h3,h4,h5,h6");
-    if (heading) {
-      activeCommands.add(`heading-${heading.tagName.slice(1)}` as MarkdownEditorCommand);
-    }
-
-    if (element.closest("blockquote")) {
-      activeCommands.add("blockquote");
-    }
-
-    if (element.closest("ul")) {
-      activeCommands.add("unordered-list");
-    }
-
-    if (element.closest("ol")) {
-      activeCommands.add("ordered-list");
-    }
-
-    if (element.closest("li[data-task='true']")) {
-      activeCommands.add("task-list");
-    }
-
-    if (element.closest("pre")) {
-      activeCommands.add("code-block");
-    } else if (element.closest("code")) {
-      activeCommands.add("inline-code");
-    }
-
-    if (element.closest("a")) {
-      activeCommands.add("link");
-    }
-
-    if (element.closest("table")) {
-      activeCommands.add("table");
-    }
-
-    if (element.closest("img")) {
-      activeCommands.add("image");
-    }
-
-    const mathElement = element.closest("[data-math]");
-    if (mathElement instanceof HTMLElement) {
-      activeCommands.add(
-        mathElement.dataset.mathDisplay === "block" ? "block-math" : "inline-math"
-      );
-    }
-
-    return activeCommands;
-  }
-
-  function syncMarkdownFromEditor(editorElement: HTMLDivElement) {
-    const nextMarkdown = editorDomToMarkdown(editorElement);
-
-    lastRenderedMarkdown.current = nextMarkdown;
-    onChange(nextMarkdown);
-    rememberEditorSelection();
-  }
-
-  function handleInput(event: FormEvent<HTMLDivElement>) {
-    syncMarkdownFromEditor(event.currentTarget);
-  }
-
-  function handleChange(event: FormEvent<HTMLDivElement>) {
-    const target = event.target;
-
-    if (
-      target instanceof HTMLSelectElement &&
-      target.dataset.codeLanguage === "true" &&
-      editorRef.current
-    ) {
-      updateCodeBlockLanguageFromSelect(target);
-      syncMarkdownFromEditor(editorRef.current);
-    }
-  }
-
-  async function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
-    const imageItem = Array.from(event.clipboardData.items).find(
-      (item) => item.kind === "file" && item.type.startsWith("image/")
-    );
-
-    if (imageItem) {
-      const file = imageItem.getAsFile();
-
-      if (file) {
-        event.preventDefault();
-        const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-        onImagePaste({
-          bytes,
-          fileName: file.name || undefined,
-          mimeType: file.type || imageItem.type
-        });
-        return;
-      }
-    }
-
-    event.preventDefault();
-    insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
-    handleInput(event);
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Backspace") {
-      if (isSelectionInsideCodeBlock()) {
-        return;
-      }
-
-      const didNormalizeBlock = normalizeEmptyBlockAtSelection();
-
-      if (didNormalizeBlock && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      const didExitInlineAtom = exitInlineAtomAtSelection();
-      const didExitBlock = didExitInlineAtom ? false : exitCurrentEditorBlock();
-
-      if ((didExitInlineAtom || didExitBlock) && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === "ArrowRight") {
-      const didExitInlineAtom = exitInlineAtomAtSelection();
-
-      if (didExitInlineAtom && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if (event.key === "Tab") {
-      const didInsertCodeIndent = insertCodeIndentAtSelection();
-      const didMoveTableCell = !didInsertCodeIndent
-        ? moveTableSelection(!event.shiftKey)
-        : false;
-      const didHandleList = !didInsertCodeIndent && !didMoveTableCell
-        ? handleListKeyAtSelection(event.key, event.shiftKey)
-        : false;
-
-      if ((didInsertCodeIndent || didMoveTableCell || didHandleList) && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if (event.key === "Enter") {
-      if (isSelectionInsideCodeBlock()) {
-        return;
-      }
-
-      const didHandleList = handleListKeyAtSelection(event.key, event.shiftKey);
-
-      if (didHandleList && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      if (didHandleList) {
-        return;
-      }
-    }
-
-    if (event.key !== " " && event.key !== "Enter") {
-      return;
-    }
-
-    const command = applySlashCommandAtSelection();
-
-    if (!command || !editorRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    syncMarkdownFromEditor(editorRef.current);
-  }
-
-  function handleMouseDown(event: MouseEvent<HTMLDivElement>) {
-    if (!event.altKey) {
-      return;
-    }
-
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement) || !target.closest("pre,blockquote")) {
-      return;
-    }
-
-    const didExitBlock = exitEditorBlockFromElement(target);
-
-    if (didExitBlock && editorRef.current) {
-      event.preventDefault();
-      syncMarkdownFromEditor(editorRef.current);
-    }
-  }
-
-  function selectImageForResize(image: HTMLImageElement) {
-    let frame = image.closest(".image-resize-frame") as HTMLSpanElement | null;
-
-    if (!frame) {
-      frame = document.createElement("span");
-      frame.className = "image-resize-frame";
-      frame.contentEditable = "false";
-      frame.dataset.imageResizeFrame = "true";
-      image.insertAdjacentElement("beforebegin", frame);
-      frame.append(image);
-    }
-
-    const imageWidth = image.getAttribute("width") ?? image.style.width.replace("px", "");
-    const width = Number.parseInt(imageWidth, 10) || Math.round(image.getBoundingClientRect().width) || 320;
-
-    frame.style.width = `${width}px`;
-    frame.classList.add("image-resize-frame-active");
-    image.style.width = "100%";
-    image.style.height = "auto";
-
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNode(frame);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    savedSelectionRange.current = range.cloneRange();
-
-    if (editorRef.current) {
-      onSelectionFormatChange(collectActiveCommands(editorRef.current));
-    }
-  }
-
-  function syncImageResizeFrames() {
-    if (!editorRef.current) {
-      return false;
-    }
-
-    let didResize = false;
-
-    for (const frame of Array.from(editorRef.current.querySelectorAll(".image-resize-frame"))) {
-      if (!(frame instanceof HTMLElement)) {
-        continue;
-      }
-
-      const image = frame.querySelector("img");
-
-      if (!(image instanceof HTMLImageElement)) {
-        continue;
-      }
-
-      const width = Math.round(frame.getBoundingClientRect().width);
-
-      if (width > 0 && image.getAttribute("width") !== String(width)) {
-        image.setAttribute("width", String(width));
-        image.style.width = "100%";
-        image.style.height = "auto";
-        didResize = true;
-      }
-    }
-
-    return didResize;
-  }
-
-  function handleMouseUp() {
-    if (syncImageResizeFrames() && editorRef.current) {
-      syncMarkdownFromEditor(editorRef.current);
-      return;
-    }
-
-    rememberEditorSelection();
-  }
-
-  async function copyTextToClipboard(text: string) {
-    try {
-      await navigator.clipboard?.writeText(text);
-
-      if (navigator.clipboard) {
-        return;
-      }
-    } catch {
-      // Fall back for Electron or browser contexts where async clipboard is unavailable.
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.append(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
-  }
-
-  function handleClick(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target;
-    const codeCopyButton =
-      target instanceof HTMLElement ? target.closest("[data-code-copy='true']") : null;
-
-    if (codeCopyButton instanceof HTMLButtonElement) {
-      const code = codeCopyButton.closest("pre")?.querySelector("code")?.textContent ?? "";
-
-      event.preventDefault();
-      void copyTextToClipboard(code);
-      return;
-    }
-
-    const linkTarget = target instanceof HTMLElement ? target.closest("a") : null;
-
-    if (linkTarget instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      const href = linkTarget.getAttribute("href") ?? "";
-
-      if (/^(?:https?:)?\/\//i.test(href)) {
-        void window.inknest.links.openExternal({ url: linkTarget.href });
-      } else {
-        onLocalLinkRequest(href);
-      }
-      return;
-    }
-
-    if (
-      target instanceof HTMLImageElement ||
-      (target instanceof HTMLElement && target.closest("[data-math]"))
-    ) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      const selectableTarget =
-        target instanceof HTMLImageElement ? target : target.closest("[data-math]");
-
-      if (!selectableTarget) {
-        return;
-      }
-
-      range.selectNode(selectableTarget);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-
-    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
-      return;
-    }
-
-    window.setTimeout(() => {
-      if (editorRef.current) {
-        syncMarkdownFromEditor(editorRef.current);
-      }
-    }, 0);
-  }
-
-  function handleDoubleClick(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    if (target instanceof HTMLImageElement) {
-      event.preventDefault();
-      selectImageForResize(target);
-      return;
-    }
-
-    const link = target.closest("a");
-
-    if (!(link instanceof HTMLAnchorElement) || !editorRef.current?.contains(link)) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(link);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    savedSelectionRange.current = range.cloneRange();
-    onSelectionFormatChange(collectActiveCommands(editorRef.current));
-
-    onLinkDialogRequest({
-      text: link.textContent ?? "",
-      url: link.getAttribute("href") ?? "",
-      isEditing: true,
-      position: getViewportPopoverPosition(event.clientX, event.clientY + 8)
-    });
-  }
-
-  return (
-    <div
-      ref={editorRef}
-      className={`visual-editor ${lineWrap ? "" : "visual-editor-no-wrap"}`}
-      contentEditable={!disabled}
-      suppressContentEditableWarning
-      aria-label="Visual Markdown editor"
-      role="textbox"
-      aria-multiline="true"
-      data-placeholder="Start writing..."
-      onInput={handleInput}
-      onChange={handleChange}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onKeyDown={handleKeyDown}
-      onKeyUp={rememberEditorSelection}
-      onMouseUp={handleMouseUp}
-      onMouseDown={handleMouseDown}
-      onPaste={handlePaste}
-    />
-  );
-});
 
 type EmptyStateProps = {
   icon: ReactNode;
