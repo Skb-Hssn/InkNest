@@ -54,7 +54,9 @@ test("phase 9 editor commands dispatch schema transactions", async () => {
     "wrapInBlockquoteCommand", "createCodeBlockCommand", "insertTableCommand",
     "addRowAfterCommand", "addColAfterCommand", "deleteRow(view.state, view.dispatch)",
     "deleteColumn(view.state, view.dispatch)", "replaceSelectionWithLink",
-    "clearFormatting", "collectActiveEditorCommands", "getEditorMarkdown"
+    "clearFormatting", "collectActiveEditorCommands", "getEditorMarkdown",
+    "insertCodeIndent", "insertCodeLineBreak", "insertText(\"    \"",
+    "const indentation = currentLine.match"
   ]);
   assert.doesNotMatch(source, /document\.execCommand|innerHTML\s*=/);
 });
@@ -110,10 +112,11 @@ test("phase 9 e2e coverage exercises commands and saved Markdown", async () => {
     'name: "Visual Markdown editor"', 'name: "B", exact: true',
     'name: "H3", exact: true', "toolbar-button-active",
     'name: "Code block", exact: true', 'name: "Code block language"',
+    'await editor.press("Enter")', 'await editor.press("Tab")', "indented",
     'name: "Insert table", exact: true', 'name: "Add table row", exact: true',
     'writeFile(notePath, "/todo\\n"', 'name: "Link", exact: true',
     "await link.dblclick()", 'name: "Save", exact: true',
-    "readFile(notePath, \"utf8\")", "```typescript\\nconst value = 1;\\n```",
+    "readFile(notePath, \"utf8\")", "```typescript\\nconst value = 1;\\n    indented\\n    continued\\n```",
     "[Edited docs](https://example.com/edited)"
   ]);
 });

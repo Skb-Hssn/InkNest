@@ -258,6 +258,43 @@ export function getEditorMarkdown(editor: Editor) {
   return editor.action(getMarkdown());
 }
 
+/** Insert a stable four-space indentation inside a fenced code block. */
+export function insertCodeIndent(view: EditorView) {
+  const { state } = view;
+  if (state.selection.$from.parent.type.name !== "code_block") {
+    return false;
+  }
+
+  view.dispatch(
+    state.tr
+      .insertText("    ", state.selection.from, state.selection.to)
+      .scrollIntoView()
+  );
+  return true;
+}
+
+/** Split a code-block line while carrying its leading spaces to the new line. */
+export function insertCodeLineBreak(view: EditorView) {
+  const { state } = view;
+  const { $from, from, to } = state.selection;
+  if ($from.parent.type.name !== "code_block") {
+    return false;
+  }
+
+  const currentLine = $from.parent.textContent
+    .slice(0, $from.parentOffset)
+    .split("\n")
+    .at(-1) ?? "";
+  const indentation = currentLine.match(/^[\t ]*/)?.[0] ?? "";
+
+  view.dispatch(
+    state.tr
+      .insertText(`\n${indentation}`, from, to)
+      .scrollIntoView()
+  );
+  return true;
+}
+
 function clearFormatting(view: EditorView) {
   const { state } = view;
   const { from, to, empty } = state.selection;

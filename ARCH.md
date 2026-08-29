@@ -947,6 +947,11 @@ parent owns dialogs and toolbar layout; `editor-controller.ts` owns focus,
 schema commands, and ProseMirror transactions. Active states are derived from
 the current selection rather than remembered DOM ranges.
 
+Inside a `code_block`, keyboard handling is also transaction-based: `Tab`
+inserts four literal spaces, while `Enter` inserts a newline followed by the
+current line's leading spaces. This keeps indentation stable in both the live
+editor and serialized fenced Markdown.
+
 Links and imported images continue through the existing preload IPC boundary.
 Local image display is handled by an image NodeView while the saved Markdown
 retains the workspace-relative source.

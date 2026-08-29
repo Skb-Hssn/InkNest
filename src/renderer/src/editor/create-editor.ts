@@ -19,7 +19,11 @@ import { createDocumentObserverPlugin } from "./extensions/document-observer-plu
 import { createImageView } from "./extensions/image-view";
 import { listItemView } from "./extensions/list-item-view";
 import { runSlashCommand, slashCommandPlugin } from "./extensions/slash-command-plugin";
-import { collectActiveEditorCommands } from "./editor-controller";
+import {
+  collectActiveEditorCommands,
+  insertCodeIndent,
+  insertCodeLineBreak
+} from "./editor-controller";
 import type { MarkdownEditorProps } from "./types";
 
 type CreateEditorOptions = Pick<
@@ -59,6 +63,28 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           spellcheck: "true"
         },
         handleKeyDown(view, event) {
+          if (
+            event.key === "Enter" &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            insertCodeLineBreak(view)
+          ) {
+            event.preventDefault();
+            return true;
+          }
+
+          if (
+            event.key === "Tab" &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            insertCodeIndent(view)
+          ) {
+            event.preventDefault();
+            return true;
+          }
+
           return (
             runSlashCommand(ctx, view, event) ||
             previous.handleKeyDown?.(view, event) ||

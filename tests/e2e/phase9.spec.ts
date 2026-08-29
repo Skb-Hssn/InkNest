@@ -130,10 +130,18 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
 
     await selectContents(codeBlock.locator("code"));
     await editor.pressSequentially("const value = 1;");
+    await placeCaretAtEnd(codeBlock.locator("code"));
+    await editor.press("Enter");
+    await editor.press("Tab");
+    await editor.pressSequentially("indented");
     await codeBlock.getByRole("combobox", { name: "Code block language" }).selectOption(
       "typescript"
     );
     await expect(codeBlock.locator(".syntax-keyword")).toHaveText("const");
+
+    await placeCaretAtEnd(codeBlock.locator("code"));
+    await editor.press("Enter");
+    await editor.pressSequentially("continued");
 
     await placeCaretAtEnd(editor);
     await window.getByRole("button", { name: "Insert table", exact: true }).click();
@@ -151,7 +159,9 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
     const savedMarkdown = await readFile(notePath, "utf8");
 
-    expect(savedMarkdown).toContain("```typescript\nconst value = 1;\n```");
+    expect(savedMarkdown).toContain(
+      "```typescript\nconst value = 1;\n    indented\n    continued\n```"
+    );
     expect(savedMarkdown).toMatch(/\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|/);
   } finally {
     await app.close();
