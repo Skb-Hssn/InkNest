@@ -273,7 +273,6 @@ export function App() {
   const [isFolderFilterVisible, setIsFolderFilterVisible] = useState(false);
   const [folderFilterQuery, setFolderFilterQuery] = useState("");
   const [isTrashExpanded, setIsTrashExpanded] = useState(false);
-  const [isToolbarExpanded, setIsToolbarExpanded] = useState(true);
   const [noteSort, setNoteSort] = useState<"title-asc" | "title-desc">("title-asc");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
@@ -465,7 +464,7 @@ export function App() {
       : workspace.status === "permission-denied"
         ? "Workspace access needed"
         : "No workspace selected";
-  const currentMode = selectedNoteContent ? "Visual Markdown" : "Workspace overview";
+  const currentMode = selectedNoteContent ? "" : "Workspace overview";
 
   const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(
     () => [
@@ -2593,51 +2592,35 @@ export function App() {
 
           {selectedNoteContent ? (
             <div className="toolbar-shell">
-              <div
-                className={`markdown-toolbar ${isToolbarExpanded ? "" : "markdown-toolbar-collapsed"}`}
-                aria-label="Markdown toolbar"
-              >
-                <button
-                  type="button"
-                  className="toolbar-collapse-button"
-                  aria-label={isToolbarExpanded ? "Collapse formatting toolbar" : "Expand formatting toolbar"}
-                  aria-expanded={isToolbarExpanded}
-                  title={isToolbarExpanded ? "Collapse formatting toolbar" : "Expand formatting toolbar"}
-                  onClick={() => setIsToolbarExpanded((isExpanded) => !isExpanded)}
-                >
-                  {isToolbarExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  <span>Formatting</span>
-                </button>
-                {isToolbarExpanded
-                  ? getToolbarGroups(toolbarPlaceholders).map((group) => (
-                      <div
-                        key={group.name}
-                        className="toolbar-group"
-                        aria-label={`${group.name} tools`}
-                      >
-                        {group.commands.map((command) => {
-                          const isActive = activeToolbarCommands.has(command.id);
+              <div className="markdown-toolbar" aria-label="Markdown toolbar">
+                {getToolbarGroups(toolbarPlaceholders).map((group) => (
+                  <div
+                    key={group.name}
+                    className="toolbar-group"
+                    aria-label={`${group.name} tools`}
+                  >
+                    {group.commands.map((command) => {
+                      const isActive = activeToolbarCommands.has(command.id);
 
-                          return (
-                            <button
-                              key={command.id}
-                              type="button"
-                              className={`toolbar-button ${
-                                isActive ? "toolbar-button-active" : ""
-                              }`}
-                              aria-label={command.label}
-                              title={command.label}
-                              onMouseDown={(event) => event.preventDefault()}
-                              onClick={(event) => runToolbarCommand(command, event)}
-                              disabled={!selectedNoteContent || isBusy}
-                            >
-                              {command.icon}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    ))
-                  : null}
+                      return (
+                        <button
+                          key={command.id}
+                          type="button"
+                          className={`toolbar-button ${
+                            isActive ? "toolbar-button-active" : ""
+                          }`}
+                          aria-label={command.label}
+                          title={command.label}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onClick={(event) => runToolbarCommand(command, event)}
+                          disabled={!selectedNoteContent || isBusy}
+                        >
+                          {command.icon}
+                        </button>
+                      );
+                    })}
+                  </div>
+                ))}
               </div>
             </div>
           ) : null}
@@ -2801,8 +2784,8 @@ export function App() {
         <span className="status-bar-path truncate" title={currentFilePath}>
           {currentFilePath}
         </span>
-        <span className="status-bar-mode">{currentMode}</span>
-        <span className="status-bar-details justify-self-end truncate">
+        {currentMode ? <span className="status-bar-mode">{currentMode}</span> : null}
+        <span className="status-bar-details col-start-3 justify-self-end truncate">
           {/* Previous combined status/count copy: {saveStatusLabel} - {wordCount} words - {characterCount} characters */}
           {settings.showWordCount ? (
             <>{wordCount} words · {characterCount} characters</>

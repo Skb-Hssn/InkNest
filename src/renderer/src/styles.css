@@ -315,14 +315,6 @@ input {
     scrollbar-width: thin;
   }
 
-  .markdown-toolbar-collapsed {
-    @apply bg-ink-50 py-1;
-  }
-
-  .toolbar-collapse-button {
-    @apply inline-flex h-8 flex-none items-center gap-1.5 rounded-md border border-transparent px-2 text-xs font-medium text-neutral-500 transition hover:border-ink-100 hover:bg-ink-50 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/30;
-  }
-
   .markdown-toolbar::-webkit-scrollbar,
   .app-editor-header-actions::-webkit-scrollbar {
     height: 5px;
