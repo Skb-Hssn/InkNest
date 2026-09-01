@@ -21,12 +21,12 @@ test("phase 3 app info reports the static layout milestone", async () => {
   assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 
-test("phase 3 renderer defines the permanent three-column app layout", async () => {
+test("phase 3 renderer defines the workspace-sidebar and editor layout", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
     "grid-rows-[56px_minmax(0,1fr)_34px]",
-    "grid-cols-[300px_minmax(300px,340px)_minmax(0,1fr)]",
+    "grid-cols-[300px_minmax(0,1fr)]",
     "workspacePath",
     "rootFolder",
     "toolbarPlaceholders",
@@ -58,29 +58,30 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "Folders",
     "Filter folders",
     "No workspace selected",
-    "No search results",
     "Choose a local Markdown folder to begin.",
-    "Search arrives in a later phase.",
     "Folder tree",
     "Workspace root"
   ]);
 });
 
-test("phase 3 notes sidebar contains note-list controls and placeholders", async () => {
+test("phase 3 workspace sidebar contains folders and nested note controls", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
     "Notes",
-    "Collapse notes list",
     "Sort notes",
-    "No notes here",
-    "Create a note in this folder to start writing.",
+    "No matching notes",
     "Untitled note",
     "Trash",
     "Trash is empty."
   ]);
 
-  assert.match(appSource, /PanelRightClose/);
+  assert.match(appSource, /folder-notes|renderNote/);
+  assert.match(appSource, /hasExpandableContent = hasChildren \|\| node\.notes\.length > 0/);
+  assert.match(appSource, /onSelect\(node\.path\);[\s\S]*onToggle\(node\.path\)/);
+  assert.doesNotMatch(appSource, /title="No notes here"/);
+  assert.doesNotMatch(appSource, /"Workspace root"\s*\}/);
+  assert.doesNotMatch(appSource, /notes-sidebar|data-notes-sidebar|isNotesListVisible/);
 });
 
 test("phase 3 editor area contains file, toolbar, note, and status placeholders", async () => {
@@ -150,7 +151,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
     "Phase 3 Architecture: Static Application Layout",
     "top bar",
     "left sidebar",
-    "note list column",
+    "Notes are nested under their folders",
     "editor area",
     "status bar",
     "phase-9-toolbar-editing-commands",

@@ -374,6 +374,9 @@ editor persistence are intentionally deferred to later phases.
 The Phase 3 renderer lives in `src/renderer/src/App.tsx` and is organized as a
 desktop note app surface:
 
+Notes are nested under their folders in the workspace sidebar; there is no
+separate notes sidebar or note-list column.
+
 ```text
 top bar
   app identity
@@ -383,16 +386,10 @@ top bar
 left sidebar
   workspace switcher
   search input
-  new note and new folder controls
-  folder tree area
+  folder tree and nested note rows
+  folder filter, sort, and new-note controls
   no-workspace empty state
-  no-search-results empty state
-
-note list column
-  selected-folder label
-  sort and new-note controls
-  no-folder empty state
-  note list placeholder rows
+  no-matching-notes empty state
 
 editor area
   note title and file path placeholder
@@ -750,9 +747,10 @@ workspace boundary, and file model.
 
 ## Phase 7 Architecture: Folder Organization
 
-Phase 7 turns folders into a usable organization surface in the sidebar. Notes
-and folders remain plain filesystem entries inside the active workspace, and the
-renderer still reaches them only through the preload API.
+Phase 7 turns folders into a usable organization surface in the workspace
+sidebar. Notes and folders remain plain filesystem entries inside the active
+workspace, and each expanded folder renders its notes directly beneath the
+folder row. The renderer still reaches them only through the preload API.
 
 ### Folder Organization Contract
 

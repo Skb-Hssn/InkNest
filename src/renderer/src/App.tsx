@@ -29,7 +29,6 @@ import {
   FolderInput,
   FolderOpen,
   FolderPlus,
-  Hash,
   Heading1,
   Heading2,
   Heading3,
@@ -45,8 +44,6 @@ import {
   ListOrdered,
   Minus,
   PanelLeft,
-  PanelRightClose,
-  PanelRightOpen,
   Quote,
   RotateCcw,
   Save,
@@ -268,7 +265,6 @@ export function App() {
   const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
-  const [isNotesListVisible, setIsNotesListVisible] = useState(true);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
   const [isFolderFilterVisible, setIsFolderFilterVisible] = useState(false);
   const [folderFilterQuery, setFolderFilterQuery] = useState("");
@@ -408,28 +404,31 @@ export function App() {
     [fileModel]
   );
   const notes = fileModel?.notes ?? [];
-  const folderTree = useMemo(() => buildFolderTree(folders, notes), [folders, notes]);
+  const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
+  const displayedNotes: Array<NoteSummary | SearchResult> = useMemo(() => {
+    const source = hasActiveSearch ? searchResults : notes;
+    return [...source].sort((firstNote, secondNote) => {
+      const direction = noteSort === "title-asc" ? 1 : -1;
+      return noteNameFromPath(firstNote.path).localeCompare(
+        noteNameFromPath(secondNote.path)
+      ) * direction;
+    });
+  }, [hasActiveSearch, noteSort, notes, searchResults]);
+  const folderTree = useMemo(
+    () => buildFolderTree(folders, displayedNotes),
+    [displayedNotes, folders]
+  );
   const filteredFolderTree = useMemo(
     () => filterFolderTree(folderTree, folderFilterQuery),
     [folderFilterQuery, folderTree]
   );
   const visibleExpandedFolderPaths = useMemo(
     () =>
-      folderFilterQuery.trim()
+      folderFilterQuery.trim().length > 0 || hasActiveSearch
         ? new Set(collectFolderTreePaths(filteredFolderTree))
         : expandedFolderPaths,
-    [expandedFolderPaths, filteredFolderTree, folderFilterQuery]
+    [expandedFolderPaths, filteredFolderTree, folderFilterQuery, hasActiveSearch]
   );
-  const visibleNotes = notes.filter((note) => note.folderPath === selectedFolderPath);
-  const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
-  const displayedNotes: Array<NoteSummary | SearchResult> = hasActiveSearch
-    ? searchResults
-    : [...visibleNotes].sort((firstNote, secondNote) => {
-        const direction = noteSort === "title-asc" ? 1 : -1;
-        return noteNameFromPath(firstNote.path).localeCompare(
-          noteNameFromPath(secondNote.path)
-        ) * direction;
-      });
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
   const selectedNoteName = selectedNote ? noteNameFromPath(selectedNote.path) : null;
@@ -455,9 +454,6 @@ export function App() {
     workspace.lastWorkspacePath ??
     "Open a local Markdown folder to begin";
   const currentFilePath = selectedNote?.path ?? selectedNoteContent?.path ?? workspacePath;
-  const selectedFolderLabel =
-    folders.find((folder) => folder.path === selectedFolderPath)?.name ??
-    selectedFolderPath;
   const workspacePromptTitle =
     workspace.status === "missing"
       ? "Previous workspace missing"
@@ -2093,8 +2089,7 @@ export function App() {
       <section
         data-layout="app-layout-columns"
         data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
-        data-notes-sidebar={isNotesListVisible ? "visible" : "hidden"}
-        className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(300px,340px)_minmax(0,1fr)]"
+        className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]"
       >
         <aside className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
@@ -2118,7 +2113,6 @@ export function App() {
               <ChevronDown className="ml-auto text-neutral-400" size={16} />
             </button>
 
-            {/* Replaces the old "Search arrives in a later phase." placeholder. */}
             <label className="search-box">
               <Search size={16} />
               <input
@@ -2201,6 +2195,12 @@ export function App() {
               </p>
             ) : null}
 
+            {searchError ? (
+              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {searchError}
+              </p>
+            ) : null}
+
             {workspace.recentWorkspaces.length > 0 ? (
               <details className="collapsible-section border-b border-ink-100">
                 <summary className="collapsible-section-trigger">
@@ -2256,6 +2256,44 @@ export function App() {
                   onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
                 >
                   {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                </button>
+                <details className="action-menu note-sort-menu">
+                  <summary className="icon-button" aria-label="Sort notes" title="Sort notes">
+                    <SlidersHorizontal size={15} />
+                  </summary>
+                  <div className="action-menu-popover" role="menu" aria-label="Sort notes">
+                    {([
+                      ["title-asc", "Title: A to Z"],
+                      ["title-desc", "Title: Z to A"]
+                    ] as const).map(([value, label]) => (
+                      <button
+                        key={value}
+                        type="button"
+                        role="menuitemradio"
+                        aria-checked={noteSort === value}
+                        className="action-menu-item compact-menu-item"
+                        onClick={(event) => {
+                          setNoteSort(value);
+                          event.currentTarget.closest("details")?.removeAttribute("open");
+                        }}
+                      >
+                        <span className="menu-check">
+                          {noteSort === value ? <Check size={14} /> : null}
+                        </span>
+                        <strong>{label}</strong>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+                <button
+                  type="button"
+                  aria-label="New note"
+                  title="New note"
+                  className="icon-button"
+                  onClick={() => void createNote()}
+                  disabled={!hasWorkspace || isBusy}
+                >
+                  <FilePlus2 size={15} />
                 </button>
               </div>
             </div>
@@ -2315,17 +2353,42 @@ export function App() {
                     }
                     onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
                     onDelete={(folder) => void deleteFolder(folder)}
+                    renderNote={(note) => (
+                      <NoteRow
+                        key={note.path}
+                        note={note}
+                        folders={folders}
+                        selected={note.path === selectedNotePath}
+                        isMoveMenuOpen={note.path === activeMoveNotePath}
+                        isBusy={isBusy}
+                        onOpen={() => {
+                          if (hasActiveSearch && "snippet" in note) {
+                            openSearchResult(note);
+                          } else {
+                            void openNote(note.path);
+                          }
+                        }}
+                        onDuplicate={() => void duplicateNote(note)}
+                        onToggleMove={() =>
+                          setActiveMoveNotePath((currentPath) =>
+                            currentPath === note.path ? null : note.path
+                          )
+                        }
+                        onMove={(folderPath) => void moveNote(note, folderPath)}
+                        onDelete={() => void deleteNote(note)}
+                      />
+                    )}
                   />
                 </div>
               </div>
             ) : null}
 
-            {hasWorkspace && hasActiveSearch ? (
+            {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 ? (
               <div className="border-t border-ink-100 px-4 py-4">
                 <EmptyState
                   icon={<Search size={18} />}
-                  title="No search results"
-                  description="Try a different search or tag."
+                  title="No matching notes"
+                  description="No search results for the current query."
                 />
               </div>
             ) : null}
@@ -2384,131 +2447,10 @@ export function App() {
           </div>
         </aside>
 
-        <aside className="notes-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-neutral-50">
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Notes</h2>
-              <p className="truncate text-xs text-neutral-500">
-                {hasActiveSearch
-                  ? `${displayedNotes.length} search result${displayedNotes.length === 1 ? "" : "s"}`
-                  : selectedFolderLabel}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                aria-label="Collapse notes list"
-                title="Collapse notes list"
-                className="icon-button"
-                onClick={() => setIsNotesListVisible(false)}
-              >
-                <PanelRightClose size={16} />
-              </button>
-              <details className="action-menu note-sort-menu">
-                <summary className="icon-button" aria-label="Sort notes" title="Sort notes">
-                  <SlidersHorizontal size={16} />
-                </summary>
-                <div className="action-menu-popover" role="menu" aria-label="Sort notes">
-                  {([
-                    ["title-asc", "Title: A to Z"],
-                    ["title-desc", "Title: Z to A"]
-                  ] as const).map(([value, label]) => (
-                    <button
-                      key={value}
-                      type="button"
-                      role="menuitemradio"
-                      aria-checked={noteSort === value}
-                      className="action-menu-item compact-menu-item"
-                      onClick={(event) => {
-                        setNoteSort(value);
-                        event.currentTarget.closest("details")?.removeAttribute("open");
-                      }}
-                    >
-                      <span className="menu-check">{noteSort === value ? <Check size={14} /> : null}</span>
-                      <strong>{label}</strong>
-                    </button>
-                  ))}
-                </div>
-              </details>
-              <button
-                type="button"
-                aria-label="New note"
-                className="icon-button"
-                onClick={() => void createNote()}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FilePlus2 size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {displayedNotes.length === 0 ? (
-              <div className="border-b border-ink-100 px-5 py-5">
-                <EmptyState
-                  icon={<Hash size={18} />}
-                  title={hasActiveSearch ? "No matching notes" : "No notes here"}
-                  description={
-                    hasActiveSearch
-                      ? "No note matches the current search."
-                      : "Create a note in this folder to start writing."
-                  }
-                />
-              </div>
-            ) : null}
-
-            {searchError ? (
-              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {searchError}
-              </p>
-            ) : null}
-
-            <div className="space-y-2 px-3 py-3" aria-label="Note list">
-              {displayedNotes.map((note) => (
-                <NoteRow
-                  key={note.path}
-                  note={note}
-                  folders={folders}
-                  selected={note.path === selectedNotePath}
-                  isMoveMenuOpen={note.path === activeMoveNotePath}
-                  isBusy={isBusy}
-                  onOpen={() => {
-                    if (hasActiveSearch && "snippet" in note) {
-                      openSearchResult(note);
-                    } else {
-                      void openNote(note.path);
-                    }
-                  }}
-                  onDuplicate={() => void duplicateNote(note)}
-                  onToggleMove={() =>
-                    setActiveMoveNotePath((currentPath) =>
-                      currentPath === note.path ? null : note.path
-                    )
-                  }
-                  onMove={(folderPath) => void moveNote(note, folderPath)}
-                  onDelete={() => void deleteNote(note)}
-                />
-              ))}
-            </div>
-
-          </div>
-        </aside>
-
         <section className="editor-pane flex min-h-0 flex-col bg-white">
           {/* The centered empty state replaces the old "Untitled note" header. */}
           <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
             <div className="app-editor-header-copy flex min-w-0 items-center gap-2">
-              {!isNotesListVisible ? (
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Show notes list"
-                  title="Show notes list"
-                  onClick={() => setIsNotesListVisible(true)}
-                >
-                  <PanelRightOpen size={16} />
-                </button>
-              ) : null}
               <div className="min-w-0 flex-1">
                 {selectedNote ? (
                   <input
@@ -2908,6 +2850,7 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
 
 type FolderTreeNode = FolderSummary & {
   children: FolderTreeNode[];
+  notes: Array<NoteSummary | SearchResult>;
   depth: number;
   noteCount: number;
 };
@@ -2931,6 +2874,7 @@ type FolderTreeProps = {
   onToggleMove: (folderPath: string) => void;
   onMove: (folder: FolderSummary, parentPath: string) => void;
   onDelete: (folder: FolderSummary) => void;
+  renderNote: (note: NoteSummary | SearchResult) => ReactNode;
 };
 
 function FolderTree({
@@ -2951,7 +2895,8 @@ function FolderTree({
   onCancelRename,
   onToggleMove,
   onMove,
-  onDelete
+  onDelete,
+  renderNote
 }: FolderTreeProps) {
   return (
     <>
@@ -2976,6 +2921,7 @@ function FolderTree({
           onToggleMove={onToggleMove}
           onMove={onMove}
           onDelete={onDelete}
+          renderNote={renderNote}
         />
       ))}
     </>
@@ -3000,10 +2946,12 @@ function FolderTreeRow({
   onCancelRename,
   onToggleMove,
   onMove,
-  onDelete
+  onDelete,
+  renderNote
 }: Omit<FolderTreeProps, "nodes"> & { node: FolderTreeNode }) {
   const isExpanded = expandedFolderPaths.has(node.path);
   const hasChildren = node.children.length > 0;
+  const hasExpandableContent = hasChildren || node.notes.length > 0;
   const isRoot = node.path === ".";
   const isRenaming = editingFolderPath === node.path;
   const isMoveMenuOpen = activeMoveFolderPath === node.path;
@@ -3022,9 +2970,9 @@ function FolderTreeRow({
           aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
           className="tree-toggle-button"
           onClick={() => onToggle(node.path)}
-          disabled={!hasWorkspace || !hasChildren}
+          disabled={!hasWorkspace || !hasExpandableContent}
         >
-          {hasChildren ? (
+          {hasExpandableContent ? (
             isExpanded ? (
               <ChevronDown size={14} />
             ) : (
@@ -3042,7 +2990,11 @@ function FolderTreeRow({
               onSubmitRename(node);
             }}
           >
-            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
+            {isExpanded && hasExpandableContent ? (
+              <FolderOpen className="shrink-0" size={15} />
+            ) : (
+              <Folder className="shrink-0" size={15} />
+            )}
             <input
               type="text"
               aria-label="Folder name"
@@ -3062,10 +3014,19 @@ function FolderTreeRow({
           <button
             type="button"
             className="tree-open-area"
-            onClick={() => onSelect(node.path)}
+            onClick={() => {
+              onSelect(node.path);
+              if (hasExpandableContent) {
+                onToggle(node.path);
+              }
+            }}
             disabled={!hasWorkspace}
           >
-            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
+            {isExpanded && hasExpandableContent ? (
+              <FolderOpen className="shrink-0" size={15} />
+            ) : (
+              <Folder className="shrink-0" size={15} />
+            )}
             <span className="truncate" title={node.name}>
               {node.name}
             </span>
@@ -3152,6 +3113,16 @@ function FolderTreeRow({
         ) : null}
       </div>
 
+      {isExpanded && node.notes.length > 0 ? (
+        <div
+          className="folder-notes space-y-1"
+          style={{ "--folder-depth": node.depth } as CSSProperties}
+          aria-label={`${node.name} notes`}
+        >
+          {node.notes.map((note) => renderNote(note))}
+        </div>
+      ) : null}
+
       {isExpanded && hasChildren ? (
         <FolderTree
           nodes={node.children}
@@ -3172,6 +3143,7 @@ function FolderTreeRow({
           onToggleMove={onToggleMove}
           onMove={onMove}
           onDelete={onDelete}
+          renderNote={renderNote}
         />
       ) : null}
     </div>
@@ -3207,18 +3179,14 @@ function NoteRow({
     <div className={`note-row group ${selected ? "note-row-active" : ""}`}>
       <button type="button" className="note-open-area" onClick={onOpen}>
         <div className="flex items-center gap-2">
-          <FileText size={15} />
-          <span className="truncate font-medium" title={noteNameFromPath(note.path)}>
-            {noteNameFromPath(note.path)}
+          <FileText className="shrink-0" size={15} />
+          <span className="truncate font-medium" title={note.title}>
+            {note.title}
           </span>
         </div>
-        <p className="mt-1 truncate text-xs text-neutral-500">
-          {"snippet" in note
-            ? note.snippet
-            : note.folderPath === "."
-              ? "Workspace root"
-              : note.folderPath}
-        </p>
+        {"snippet" in note ? (
+          <p className="mt-1 truncate text-xs text-neutral-500">{note.snippet}</p>
+        ) : null}
         {"tags" in note && note.tags.length > 0 ? (
           <div className="note-tag-list" aria-label="Note tags">
             {note.tags.map((tag) => (
@@ -3289,7 +3257,7 @@ function NoteRow({
 
 function buildFolderTree(
   folders: FolderSummary[],
-  notes: NoteSummary[]
+  notes: Array<NoteSummary | SearchResult>
 ): FolderTreeNode[] {
   const folderNodes = new Map<string, FolderTreeNode>();
 
@@ -3297,6 +3265,7 @@ function buildFolderTree(
     folderNodes.set(folder.path, {
       ...folder,
       children: [],
+      notes: notes.filter((note) => note.folderPath === folder.path),
       depth: 0,
       noteCount: notes.filter((note) => note.folderPath === folder.path).length
     });

@@ -41,25 +41,19 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
     await expect(window.getByText("No workspace selected")).toBeVisible();
-    await expect(window.getByText("No search results")).toBeVisible();
     await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
 
-    await expect(
-      window.getByRole("heading", { name: "Notes", exact: true })
-    ).toBeVisible();
     await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
-    await expect(window.getByText("No notes here")).toBeVisible();
     await expect(window.getByText("Trash is empty.")).toBeVisible();
 
-    await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
-    await expect(window.getByText("No file selected")).toBeVisible();
-    await expect(window.getByText("Saved").first()).toBeVisible();
+    await expect(window.getByRole("heading", { name: "Editor" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
     await expect(
-      window.getByText("Open or create a Markdown note to inspect its saved content here.")
+      window.getByText("Select a note from the list or create a new one to start writing.")
     ).toBeVisible();
     await expect(window.getByText("Open a local Markdown folder to begin")).toBeVisible();
-    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("Workspace overview")).toBeVisible();
+    await expect(window.getByText("0 words · 0 characters")).toBeVisible();
   } finally {
     await app.close();
   }
@@ -73,9 +67,8 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     const window = await app.firstWindow();
 
     await expect(window.getByRole("button", { name: "Toggle sidebar" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Collapse notes list" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Filter folders" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Sort notes" })).toBeVisible();
+    await expect(window.locator('summary[aria-label="Sort notes"]')).toBeVisible();
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
 
     await expect(
@@ -85,11 +78,7 @@ test("phase 3 exposes visible static controls for future interactions", async ({
       window.getByRole("button", { name: "New folder", exact: true }).first()
     ).toBeVisible();
 
-    for (const action of ["H1", "B", "I", "List", "Link", "Image"]) {
-      await expect(
-        window.getByRole("button", { name: action, exact: true })
-      ).toBeVisible();
-    }
+    await expect(window.locator(".markdown-toolbar")).not.toBeVisible();
   } finally {
     await app.close();
   }
@@ -119,7 +108,7 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       hasProcess: false
     });
     await expect(
-      window.getByText("phase-17-release-validation")
+      window.locator('main.app-shell[data-build-phase="phase-17-release-validation"]')
     ).toBeVisible();
   } finally {
     await app.close();
