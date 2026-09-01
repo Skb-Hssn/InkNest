@@ -114,3 +114,34 @@ test("phase 3 renderer receives the static layout phase through preload", async 
     await app.close();
   }
 });
+
+test("phase 3 resizes the workspace sidebar with the drag handle", async ({}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    const handle = window.getByRole("separator", { name: "Resize workspace sidebar" });
+    const box = await handle.boundingBox();
+
+    expect(box).not.toBeNull();
+    if (!box) {
+      return;
+    }
+
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await window.mouse.move(x, y);
+    await window.mouse.down();
+    await window.mouse.move(x + 80, y, { steps: 4 });
+    await window.mouse.up();
+
+    await expect.poll(() => handle.getAttribute("aria-valuenow")).toBe("380");
+    await expect.poll(() =>
+      window.evaluate(
+        () => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns
+      )
+    ).toContain("380px");
+  } finally {
+    await app.close();
+  }
+});

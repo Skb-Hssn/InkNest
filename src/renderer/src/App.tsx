@@ -1,6 +1,7 @@
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
   type FormEvent,
   type ReactNode,
   useEffect,
@@ -259,11 +260,15 @@ type CommandPaletteCommand = {
 
 // Keep the debounce inside the product's 500ms-1000ms autosave range.
 const autoSaveDelayMs = 750;
+const sidebarMinWidth = 220;
+const sidebarMaxWidth = 480;
 
 export function App() {
   const [phase, setPhase] = useState("phase-16-accessibility-and-ui-polish");
   const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
   const [isFolderFilterVisible, setIsFolderFilterVisible] = useState(false);
@@ -316,6 +321,7 @@ export function App() {
   const externalNoteChangeRef = useRef<ExternalNoteChange | null>(externalNoteChange);
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
+  const sidebarResizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
@@ -1850,6 +1856,78 @@ export function App() {
     setIsBusy(false);
   }
 
+  function getSidebarWidthMax() {
+    if (typeof window !== "undefined" && window.innerWidth <= 1100) {
+      return Math.max(
+        sidebarMinWidth,
+        Math.min(sidebarMaxWidth, Math.floor(window.innerWidth * 0.4))
+      );
+    }
+
+    return sidebarMaxWidth;
+  }
+
+  function clampSidebarWidth(width: number) {
+    return Math.min(getSidebarWidthMax(), Math.max(sidebarMinWidth, width));
+  }
+
+  function finishSidebarResize(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    sidebarResizeStartRef.current = null;
+    setIsSidebarResizing(false);
+  }
+
+  function handleSidebarPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!settings.sidebarVisible) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sidebarResizeStartRef.current = {
+      clientX: event.clientX,
+      width: sidebarWidth
+    };
+    setIsSidebarResizing(true);
+  }
+
+  function handleSidebarPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = sidebarResizeStartRef.current;
+
+    if (!start) {
+      return;
+    }
+
+    setSidebarWidth(clampSidebarWidth(start.width + event.clientX - start.clientX));
+  }
+
+  function handleSidebarKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!settings.sidebarVisible) {
+      return;
+    }
+
+    const step = event.shiftKey ? 32 : 16;
+    let nextWidth: number | null = null;
+
+    if (event.key === "ArrowLeft") {
+      nextWidth = sidebarWidth - step;
+    } else if (event.key === "ArrowRight") {
+      nextWidth = sidebarWidth + step;
+    } else if (event.key === "Home") {
+      nextWidth = sidebarMinWidth;
+    } else if (event.key === "End") {
+      nextWidth = getSidebarWidthMax();
+    }
+
+    if (nextWidth !== null) {
+      event.preventDefault();
+      setSidebarWidth(clampSidebarWidth(nextWidth));
+    }
+  }
+
   return (
     <main
       className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
@@ -2089,7 +2167,9 @@ export function App() {
       <section
         data-layout="app-layout-columns"
         data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
+        data-sidebar-resizing={isSidebarResizing ? "true" : "false"}
         className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]"
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
         <aside className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white">
           <div className="space-y-3 border-b border-ink-100 p-3">
@@ -2446,6 +2526,23 @@ export function App() {
             ) : null}
           </div>
         </aside>
+
+        <div
+          className="sidebar-resize-handle"
+          role="separator"
+          tabIndex={settings.sidebarVisible ? 0 : -1}
+          aria-label="Resize workspace sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={sidebarMinWidth}
+          aria-valuemax={getSidebarWidthMax()}
+          aria-valuenow={Math.round(clampSidebarWidth(sidebarWidth))}
+          onKeyDown={handleSidebarKeyDown}
+          onPointerDown={handleSidebarPointerDown}
+          onPointerMove={handleSidebarPointerMove}
+          onPointerUp={finishSidebarResize}
+          onPointerCancel={finishSidebarResize}
+          onLostPointerCapture={() => finishSidebarResize()}
+        />
 
         <section className="editor-pane flex min-h-0 flex-col bg-white">
           {/* The centered empty state replaces the old "Untitled note" header. */}

@@ -27,6 +27,8 @@ test("phase 3 renderer defines the workspace-sidebar and editor layout", async (
   assertIncludesAll(appSource, [
     "grid-rows-[56px_minmax(0,1fr)_34px]",
     "grid-cols-[300px_minmax(0,1fr)]",
+    "sidebar-resize-handle",
+    "Resize workspace sidebar",
     "workspacePath",
     "rootFolder",
     "toolbarPlaceholders",
