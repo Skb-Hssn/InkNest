@@ -129,9 +129,9 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "renameFolder",
     "deleteFolder",
     "openNote",
+    "startRenamingNote",
     "renameNote",
     "duplicateNote",
-    "moveNote",
     "deleteNote",
     "restoreNote",
     "permanentlyDeleteNote",
@@ -141,35 +141,32 @@ test("phase 6 renderer exposes note actions without direct filesystem access", a
     "window.inknest.folders.delete",
     "window.inknest.notes.rename",
     "window.inknest.notes.duplicate",
-    "window.inknest.notes.move",
     "window.inknest.notes.delete",
     "window.inknest.notes.listTrash",
     "window.inknest.notes.restore",
     "window.inknest.notes.permanentlyDelete",
     "Trash is empty.",
-    "Note title",
-    "note-title-input",
-    "note-actions",
-    "note-action-button",
-    "move-menu",
-    "Move note to folder",
-    "Rename folder",
-    "Delete folder",
-    "folder-actions",
+    "File name",
+    "note-rename-form",
+    "context-menu",
+    "context-menu-trigger",
+    "New note",
+    "New folder",
+    "onRename",
     "event.key === \"Enter\"",
     "MarkdownEditor"
   ]);
   assert.doesNotMatch(appSource, /New note title/);
   assert.doesNotMatch(appSource, /Rename note/);
   assert.doesNotMatch(appSource, /Move note to folder path/);
-  assert.doesNotMatch(appSource, />Rename</);
+  assert.doesNotMatch(appSource, /aria-label="Note title"/);
+  assert.doesNotMatch(stylesSource, /\.note-title-input/);
+  assert.match(appSource, /onContextMenu/);
+  assert.match(appSource, /aria-label=\{`\$\{label\} options`\}/);
   assert.match(stylesSource, /\.trash-row/);
-  assert.match(stylesSource, /\.note-title-input/);
-  assert.match(stylesSource, /\.note-actions/);
-  assert.match(stylesSource, /group-hover:opacity-100/);
-  assert.match(stylesSource, /\.move-menu/);
-  assert.match(stylesSource, /\.folder-actions/);
-  assert.match(stylesSource, /\.folder-action-button/);
+  assert.match(stylesSource, /\.note-rename-form/);
+  assert.match(stylesSource, /\.context-menu/);
+  assert.match(stylesSource, /\.context-menu-trigger/);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);
   assert.doesNotMatch(appSource, /ipcRenderer|showOpenDialog/);
 });

@@ -1,4 +1,5 @@
 import { _electron as electron, expect, test } from "@playwright/test";
+import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -55,10 +56,18 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
 
     const editor = window.getByRole("textbox", { name: "Visual Markdown editor" });
     await expect(editor).toBeVisible();
-    const title = window.getByRole("textbox", { name: "Note title" });
+    const notePath = path.join(workspaceDir, "Release Smoke.md");
+    const createdNoteRow = window.locator(".note-row").filter({ hasText: "Untitled" }).first();
+    await createdNoteRow.hover();
+    await createdNoteRow.getByRole("button", { name: "Note actions" }).click();
+    await createdNoteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Rename" })
+      .click();
+    const title = window.getByRole("textbox", { name: "File name" });
     await title.fill("Release Smoke");
     await title.press("Enter");
-    await expect(window.getByText("Release Smoke.md").first()).toBeVisible();
+    await expect.poll(() => existsSync(notePath)).toBe(true);
 
     const renamedEditor = window.getByRole("textbox", { name: "Visual Markdown editor" });
 
@@ -72,7 +81,6 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     await saveButton.click();
     await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
 
-    const notePath = path.join(workspaceDir, "Release Smoke.md");
     await expect
       .poll(() => readFile(notePath, "utf8"), { timeout: 4000 })
       .toContain("Release validation content.");
@@ -83,9 +91,19 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     await expect(searchResult).toBeVisible();
     await searchResult.click();
 
-    await title.fill("Release Renamed");
-    await title.press("Enter");
-    await expect(window.getByText("Release Renamed.md").first()).toBeVisible();
+    const searchNoteRow = window.locator(".note-row").first();
+    await searchNoteRow.hover();
+    await searchNoteRow.getByRole("button", { name: "Note actions" }).click();
+    await searchNoteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Rename" })
+      .click();
+    const renamedTitle = window.getByRole("textbox", { name: "File name" });
+    await renamedTitle.fill("Release Renamed");
+    await renamedTitle.press("Enter");
+    const renamedNotePath = path.join(workspaceDir, "Release Renamed.md");
+    await expect.poll(() => existsSync(renamedNotePath)).toBe(true);
+    await expect.poll(() => readFile(renamedNotePath, "utf8")).toContain("Release validation content.");
 
     const exported = await window.evaluate(
       ({ sourcePath, destinationPath }) =>
@@ -112,9 +130,14 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
       .toContain("Release validation content.");
 
     const noteRow = window.locator(".note-row").first();
+    await noteRow.hover();
+    await noteRow.getByRole("button", { name: "Note actions" }).click();
     window.once("dialog", (dialog) => dialog.accept());
-    await noteRow.getByRole("button", { name: "Delete" }).click();
-    await expect(window.getByText("Release Renamed", { exact: true }).last()).toBeVisible();
+    await noteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Delete" })
+      .click();
+    await expect.poll(() => existsSync(renamedNotePath)).toBe(false);
     await expect(window.getByRole("button", { name: "Restore note" })).toBeVisible();
 
     await window.getByRole("button", { name: "Restore note" }).click();

@@ -43,6 +43,7 @@ import {
   ListChecks,
   ListFilter,
   ListOrdered,
+  MoreHorizontal,
   Minus,
   PanelLeft,
   Quote,
@@ -288,9 +289,10 @@ export function App() {
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
   const [editorMarkdown, setEditorMarkdown] = useState("");
   const [lastSavedMarkdown, setLastSavedMarkdown] = useState("");
-  const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const [activeMoveNotePath, setActiveMoveNotePath] = useState<string | null>(null);
   const [activeMoveFolderPath, setActiveMoveFolderPath] = useState<string | null>(null);
+  const [editingNotePath, setEditingNotePath] = useState<string | null>(null);
+  const [noteNameDraft, setNoteNameDraft] = useState("");
   const [editingFolderPath, setEditingFolderPath] = useState<string | null>(null);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [expandedFolderPaths, setExpandedFolderPaths] = useState<Set<string>>(
@@ -377,15 +379,26 @@ export function App() {
   }, [settings.theme]);
 
   useEffect(() => {
-    function closeActionMenus(event: PointerEvent | globalThis.KeyboardEvent) {
-      if (event instanceof globalThis.KeyboardEvent && event.key !== "Escape") {
-        return;
+    function closeActionMenus(event: Event) {
+      if (event instanceof globalThis.KeyboardEvent) {
+        if (event.key !== "Escape") {
+          return;
+        }
+
+        setActiveMoveFolderPath(null);
+        setActiveMoveNotePath(null);
       }
 
+      const eventTarget = event.target instanceof Element ? event.target : null;
       const clickedMenu =
-        event instanceof PointerEvent && event.target instanceof Element
-          ? event.target.closest(".action-menu")
-          : null;
+        eventTarget?.closest(".action-menu") ?? null;
+      const clickedContextMenu =
+        eventTarget?.closest("[data-context-menu]") ?? null;
+
+      if (!clickedContextMenu) {
+        setActiveMoveFolderPath(null);
+        setActiveMoveNotePath(null);
+      }
 
       document
         .querySelectorAll<HTMLDetailsElement>(".action-menu[open]")
@@ -397,10 +410,12 @@ export function App() {
     }
 
     document.addEventListener("pointerdown", closeActionMenus);
+    document.addEventListener("click", closeActionMenus);
     window.addEventListener("keydown", closeActionMenus);
 
     return () => {
       document.removeEventListener("pointerdown", closeActionMenus);
+      document.removeEventListener("click", closeActionMenus);
       window.removeEventListener("keydown", closeActionMenus);
     };
   }, []);
@@ -552,10 +567,6 @@ export function App() {
       `${command.label} ${command.description}`.toLocaleLowerCase().includes(query)
     );
   });
-
-  useEffect(() => {
-    setNoteTitleDraft(selectedNoteName ?? "");
-  }, [selectedNoteName]);
 
   useEffect(() => {
     if (!fileModel) {
@@ -1036,6 +1047,8 @@ export function App() {
 
   function clearSelectedNote() {
     clearAutoSaveTimer();
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     selectedNoteContentRef.current = null;
     editorMarkdownRef.current = "";
     lastSavedMarkdownRef.current = "";
@@ -1505,11 +1518,25 @@ export function App() {
     setLinkDialog(null);
   }
 
-  async function createNote() {
+  async function createNote(folderPath = selectedFolderPath) {
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
+    setEditingFolderPath(null);
+    setSelectedFolderPath(folderPath);
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths);
+      nextPaths.add(folderPath);
+      for (const ancestorPath of getAncestorFolderPaths(folderPath)) {
+        nextPaths.add(ancestorPath);
+      }
+      return nextPaths;
+    });
     setIsBusy(true);
     const result = await window.inknest.notes.create({
       title: "Untitled",
-      folderPath: selectedFolderPath
+      folderPath
     });
 
     if (result.ok) {
@@ -1523,13 +1550,24 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function createFolder() {
+  async function createFolder(parentPath = selectedFolderPath) {
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setEditingFolderPath(null);
+    setSelectedFolderPath(parentPath);
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths);
+      nextPaths.add(parentPath);
+      for (const ancestorPath of getAncestorFolderPaths(parentPath)) {
+        nextPaths.add(ancestorPath);
+      }
+      return nextPaths;
+    });
     setIsBusy(true);
     const result = await window.inknest.folders.create({
-      parentPath: selectedFolderPath,
+      parentPath,
       name: "New Folder"
     });
 
@@ -1555,6 +1593,8 @@ export function App() {
   function startRenamingFolder(folder: FolderSummary) {
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setEditingFolderPath(folder.path);
     setFolderNameDraft(folder.name);
   }
@@ -1652,47 +1692,6 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function moveFolder(folder: FolderSummary, parentPath: string) {
-    if (
-      selectedNote &&
-      isSameOrChildFolderPath(selectedNote.folderPath, folder.path) &&
-      !(await flushCurrentNote())
-    ) {
-      return;
-    }
-
-    setActiveMoveNotePath(null);
-    setActiveMoveFolderPath(null);
-    setEditingFolderPath(null);
-    setIsBusy(true);
-    const result = await window.inknest.folders.move({
-      path: folder.path,
-      parentPath
-    });
-
-    if (result.ok) {
-      if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        clearSelectedNote();
-      }
-
-      await refreshWorkspace();
-      setSelectedFolderPath(result.data.path);
-      setExpandedFolderPaths((currentPaths) => {
-        const nextPaths = new Set(currentPaths);
-        nextPaths.add(result.data.path);
-        for (const ancestorPath of getAncestorFolderPaths(result.data.path)) {
-          nextPaths.add(ancestorPath);
-        }
-        return nextPaths;
-      });
-      setStatusMessage("Folder moved");
-    } else {
-      setWorkspaceError(result.error.message);
-    }
-
-    setIsBusy(false);
-  }
-
   function toggleFolder(folderPath: string) {
     setExpandedFolderPaths((currentPaths) => {
       const nextPaths = new Set(currentPaths);
@@ -1707,37 +1706,48 @@ export function App() {
     });
   }
 
-  async function renameNote() {
-    if (!selectedNote) {
-      return;
-    }
-
-    const title = noteNameFromPath(noteTitleDraft.trim());
+  async function renameNote(note: NoteSummary | SearchResult, name: string) {
+    const title = noteNameFromPath(name.trim());
 
     if (!title) {
       setWorkspaceError("Note title cannot be empty.");
       return;
     }
 
-    if (!(await flushCurrentNote())) {
+    const shouldReopen = note.path === selectedNotePath;
+    if (shouldReopen && !(await flushCurrentNote())) {
       return;
     }
 
+    setActiveMoveNotePath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setIsBusy(true);
     const result = await window.inknest.notes.rename({
-      path: selectedNote.path,
+      path: note.path,
       title
     });
 
     if (result.ok) {
       await refreshWorkspace();
-      await openNote(result.data.path);
+      if (shouldReopen) {
+        await openNote(result.data.path);
+      }
       setStatusMessage("Note renamed");
     } else {
       setWorkspaceError(result.error.message);
     }
 
     setIsBusy(false);
+  }
+
+  function startRenamingNote(note: NoteSummary | SearchResult) {
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(null);
+    setFolderNameDraft("");
+    setEditingNotePath(note.path);
+    setNoteNameDraft(noteNameFromPath(note.path));
   }
 
   async function duplicateNote(note: NoteSummary) {
@@ -1755,30 +1765,6 @@ export function App() {
       await refreshWorkspace();
       await openNote(result.data.path);
       setStatusMessage("Note duplicated");
-    } else {
-      setWorkspaceError(result.error.message);
-    }
-
-    setIsBusy(false);
-  }
-
-  async function moveNote(note: NoteSummary, folderPath: string) {
-    if (note.path === selectedNotePath && !(await flushCurrentNote())) {
-      return;
-    }
-
-    setActiveMoveNotePath(null);
-    setIsBusy(true);
-    const result = await window.inknest.notes.move({
-      path: note.path,
-      folderPath
-    });
-
-    if (result.ok) {
-      setSelectedFolderPath(result.data.folderPath);
-      await refreshWorkspace();
-      await openNote(result.data.path);
-      setStatusMessage("Note moved");
     } else {
       setWorkspaceError(result.error.message);
     }
@@ -2406,7 +2392,6 @@ export function App() {
                 <div className="space-y-1" aria-label="Folder tree">
                   <FolderTree
                     nodes={filteredFolderTree}
-                    folders={folders}
                     selectedFolderPath={selectedFolderPath}
                     expandedFolderPaths={visibleExpandedFolderPaths}
                     activeMoveFolderPath={activeMoveFolderPath}
@@ -2431,14 +2416,16 @@ export function App() {
                         currentPath === folderPath ? null : folderPath
                       )
                     }
-                    onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
+                    onNewNote={(folderPath) => void createNote(folderPath)}
+                    onNewFolder={(parentPath) => void createFolder(parentPath)}
                     onDelete={(folder) => void deleteFolder(folder)}
                     renderNote={(note) => (
                       <NoteRow
                         key={note.path}
                         note={note}
-                        folders={folders}
                         selected={note.path === selectedNotePath}
+                        isRenaming={note.path === editingNotePath}
+                        noteNameDraft={noteNameDraft}
                         isMoveMenuOpen={note.path === activeMoveNotePath}
                         isBusy={isBusy}
                         onOpen={() => {
@@ -2448,13 +2435,19 @@ export function App() {
                             void openNote(note.path);
                           }
                         }}
+                        onRename={() => startRenamingNote(note)}
+                        onRenameDraftChange={setNoteNameDraft}
+                        onSubmitRename={() => void renameNote(note, noteNameDraft)}
+                        onCancelRename={() => {
+                          setEditingNotePath(null);
+                          setNoteNameDraft("");
+                        }}
                         onDuplicate={() => void duplicateNote(note)}
                         onToggleMove={() =>
                           setActiveMoveNotePath((currentPath) =>
                             currentPath === note.path ? null : note.path
                           )
                         }
-                        onMove={(folderPath) => void moveNote(note, folderPath)}
                         onDelete={() => void deleteNote(note)}
                       />
                     )}
@@ -2550,22 +2543,12 @@ export function App() {
             <div className="app-editor-header-copy flex min-w-0 items-center gap-2">
               <div className="min-w-0 flex-1">
                 {selectedNote ? (
-                  <input
-                    type="text"
-                    aria-label="Note title"
-                    className="note-title-input"
-                    value={noteTitleDraft}
+                  <h2
+                    className="truncate text-sm font-semibold"
                     title={selectedNoteName ?? undefined}
-                    onChange={(event) => setNoteTitleDraft(event.target.value)}
-                    onKeyDown={(event) => {
-                      if (event.key === "Enter") {
-                        event.preventDefault();
-                        event.currentTarget.blur();
-                        void renameNote();
-                      }
-                    }}
-                    disabled={isBusy}
-                  />
+                  >
+                    {selectedNoteName}
+                  </h2>
                 ) : (
                   <h2 className="truncate text-sm font-semibold">Editor</h2>
                 )}
@@ -2945,6 +2928,54 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
   );
 }
 
+type ContextMenuProps = {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  onContextMenu?: () => void;
+  children: ReactNode;
+};
+
+function ContextMenu({ label, open, onToggle, onContextMenu, children }: ContextMenuProps) {
+  return (
+    <div
+      className={`context-menu-anchor ${open ? "context-menu-anchor-open" : ""}`}
+      data-context-menu
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu?.();
+      }}
+    >
+      <button
+        type="button"
+        className="context-menu-trigger"
+        aria-label={`${label} actions`}
+        title={`${label} actions`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        <MoreHorizontal size={15} />
+      </button>
+      {open ? (
+        <div
+          className="context-menu"
+          role="menu"
+          aria-label={`${label} options`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type FolderTreeNode = FolderSummary & {
   children: FolderTreeNode[];
   notes: Array<NoteSummary | SearchResult>;
@@ -2954,7 +2985,6 @@ type FolderTreeNode = FolderSummary & {
 
 type FolderTreeProps = {
   nodes: FolderTreeNode[];
-  folders: FolderSummary[];
   selectedFolderPath: string;
   expandedFolderPaths: Set<string>;
   activeMoveFolderPath: string | null;
@@ -2969,14 +2999,14 @@ type FolderTreeProps = {
   onSubmitRename: (folder: FolderSummary) => void;
   onCancelRename: () => void;
   onToggleMove: (folderPath: string) => void;
-  onMove: (folder: FolderSummary, parentPath: string) => void;
+  onNewNote: (folderPath: string) => void;
+  onNewFolder: (parentPath: string) => void;
   onDelete: (folder: FolderSummary) => void;
   renderNote: (note: NoteSummary | SearchResult) => ReactNode;
 };
 
 function FolderTree({
   nodes,
-  folders,
   selectedFolderPath,
   expandedFolderPaths,
   activeMoveFolderPath,
@@ -2991,7 +3021,8 @@ function FolderTree({
   onSubmitRename,
   onCancelRename,
   onToggleMove,
-  onMove,
+  onNewNote,
+  onNewFolder,
   onDelete,
   renderNote
 }: FolderTreeProps) {
@@ -3001,7 +3032,6 @@ function FolderTree({
         <FolderTreeRow
           key={node.path}
           node={node}
-          folders={folders}
           selectedFolderPath={selectedFolderPath}
           expandedFolderPaths={expandedFolderPaths}
           activeMoveFolderPath={activeMoveFolderPath}
@@ -3016,7 +3046,8 @@ function FolderTree({
           onSubmitRename={onSubmitRename}
           onCancelRename={onCancelRename}
           onToggleMove={onToggleMove}
-          onMove={onMove}
+          onNewNote={onNewNote}
+          onNewFolder={onNewFolder}
           onDelete={onDelete}
           renderNote={renderNote}
         />
@@ -3027,7 +3058,6 @@ function FolderTree({
 
 function FolderTreeRow({
   node,
-  folders,
   selectedFolderPath,
   expandedFolderPaths,
   activeMoveFolderPath,
@@ -3042,7 +3072,8 @@ function FolderTreeRow({
   onSubmitRename,
   onCancelRename,
   onToggleMove,
-  onMove,
+  onNewNote,
+  onNewFolder,
   onDelete,
   renderNote
 }: Omit<FolderTreeProps, "nodes"> & { node: FolderTreeNode }) {
@@ -3052,7 +3083,6 @@ function FolderTreeRow({
   const isRoot = node.path === ".";
   const isRenaming = editingFolderPath === node.path;
   const isMoveMenuOpen = activeMoveFolderPath === node.path;
-  const moveTargets = folders.filter((folder) => isFolderMoveTarget(node, folder));
 
   return (
     <div>
@@ -3061,6 +3091,14 @@ function FolderTreeRow({
           node.path === selectedFolderPath ? "tree-row-active" : ""
         }`}
         style={{ "--folder-depth": node.depth } as CSSProperties}
+        onContextMenu={(event) => {
+          if (isRoot || isRenaming || !hasWorkspace || isBusy) {
+            return;
+          }
+
+          event.preventDefault();
+          onToggleMove(node.path);
+        }}
       >
         <button
           type="button"
@@ -3130,83 +3168,66 @@ function FolderTreeRow({
             <span className="tree-count">{node.noteCount}</span>
           </button>
         )}
-        {!isRoot ? (
-          <span
-            className={`folder-actions ${
-              isRenaming || isMoveMenuOpen ? "folder-actions-visible" : ""
-            }`}
+        {!isRoot && !isRenaming ? (
+          <ContextMenu
+            label="Folder"
+            open={isMoveMenuOpen}
+            onToggle={() => onToggleMove(node.path)}
+            onContextMenu={() => onToggleMove(node.path)}
           >
             <button
               type="button"
-              aria-label={isRenaming ? "Save folder name" : "Rename folder"}
-              title={isRenaming ? "Save folder name" : "Rename folder"}
-              className="icon-button folder-action-button"
+              role="menuitem"
+              className="context-menu-item"
               onClick={() => {
-                if (isRenaming) {
-                  onSubmitRename(node);
-                } else {
-                  onStartRename(node);
-                }
+                onToggleMove(node.path);
+                onNewNote(node.path);
               }}
               disabled={!hasWorkspace || isBusy}
             >
-              {isRenaming ? <Check size={13} /> : <Edit3 size={13} />}
+              <FilePlus2 size={14} />
+              <span>New note</span>
             </button>
-            {isRenaming ? (
-              <button
-                type="button"
-                aria-label="Cancel folder rename"
-                title="Cancel folder rename"
-                className="icon-button folder-action-button"
-                onClick={onCancelRename}
-                disabled={isBusy}
-              >
-                <X size={13} />
-              </button>
-            ) : (
-              <>
-                <div className="relative">
-                  <button
-                    type="button"
-                    aria-label="Move folder"
-                    title="Move folder"
-                    className="icon-button folder-action-button"
-                    onClick={() => onToggleMove(node.path)}
-                    disabled={!hasWorkspace || isBusy || moveTargets.length === 0}
-                  >
-                    <FolderInput size={13} />
-                  </button>
-                  {isMoveMenuOpen ? (
-                    <div className="move-menu folder-move-menu" role="menu" aria-label="Move folder to parent">
-                      {moveTargets.map((folder) => (
-                        <button
-                          key={folder.path}
-                          type="button"
-                          className="move-menu-item"
-                          onClick={() => onMove(node, folder.path)}
-                        >
-                          <Folder size={13} />
-                          <span className="truncate" title={folder.name}>
-                            {folder.name}
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
-                <button
-                  type="button"
-                  aria-label="Delete folder"
-                  title="Delete folder"
-                  className="icon-button folder-action-button danger"
-                  onClick={() => onDelete(node)}
-                  disabled={!hasWorkspace || isBusy}
-                >
-                  <Trash2 size={13} />
-                </button>
-              </>
-            )}
-          </span>
+            <button
+              type="button"
+              role="menuitem"
+              className="context-menu-item"
+              onClick={() => {
+                onToggleMove(node.path);
+                onNewFolder(node.path);
+              }}
+              disabled={!hasWorkspace || isBusy}
+            >
+              <FolderPlus size={14} />
+              <span>New folder</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="context-menu-item"
+              onClick={() => {
+                onToggleMove(node.path);
+                onStartRename(node);
+              }}
+              disabled={!hasWorkspace || isBusy}
+            >
+              <Edit3 size={14} />
+              <span>Rename</span>
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="context-menu-item danger"
+              onClick={() => {
+                onToggleMove(node.path);
+                onDelete(node);
+              }}
+              disabled={!hasWorkspace || isBusy}
+            >
+              <Trash2 size={14} />
+              <span>Delete</span>
+            </button>
+          </ContextMenu>
         ) : null}
       </div>
 
@@ -3223,7 +3244,6 @@ function FolderTreeRow({
       {isExpanded && hasChildren ? (
         <FolderTree
           nodes={node.children}
-          folders={folders}
           selectedFolderPath={selectedFolderPath}
           expandedFolderPaths={expandedFolderPaths}
           activeMoveFolderPath={activeMoveFolderPath}
@@ -3238,7 +3258,8 @@ function FolderTreeRow({
           onSubmitRename={onSubmitRename}
           onCancelRename={onCancelRename}
           onToggleMove={onToggleMove}
-          onMove={onMove}
+          onNewNote={onNewNote}
+          onNewFolder={onNewFolder}
           onDelete={onDelete}
           renderNote={renderNote}
         />
@@ -3249,105 +3270,144 @@ function FolderTreeRow({
 
 type NoteRowProps = {
   note: NoteSummary | SearchResult;
-  folders: FolderSummary[];
   selected: boolean;
+  isRenaming: boolean;
+  noteNameDraft: string;
   isMoveMenuOpen: boolean;
   isBusy: boolean;
   onOpen: () => void;
+  onRename: () => void;
+  onRenameDraftChange: (name: string) => void;
+  onSubmitRename: () => void;
+  onCancelRename: () => void;
   onDuplicate: () => void;
   onToggleMove: () => void;
-  onMove: (folderPath: string) => void;
   onDelete: () => void;
 };
 
 function NoteRow({
   note,
-  folders,
   selected,
+  isRenaming,
+  noteNameDraft,
   isMoveMenuOpen,
   isBusy,
   onOpen,
+  onRename,
+  onRenameDraftChange,
+  onSubmitRename,
+  onCancelRename,
   onDuplicate,
   onToggleMove,
-  onMove,
   onDelete
 }: NoteRowProps) {
   return (
-    <div className={`note-row group ${selected ? "note-row-active" : ""}`}>
-      <button type="button" className="note-open-area" onClick={onOpen}>
-        <div className="flex items-center gap-2">
-          <FileText className="shrink-0" size={15} />
-          <span className="truncate font-medium" title={note.title}>
-            {note.title}
-          </span>
-        </div>
-        {"snippet" in note ? (
-          <p className="mt-1 truncate text-xs text-neutral-500">{note.snippet}</p>
-        ) : null}
-        {"tags" in note && note.tags.length > 0 ? (
-          <div className="note-tag-list" aria-label="Note tags">
-            {note.tags.map((tag) => (
-              <span key={tag} className="note-tag">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </button>
+    <div
+      className={`note-row group ${selected ? "note-row-active" : ""}`}
+      onContextMenu={(event) => {
+        if (isRenaming) {
+          return;
+        }
 
-      <div className="note-actions">
-        <button
-          type="button"
-          aria-label="Duplicate"
-          title="Duplicate"
-          className="icon-button note-action-button"
-          onClick={onDuplicate}
-          disabled={isBusy}
+        event.preventDefault();
+        onToggleMove();
+      }}
+    >
+      {isRenaming ? (
+        <form
+          className="note-rename-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmitRename();
+          }}
         >
-          <Copy size={14} />
-        </button>
-        <div className="relative">
-          <button
-            type="button"
-            aria-label="Move"
-            title="Move"
-            className="icon-button note-action-button"
-            onClick={onToggleMove}
+          <FileText className="shrink-0" size={15} />
+          <input
+            type="text"
+            aria-label="File name"
+            value={noteNameDraft}
+            onChange={(event) => onRenameDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancelRename();
+              }
+            }}
+            autoFocus
             disabled={isBusy}
-          >
-            <FolderInput size={14} />
-          </button>
-          {isMoveMenuOpen ? (
-            <div className="move-menu" role="menu" aria-label="Move note to folder">
-              {folders.map((folder) => (
-                <button
-                  key={folder.path}
-                  type="button"
-                  role="menuitem"
-                  className="move-menu-item"
-                  onClick={() => onMove(folder.path)}
-                  disabled={folder.path === note.folderPath || isBusy}
-                >
-                  <Folder size={13} />
-                  <span className="truncate" title={folder.name}>
-                    {folder.name}
-                  </span>
-                </button>
+          />
+        </form>
+      ) : (
+        <button type="button" className="note-open-area" onClick={onOpen}>
+          <div className="flex items-center gap-2">
+            <FileText className="shrink-0" size={15} />
+            <span className="truncate font-medium" title={note.title}>
+              {note.title}
+            </span>
+          </div>
+          {"snippet" in note ? (
+            <p className="mt-1 truncate text-xs text-neutral-500">{note.snippet}</p>
+          ) : null}
+          {"tags" in note && note.tags.length > 0 ? (
+            <div className="note-tag-list" aria-label="Note tags">
+              {note.tags.map((tag) => (
+                <span key={tag} className="note-tag">
+                  #{tag}
+                </span>
               ))}
             </div>
           ) : null}
-        </div>
-        <button
-          type="button"
-          aria-label="Delete"
-          title="Delete"
-          className="icon-button note-action-button danger"
-          onClick={onDelete}
-          disabled={isBusy}
-        >
-          <Trash2 size={14} />
         </button>
-      </div>
+      )}
+
+      {!isRenaming ? (
+        <ContextMenu
+          label="Note"
+          open={isMoveMenuOpen}
+          onToggle={onToggleMove}
+          onContextMenu={onToggleMove}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            className="context-menu-item"
+            onClick={() => {
+              onToggleMove();
+              onRename();
+            }}
+            disabled={isBusy}
+          >
+            <Edit3 size={14} />
+            <span>Rename</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="context-menu-item"
+            onClick={() => {
+              onToggleMove();
+              onDuplicate();
+            }}
+            disabled={isBusy}
+          >
+            <Copy size={14} />
+            <span>Duplicate</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="context-menu-item danger"
+            onClick={() => {
+              onToggleMove();
+              onDelete();
+            }}
+            disabled={isBusy}
+          >
+            <Trash2 size={14} />
+            <span>Delete</span>
+          </button>
+        </ContextMenu>
+      ) : null}
     </div>
   );
 }
@@ -3455,18 +3515,6 @@ function getAncestorFolderPaths(folderPath: string) {
   }
 
   return ancestorPaths;
-}
-
-function isFolderMoveTarget(source: FolderSummary, target: FolderSummary) {
-  if (source.path === "." || target.path === source.path) {
-    return false;
-  }
-
-  if (target.path.startsWith(`${source.path}/`)) {
-    return false;
-  }
-
-  return getParentFolderPath(source.path) !== target.path;
 }
 
 function isSameOrChildFolderPath(candidatePath: string, folderPath: string) {

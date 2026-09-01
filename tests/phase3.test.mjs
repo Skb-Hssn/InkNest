@@ -62,7 +62,7 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "No workspace selected",
     "Choose a local Markdown folder to begin.",
     "Folder tree",
-    "Workspace root"
+    "Workspace"
   ]);
 });
 
@@ -82,7 +82,7 @@ test("phase 3 workspace sidebar contains folders and nested note controls", asyn
   assert.match(appSource, /hasExpandableContent = hasChildren \|\| node\.notes\.length > 0/);
   assert.match(appSource, /onSelect\(node\.path\);[\s\S]*onToggle\(node\.path\)/);
   assert.doesNotMatch(appSource, /title="No notes here"/);
-  assert.doesNotMatch(appSource, /"Workspace root"\s*\}/);
+  assert.doesNotMatch(appSource, /Workspace root/);
   assert.doesNotMatch(appSource, /notes-sidebar|data-notes-sidebar|isNotesListVisible/);
 });
 
@@ -99,7 +99,7 @@ test("phase 3 editor area contains file, toolbar, note, and status placeholders"
     "List",
     "Link",
     "Image",
-    "Note title",
+    "File name",
     "event.key === \"Enter\"",
     "Duplicate",
     "Move",

@@ -44,7 +44,7 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     "utf8"
   );
 
-  const app = await launchInkNest(userDataDir);
+    const app = await launchInkNest(userDataDir);
 
   try {
     const window = await app.firstWindow();
@@ -53,9 +53,31 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     }, workspaceDir);
     await window.reload();
 
-    await expect(window.getByRole("button", { name: /Workspace root/ })).toBeVisible();
+    const workspaceRootName = path.basename(workspaceDir);
+    const workspaceRootRow = folderRow(window, workspaceRootName);
+    await expect(workspaceRootRow).toBeVisible();
     await expect(window.getByRole("button", { name: /Projects/ })).toBeVisible();
     await expect(window.getByRole("button", { name: /Drafts/ })).toBeHidden();
+
+    await workspaceRootRow.hover();
+    await workspaceRootRow.getByRole("button", { name: "Folder actions" }).click();
+    const workspaceRootMenu = workspaceRootRow.getByRole("menu", {
+      name: "Folder options"
+    });
+    await expect(
+      workspaceRootMenu.getByRole("menuitem", { name: "New note" })
+    ).toBeVisible();
+    await expect(
+      workspaceRootMenu.getByRole("menuitem", { name: "New folder" })
+    ).toBeVisible();
+    await expect(
+      workspaceRootMenu.getByRole("menuitem", { name: "Rename" })
+    ).toHaveCount(0);
+    await expect(
+      workspaceRootMenu.getByRole("menuitem", { name: "Delete" })
+    ).toHaveCount(0);
+    await window.locator("main").click({ position: { x: 700, y: 500 } });
+    await expect(workspaceRootMenu).toBeHidden();
 
     await folderRow(window, "Projects")
       .getByRole("button", { name: "Expand folder" })
@@ -63,21 +85,62 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     await expect(window.getByRole("button", { name: /Drafts/ })).toBeVisible();
 
     const projectsRow = folderRow(window, "Projects");
-    const projectsActions = projectsRow.locator(".folder-actions");
-    await window.mouse.move(900, 420);
+    const projectsActions = projectsRow.locator(".context-menu-anchor");
+    await window.evaluate(() => {
+      (document.activeElement as HTMLElement | null)?.blur();
+    });
+    await window.mouse.move(1000, 100);
     await expect(projectsActions).toHaveCSS("opacity", "0");
 
     await projectsRow.hover();
     await expect(projectsActions).toHaveCSS("opacity", "1");
 
-    await projectsRow.getByRole("button", { name: "Rename folder" }).click();
-    await window.getByRole("textbox", { name: "Folder name" }).fill("Research");
-    await window.getByRole("button", { name: "Save folder name" }).click();
+    await projectsRow.getByRole("button", { name: "Folder actions" }).click();
+    const folderMenu = projectsRow.getByRole("menu", { name: "Folder options" });
+    await expect(folderMenu).toBeVisible();
+    await expect(folderMenu.getByRole("menuitem", { name: "New note" })).toBeVisible();
+    await expect(folderMenu.getByRole("menuitem", { name: "New folder" })).toBeVisible();
+    await expect(folderMenu.getByText("Move to")).toHaveCount(0);
+    await window.locator("main").click({ position: { x: 700, y: 500 } });
+    await expect(folderMenu).toBeHidden();
+
+    await projectsRow.hover();
+    await projectsRow.getByRole("button", { name: "Folder actions" }).click();
+    await folderMenu.getByRole("menuitem", { name: "New folder" }).click();
+    await expect(window.getByRole("button", { name: /New Folder/ })).toBeVisible();
+    await expect
+      .poll(() => existsSync(path.join(workspaceDir, "Projects", "New Folder")))
+      .toBe(true);
+
+    await projectsRow.hover();
+    await projectsRow.getByRole("button", { name: "Folder actions" }).click();
+    await folderMenu.getByRole("menuitem", { name: "Rename" }).click();
+    const folderNameInput = window.getByRole("textbox", { name: "Folder name" });
+    await folderNameInput.fill("Research");
+    await folderNameInput.press("Enter");
 
     await expect(window.getByRole("button", { name: /Research/ })).toBeVisible();
     await expect(window.getByRole("button", { name: /Projects/ })).toBeHidden();
     expect(existsSync(path.join(workspaceDir, "Research", "Drafts"))).toBe(true);
     expect(existsSync(path.join(workspaceDir, "Projects"))).toBe(false);
+
+    const draftsRow = folderRow(window, "Drafts");
+    await draftsRow.getByRole("button", { name: "Expand folder" }).click();
+    const noteRow = window.locator(".note-row").filter({ hasText: "outline" });
+    await noteRow.hover();
+    await noteRow.getByRole("button", { name: "Note actions" }).click();
+    const noteMenu = noteRow.getByRole("menu", { name: "Note options" });
+    await expect(noteMenu.getByRole("menuitem", { name: "Rename" })).toBeVisible();
+    await expect(noteMenu.getByRole("menuitem", { name: "Duplicate" })).toBeVisible();
+    await expect(noteMenu.getByText("Move to")).toHaveCount(0);
+    await noteMenu.getByRole("menuitem", { name: "Rename" }).click();
+    const noteNameInput = window.getByRole("textbox", { name: "File name" });
+    await expect(noteNameInput).toBeFocused();
+    await noteNameInput.fill("outline-renamed");
+    await noteNameInput.press("Enter");
+    await expect
+      .poll(() => existsSync(path.join(workspaceDir, "Research", "Drafts", "outline-renamed.md")))
+      .toBe(true);
   } finally {
     await app.close();
   }

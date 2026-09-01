@@ -41,9 +41,12 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
     await expect(window.getByText("No workspace selected")).toBeVisible();
-    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
-
-    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
+    await expect(
+      window.locator('[aria-label="Folder tree"] .tree-open-area').first()
+    ).toHaveText(/Workspace/);
+    await expect(
+      window.locator('[aria-label="Folder tree"] .tree-open-area').first()
+    ).toBeVisible();
     await expect(window.getByText("Trash is empty.")).toBeVisible();
 
     await expect(window.getByRole("heading", { name: "Editor" })).toBeVisible();

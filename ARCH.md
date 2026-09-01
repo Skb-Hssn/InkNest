@@ -715,7 +715,7 @@ placeholder rows. Users can:
 - select a workspace and scan its folders and notes
 - create a note in the selected folder
 - open a note and inspect its saved Markdown content
-- rename, duplicate, move, and delete the selected note
+- rename, duplicate, and delete notes from the sidebar context menu
 - restore or permanently delete notes from trash
 
 The editor area remains an inspection surface in this phase. Visual editing,
@@ -795,13 +795,15 @@ itself or one of its descendants.
 `src/renderer/src/App.tsx` now builds a collapsible folder tree from scanned
 folder summaries. Users can:
 
+- see the active workspace folder name on the root row
 - expand and collapse nested folders
 - select folders from the tree
-- create folders under the selected folder
-- rename, move, and delete folders from inline sidebar actions
-- move notes into folders from the existing note move menu
+- create notes and folders from the root row
+- create a note or child folder, rename, and delete folders from a hover ellipsis or context menu
+- rename, duplicate, and delete notes from a hover ellipsis or context menu
+- open the same contextual options by right-clicking a folder or note
 
-The renderer keeps expanded ancestors visible after creates, renames, and moves.
+The renderer keeps expanded ancestors visible after creates and renames.
 After every folder or note mutation, it rescans the workspace so the sidebar and
 note list reflect the filesystem state.
 
