@@ -68,6 +68,9 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     await title.fill("Release Smoke");
     await title.press("Enter");
     await expect.poll(() => existsSync(notePath)).toBe(true);
+    await expect(
+      window.locator(".note-row").filter({ hasText: "Release Smoke" }).first()
+    ).toBeVisible();
 
     const renamedEditor = window.getByRole("textbox", { name: "Visual Markdown editor" });
 

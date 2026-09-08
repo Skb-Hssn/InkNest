@@ -3269,6 +3269,8 @@ function NoteRow({
   onToggleMove,
   onDelete
 }: NoteRowProps) {
+  const noteName = noteNameFromPath(note.path);
+
   return (
     <div
       className={`note-row group ${selected ? "note-row-active" : ""}`}
@@ -3309,8 +3311,8 @@ function NoteRow({
         <button type="button" className="note-open-area" onClick={onOpen}>
           <div className="flex items-center gap-2">
             <FileText className="shrink-0" size={15} />
-            <span className="truncate font-medium" title={note.title}>
-              {note.title}
+            <span className="truncate font-medium" title={noteName}>
+              {noteName}
             </span>
           </div>
           {"snippet" in note ? (
