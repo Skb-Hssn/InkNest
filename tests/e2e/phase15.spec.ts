@@ -48,25 +48,17 @@ test("phase 15 reloads clean external edits and protects local changes", async (
 
   try {
     const window = await app.firstWindow();
-    const editor = await openWorkspaceNote(window, workspaceDir, "Watched Note");
+    const editor = await openWorkspaceNote(window, workspaceDir, "watched");
 
     await writeFile(notePath, "# Watched Note\n\nExternal body.\n", "utf8");
     await expect(editor).toContainText("External body.");
     await expect(window.getByRole("alert")).not.toBeVisible();
 
-    await editor.evaluate((editableElement) => {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = "Local unsaved body.";
-      editableElement.appendChild(paragraph);
-      editableElement.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "Local unsaved body.",
-          inputType: "insertText"
-        })
-      );
-    });
-    await expect(window.getByText(/Unsaved changes/).first()).toBeVisible();
+    await editor.click();
+    await editor.press("Control+End");
+    await editor.press("Enter");
+    await editor.pressSequentially("Local unsaved body.");
+    await expect(window.getByText("Editing", { exact: true }).first()).toBeVisible();
 
     await writeFile(notePath, "# Watched Note\n\nCompeting external body.\n", "utf8");
     const conflict = window.getByRole("alert");
@@ -92,14 +84,13 @@ test("phase 15 marks deleted notes and saves local content as a new note", async
 
   try {
     const window = await app.firstWindow();
-    await openWorkspaceNote(window, workspaceDir, "Deleted Note");
+    const editor = await openWorkspaceNote(window, workspaceDir, "deleted");
+    await expect(editor).toContainText("Keep this body.");
     await rm(notePath);
 
     const conflict = window.getByRole("alert");
     await expect(conflict).toContainText("deleted outside InkNest");
     await conflict.getByRole("button", { name: "Save as new note" }).click();
-    await expect(window.getByText(/Saved local version as new note/).first()).toBeVisible();
-
     const workspaceEntries = await readdir(workspaceDir);
     const recoveredName = workspaceEntries.find((entry) =>
       entry.startsWith("deleted Recovered")

@@ -52,7 +52,13 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     await window.reload();
 
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
-    await window.getByRole("button", { name: "New note", exact: true }).first().click();
+    const workspaceRootRow = window.locator('[aria-label="Folder tree"] .tree-row').first();
+    await workspaceRootRow.hover();
+    await workspaceRootRow.getByRole("button", { name: "Folder actions" }).click();
+    await workspaceRootRow
+      .getByRole("menu", { name: "Folder options" })
+      .getByRole("menuitem", { name: "New note" })
+      .click();
 
     const editor = window.getByRole("textbox", { name: "Visual Markdown editor" });
     await expect(editor).toBeVisible();

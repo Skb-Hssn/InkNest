@@ -25,7 +25,7 @@ test("phase 3 renderer defines the workspace-sidebar and editor layout", async (
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
-    "grid-rows-[56px_minmax(0,1fr)_34px]",
+    "grid-rows-[minmax(0,1fr)_34px]",
     "grid-cols-[300px_minmax(0,1fr)]",
     "sidebar-resize-handle",
     "Resize workspace sidebar",
@@ -37,17 +37,17 @@ test("phase 3 renderer defines the workspace-sidebar and editor layout", async (
   ]);
 });
 
-test("phase 3 top bar exposes global app controls", async () => {
+test("phase 3 sidebar exposes global app controls", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
     "InkNest",
-    "No workspace",
     "Toggle sidebar",
-    "New note",
-    "New folder",
-    "Settings"
+    "Settings",
+    "Open command palette"
   ]);
+  assert.doesNotMatch(appSource, /<header[\s\S]*app-header-actions/);
+  assert.doesNotMatch(appSource, /aria-label=\"Import options\"/);
 });
 
 test("phase 3 workspace sidebar contains workspace, search, folders, and empty states", async () => {
@@ -150,7 +150,7 @@ test("phase 3 architecture document describes the static layout layer", async ()
 
   assertIncludesAll(archSource, [
     "Phase 3 Architecture: Static Application Layout",
-    "top bar",
+    "application shell",
     "left sidebar",
     "Notes are nested under their folders",
     "editor area",

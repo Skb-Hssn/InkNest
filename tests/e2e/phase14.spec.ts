@@ -48,14 +48,16 @@ test("phase 14 persists editor preferences across restarts", async ({}, testInfo
         fontSize: getComputedStyle(document.querySelector("main")!).getPropertyValue(
           "--app-font-size"
         ),
-        layout: document.querySelector("main section")?.className
+        layout: document.querySelector("main section")?.className,
+        sidebar: document.querySelector("main section")?.getAttribute("data-workspace-sidebar")
       }))
     ).toEqual({
       theme: "dark",
       fontSize: "20px",
-      layout: "grid min-h-0 sidebar-hidden"
+      layout: "app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]",
+      sidebar: "hidden"
     });
-    await expect(window.getByText("No note - 0 characters")).toBeVisible();
+    await expect(window.getByText("0 characters", { exact: true })).toBeVisible();
   } finally {
     await firstApp.close();
   }
@@ -64,7 +66,7 @@ test("phase 14 persists editor preferences across restarts", async ({}, testInfo
 
   try {
     const window = await secondApp.firstWindow();
-    await window.getByRole("button", { name: "Settings" }).click();
+    await window.locator(".sidebar-collapsed-controls").getByRole("button", { name: "Settings" }).click();
 
     const settings = window.getByRole("dialog", { name: "Settings" });
     await expect(settings).toBeVisible();
@@ -77,7 +79,7 @@ test("phase 14 persists editor preferences across restarts", async ({}, testInfo
     await expect(settings.getByRole("checkbox", { name: "Wrap editor lines" })).not.toBeChecked();
     await expect(settings.getByRole("checkbox", { name: "Show word count" })).not.toBeChecked();
     await expect(settings.getByRole("checkbox", { name: "Show sidebar" })).not.toBeChecked();
-    await expect(window.getByText("No note - 0 characters")).toBeVisible();
+    await expect(window.getByText("0 characters", { exact: true })).toBeVisible();
   } finally {
     await secondApp.close();
   }

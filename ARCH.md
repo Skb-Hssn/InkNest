@@ -179,7 +179,7 @@ Important files include:
 The current UI renders the first workspace-oriented app screen, not a marketing
 landing page. It includes the major future layout areas:
 
-- top bar
+- application shell
 - workspace control
 - search location
 - folder area
@@ -378,18 +378,18 @@ Notes are nested under their folders in the workspace sidebar; there is no
 separate notes sidebar or note-list column.
 
 ```text
-top bar
-  app identity
-  workspace name
-  new note, new folder, settings controls
+application shell
+  editor and workspace surfaces
 
 left sidebar
+  InkNest identity and sidebar toggle
   workspace switcher
   search input
   folder tree and nested note rows
   folders section expand/collapse control
   no-workspace empty state
   no-matching-notes empty state
+  bottom-left settings and command-palette controls
 
 editor area
   note title and file path placeholder

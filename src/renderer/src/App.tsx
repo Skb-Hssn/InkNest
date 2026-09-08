@@ -21,13 +21,12 @@ import {
   Command,
   Code2,
   Copy,
-  Download,
   Edit3,
   Eraser,
   FileText,
   FilePlus2,
+  FileOutput,
   Folder,
-  FolderInput,
   FolderOpen,
   FolderPlus,
   Heading1,
@@ -537,21 +536,21 @@ export function App() {
         id: "export-markdown",
         label: "Export Markdown",
         description: "Save the current note as Markdown.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       },
       {
         id: "export-html",
         label: "Export HTML",
         description: "Save a readable HTML version of the current note.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       },
       {
         id: "export-pdf",
         label: "Export PDF",
         description: "Print the current note to PDF.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       }
     ],
@@ -892,41 +891,6 @@ export function App() {
     }
   }
 
-  async function importNotes(mode: "files" | "folder") {
-    if (!(await flushCurrentNote())) {
-      return;
-    }
-
-    setIsBusy(true);
-    setWorkspaceError(null);
-    const result =
-      mode === "files"
-        ? await window.inknest.notes.importFiles({ folderPath: selectedFolderPath })
-        : await window.inknest.notes.importFolder({ folderPath: selectedFolderPath });
-
-    if (result.ok) {
-      await refreshWorkspace();
-      const firstImportedNote = result.data.imported[0];
-
-      if (firstImportedNote) {
-        setSelectedFolderPath(firstImportedNote.folderPath);
-        await openNote(firstImportedNote.path);
-      }
-
-      const importedCount = result.data.imported.length;
-      const skippedCount = result.data.skipped.length;
-      setStatusMessage(
-        skippedCount > 0
-          ? `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}; skipped ${skippedCount}`
-          : `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}`
-      );
-    } else {
-      setWorkspaceError(result.error.message);
-    }
-
-    setIsBusy(false);
-  }
-
   async function insertPastedImage(payload: SaveImagePayload) {
     if (!selectedNoteContent || isBusy) {
       return;
@@ -1235,7 +1199,7 @@ export function App() {
 
   async function saveLocalVersionAsNewNote() {
     const note = selectedNoteContentRef.current;
-    const markdownToSave = editorMarkdownRef.current;
+    const markdownToSave = syncEditorMarkdownSnapshot();
 
     if (!note) {
       return;
@@ -1941,240 +1905,13 @@ export function App() {
 
   return (
     <main
-      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
       data-build-phase={phase}
       style={{
         "--app-font-size": `${settings.fontSize}px`,
         "--app-font-family": fontFamilyCssValue(settings.fontFamily)
       } as CSSProperties}
     >
-      <header className="flex min-w-0 items-center justify-between border-b border-ink-100 bg-white px-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="Toggle sidebar"
-            aria-pressed={settings.sidebarVisible}
-            className="icon-button"
-            onClick={() => void updateAppSettings({ sidebarVisible: !settings.sidebarVisible })}
-          >
-            <PanelLeft size={18} />
-          </button>
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
-            <SquarePen size={17} />
-          </div>
-          <h1 className="text-sm font-semibold leading-5">InkNest</h1>
-        </div>
-
-        <div className="app-header-actions relative flex items-center gap-2">
-          <button
-            type="button"
-            className="command-button"
-            onClick={() => void createNote()}
-            disabled={!hasWorkspace || isBusy}
-          >
-            <FilePlus2 size={16} />
-            <span>New note</span>
-          </button>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={() => void createFolder()}
-            disabled={!hasWorkspace || isBusy}
-          >
-            <FolderPlus size={16} />
-            <span>New folder</span>
-          </button>
-          <details className="action-menu header-action-menu">
-            <summary className="secondary-button" aria-label="Import options">
-              <Download size={16} />
-              <span>Import</span>
-              <ChevronDown size={14} />
-            </summary>
-            <div className="action-menu-popover" role="menu" aria-label="Import options">
-              <button
-                type="button"
-                role="menuitem"
-                className="action-menu-item"
-                onClick={(event) => {
-                  event.currentTarget.closest("details")?.removeAttribute("open");
-                  void importNotes("files");
-                }}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FileText size={15} />
-                <span>
-                  <strong>Import files</strong>
-                  <small>Add selected Markdown files</small>
-                </span>
-              </button>
-              <button
-                type="button"
-                role="menuitem"
-                className="action-menu-item"
-                onClick={(event) => {
-                  event.currentTarget.closest("details")?.removeAttribute("open");
-                  void importNotes("folder");
-                }}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FolderInput size={15} />
-                <span>
-                  <strong>Import folder</strong>
-                  <small>Bring in a Markdown folder</small>
-                </span>
-              </button>
-            </div>
-          </details>
-          <button
-            type="button"
-            aria-label="Settings"
-            aria-pressed={isSettingsOpen}
-            title="Settings"
-            className="icon-button"
-            onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
-          >
-            <Settings size={18} />
-          </button>
-          <button
-            type="button"
-            aria-label="Open command palette"
-            title="Open command palette (Ctrl+K)"
-            aria-keyshortcuts="Control+K"
-            className="icon-button"
-            onClick={() => {
-              setIsCommandPaletteOpen(true);
-              setIsSettingsOpen(false);
-            }}
-          >
-            <Command size={18} />
-          </button>
-          {isSettingsOpen ? (
-            <div className="settings-popover" role="dialog" aria-label="Settings">
-              <div className="settings-popover-header">
-                <div>
-                  <p className="settings-popover-title">Settings</p>
-                  <p className="settings-popover-description">Customize your writing space.</p>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Close settings"
-                  onClick={() => setIsSettingsOpen(false)}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <label className="settings-field">
-                <span>Theme</span>
-                <select
-                  aria-label="Theme"
-                  value={settings.theme}
-                  onChange={(event) =>
-                    void updateAppSettings({
-                      theme: event.target.value as AppSettings["theme"]
-                    })
-                  }
-                >
-                  <option value="system">System</option>
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Font size</span>
-                <select
-                  aria-label="Font size"
-                  value={settings.fontSize}
-                  onChange={(event) =>
-                    void updateAppSettings({ fontSize: Number(event.target.value) })
-                  }
-                >
-                  {[12, 14, 16, 18, 20, 22, 24].map((fontSize) => (
-                    <option key={fontSize} value={fontSize}>
-                      {fontSize}px
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Font family</span>
-                <select
-                  aria-label="Font family"
-                  value={settings.fontFamily}
-                  onChange={(event) =>
-                    void updateAppSettings({
-                      fontFamily: event.target.value as AppSettings["fontFamily"]
-                    })
-                  }
-                >
-                  <option value="system">System sans</option>
-                  <option value="serif">Serif</option>
-                  <option value="mono">Monospace</option>
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Auto-save delay</span>
-                <select
-                  aria-label="Auto-save delay"
-                  value={settings.autoSaveDelayMs}
-                  onChange={(event) =>
-                    void updateAppSettings({ autoSaveDelayMs: Number(event.target.value) })
-                  }
-                >
-                  {[500, 750, 1000, 1500, 2000, 3000, 5000].map((delay) => (
-                    <option key={delay} value={delay}>
-                      {delay} ms
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.lineWrap}
-                  onChange={(event) =>
-                    void updateAppSettings({ lineWrap: event.target.checked })
-                  }
-                />
-                <span>Wrap editor lines</span>
-              </label>
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.showWordCount}
-                  onChange={(event) =>
-                    void updateAppSettings({ showWordCount: event.target.checked })
-                  }
-                />
-                <span>Show word count</span>
-              </label>
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.sidebarVisible}
-                  onChange={(event) =>
-                    void updateAppSettings({ sidebarVisible: event.target.checked })
-                  }
-                />
-                <span>Show sidebar</span>
-              </label>
-
-              <div className="settings-default-workspace">
-                <span>Default workspace</span>
-                <strong title={settings.lastWorkspacePath ?? undefined}>
-                  {settings.lastWorkspacePath ?? "No workspace selected"}
-                </strong>
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </header>
-
       <section
         data-layout="app-layout-columns"
         data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
@@ -2182,7 +1919,26 @@ export function App() {
         className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]"
         style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
-        <aside className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white">
+        <aside
+          className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white"
+          aria-hidden={!settings.sidebarVisible}
+        >
+          <div className="flex shrink-0 items-center gap-2 border-b border-ink-100 px-3 py-3">
+            <button
+              type="button"
+              aria-label="Toggle sidebar"
+              aria-pressed={settings.sidebarVisible}
+              title="Toggle sidebar"
+              className="icon-button"
+              onClick={() => void updateAppSettings({ sidebarVisible: !settings.sidebarVisible })}
+            >
+              <PanelLeft size={18} />
+            </button>
+            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
+              <SquarePen size={17} />
+            </div>
+            <h1 className="truncate text-sm font-semibold leading-5">InkNest</h1>
+          </div>
           <div className="space-y-3 border-b border-ink-100 p-3">
             <button
               type="button"
@@ -2482,6 +2238,41 @@ export function App() {
               </div>
             ) : null}
           </div>
+          {settings.sidebarVisible ? (
+            <div className="sidebar-footer relative flex shrink-0 items-center gap-1 border-t border-ink-100 p-3">
+              <button
+                type="button"
+                aria-label="Settings"
+                aria-pressed={isSettingsOpen}
+                title="Settings"
+                className="icon-button"
+                onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+              >
+                <Settings size={18} />
+              </button>
+              <button
+                type="button"
+                aria-label="Open command palette"
+                title="Open command palette (Ctrl+K)"
+                aria-keyshortcuts="Control+K"
+                className="icon-button"
+                onClick={() => {
+                  setIsCommandPaletteOpen(true);
+                  setIsSettingsOpen(false);
+                }}
+              >
+                <Command size={18} />
+              </button>
+              {isSettingsOpen && settings.sidebarVisible ? (
+                <SettingsPopover
+                  settings={settings}
+                  onUpdate={(patch) => void updateAppSettings(patch)}
+                  onClose={() => setIsSettingsOpen(false)}
+                  className="sidebar-settings-popover"
+                />
+              ) : null}
+            </div>
+          ) : null}
         </aside>
 
         <div
@@ -2541,7 +2332,7 @@ export function App() {
                 </button>
                 <details className="action-menu editor-action-menu">
                   <summary className="secondary-button" aria-label="Export note">
-                    <Download size={15} />
+                    <FileOutput size={15} />
                     <span>Export</span>
                     <ChevronDown size={14} />
                   </summary>
@@ -2563,7 +2354,7 @@ export function App() {
                         }}
                         disabled={isBusy}
                       >
-                        <FileText size={15} />
+                        <FileOutput size={15} />
                         <span>
                           <strong>{label}</strong>
                           <small>{format === "markdown" ? "Original note format" : `Export as ${label}`}</small>
@@ -2766,6 +2557,52 @@ export function App() {
         </section>
       </section>
 
+      {!settings.sidebarVisible ? (
+        <div className="sidebar-collapsed-controls fixed bottom-10 left-3 z-50 flex items-center gap-1 rounded-lg border border-ink-100 bg-white p-1 shadow-lg">
+          <button
+            type="button"
+            aria-label="Toggle sidebar"
+            aria-pressed={settings.sidebarVisible}
+            title="Show sidebar"
+            className="icon-button"
+            onClick={() => void updateAppSettings({ sidebarVisible: true })}
+          >
+            <PanelLeft size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Settings"
+            aria-pressed={isSettingsOpen}
+            title="Settings"
+            className="icon-button"
+            onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+          >
+            <Settings size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Open command palette"
+            title="Open command palette (Ctrl+K)"
+            aria-keyshortcuts="Control+K"
+            className="icon-button"
+            onClick={() => {
+              setIsCommandPaletteOpen(true);
+              setIsSettingsOpen(false);
+            }}
+          >
+            <Command size={18} />
+          </button>
+          {isSettingsOpen && !settings.sidebarVisible ? (
+            <SettingsPopover
+              settings={settings}
+              onUpdate={(patch) => void updateAppSettings(patch)}
+              onClose={() => setIsSettingsOpen(false)}
+              className="sidebar-settings-popover"
+            />
+          ) : null}
+        </div>
+      ) : null}
+
       <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
         <span className="status-bar-path truncate" title={currentFilePath}>
           {currentFilePath}
@@ -2879,6 +2716,119 @@ type EmptyStateProps = {
   title: string;
   description: string;
 };
+
+type SettingsPopoverProps = {
+  settings: AppSettings;
+  onUpdate: (patch: SaveSettingsPayload) => void;
+  onClose: () => void;
+  className?: string;
+};
+
+function SettingsPopover({ settings, onUpdate, onClose, className = "" }: SettingsPopoverProps) {
+  return (
+    <div className={`settings-popover ${className}`} role="dialog" aria-label="Settings">
+      <div className="settings-popover-header">
+        <div>
+          <p className="settings-popover-title">Settings</p>
+          <p className="settings-popover-description">Customize your writing space.</p>
+        </div>
+        <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+
+      <label className="settings-field">
+        <span>Theme</span>
+        <select
+          aria-label="Theme"
+          value={settings.theme}
+          onChange={(event) => onUpdate({ theme: event.target.value as AppSettings["theme"] })}
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+
+      <label className="settings-field">
+        <span>Font size</span>
+        <select
+          aria-label="Font size"
+          value={settings.fontSize}
+          onChange={(event) => onUpdate({ fontSize: Number(event.target.value) })}
+        >
+          {[12, 14, 16, 18, 20, 22, 24].map((fontSize) => (
+            <option key={fontSize} value={fontSize}>
+              {fontSize}px
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="settings-field">
+        <span>Font family</span>
+        <select
+          aria-label="Font family"
+          value={settings.fontFamily}
+          onChange={(event) =>
+            onUpdate({ fontFamily: event.target.value as AppSettings["fontFamily"] })
+          }
+        >
+          <option value="system">System sans</option>
+          <option value="serif">Serif</option>
+          <option value="mono">Monospace</option>
+        </select>
+      </label>
+
+      <label className="settings-field">
+        <span>Auto-save delay</span>
+        <select
+          aria-label="Auto-save delay"
+          value={settings.autoSaveDelayMs}
+          onChange={(event) => onUpdate({ autoSaveDelayMs: Number(event.target.value) })}
+        >
+          {[500, 750, 1000, 1500, 2000, 3000, 5000].map((delay) => (
+            <option key={delay} value={delay}>
+              {delay} ms
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.lineWrap}
+          onChange={(event) => onUpdate({ lineWrap: event.target.checked })}
+        />
+        <span>Wrap editor lines</span>
+      </label>
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.showWordCount}
+          onChange={(event) => onUpdate({ showWordCount: event.target.checked })}
+        />
+        <span>Show word count</span>
+      </label>
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.sidebarVisible}
+          onChange={(event) => onUpdate({ sidebarVisible: event.target.checked })}
+        />
+        <span>Show sidebar</span>
+      </label>
+
+      <div className="settings-default-workspace">
+        <span>Default workspace</span>
+        <strong title={settings.lastWorkspacePath ?? undefined}>
+          {settings.lastWorkspacePath ?? "No workspace selected"}
+        </strong>
+      </div>
+    </div>
+  );
+}
 
 function EmptyState({ icon, title, description }: EmptyStateProps) {
   return (

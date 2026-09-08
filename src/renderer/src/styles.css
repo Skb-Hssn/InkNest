@@ -68,10 +68,6 @@ input {
     @apply text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700;
   }
 
-  .command-button {
-    @apply inline-flex h-8 items-center gap-2 rounded-md border border-ink-100 bg-ink-700 px-3 text-sm font-medium text-white transition hover:bg-ink-900 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
-  }
-
   .secondary-button {
     @apply inline-flex h-8 items-center gap-2 whitespace-nowrap rounded-md border border-ink-100 bg-white px-3 text-sm font-medium text-ink-900 transition hover:border-ink-500/30 hover:bg-ink-50 focus:outline-none focus:ring-2 focus:ring-ink-500/40;
   }
@@ -473,6 +469,17 @@ input {
     overflow-y: auto;
   }
 
+  .sidebar-settings-popover {
+    top: auto;
+    right: auto;
+    bottom: calc(100% + 0.5rem);
+    left: 0;
+  }
+
+  .sidebar-collapsed-controls .sidebar-settings-popover {
+    left: 0;
+  }
+
   .settings-popover-header {
     @apply mb-4 flex items-start justify-between gap-3 border-b border-ink-100 pb-3;
   }
@@ -810,18 +817,6 @@ main[style] {
   [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"] > .workspace-sidebar {
     display: none;
   }
-
-  .app-header-actions > .command-button > span,
-  .app-header-actions > .secondary-button > span,
-  .app-header-actions > .action-menu > .secondary-button > span {
-    display: none;
-  }
-
-  .app-header-actions > .command-button,
-  .app-header-actions > .secondary-button,
-  .app-header-actions > .action-menu > .secondary-button {
-    padding-inline: 0.55rem;
-  }
 }
 
 @media (max-width: 860px) {
@@ -873,17 +868,6 @@ main[style] {
 }
 
 @media (max-width: 620px) {
-  .app-header-actions > .command-button,
-  .app-header-actions > .secondary-button,
-  .app-header-actions > .action-menu > .secondary-button,
-  .app-header-actions > .icon-button {
-    height: 2rem;
-  }
-
-  .app-header-actions {
-    gap: 0.25rem;
-  }
-
   .app-status-bar {
     font-size: 0.65rem;
   }

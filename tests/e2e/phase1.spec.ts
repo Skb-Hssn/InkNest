@@ -36,13 +36,11 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
-    await expect(
-      window.getByRole("heading", { name: "Notes", exact: true })
-    ).toBeVisible();
-    await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
+    await expect(window.getByRole("heading", { name: "Notes", exact: true })).toHaveCount(0);
+    await expect(window.getByRole("heading", { name: "Editor", exact: true })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
-    await expect(window.getByText("No search results")).toBeVisible();
-    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("Workspace overview")).toBeVisible();
+    await expect(window.getByText("0 words · 0 characters", { exact: true })).toBeVisible();
 
     await expect(window.locator("#root")).toHaveJSProperty("childElementCount", 1);
   } finally {
