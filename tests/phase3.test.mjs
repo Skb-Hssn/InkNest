@@ -58,7 +58,6 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "Local Markdown folder",
     "Search notes",
     "Folders",
-    "Filter folders",
     "No workspace selected",
     "Choose a local Markdown folder to begin.",
     "Folder tree",
@@ -71,7 +70,6 @@ test("phase 3 workspace sidebar contains folders and nested note controls", asyn
 
   assertIncludesAll(appSource, [
     "Notes",
-    "Sort notes",
     "No matching notes",
     "Untitled note",
     "Trash",
@@ -83,6 +81,7 @@ test("phase 3 workspace sidebar contains folders and nested note controls", asyn
   assert.match(appSource, /onSelect\(node\.path\);[\s\S]*onToggle\(node\.path\)/);
   assert.doesNotMatch(appSource, /title="No notes here"/);
   assert.doesNotMatch(appSource, /Workspace root/);
+  assert.doesNotMatch(appSource, /Filter folders|Sort notes|isFolderFilterVisible|folderFilterQuery/);
   assert.doesNotMatch(appSource, /notes-sidebar|data-notes-sidebar|isNotesListVisible/);
 });
 

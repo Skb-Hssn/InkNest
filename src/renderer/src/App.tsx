@@ -41,7 +41,6 @@ import {
   Link,
   List,
   ListChecks,
-  ListFilter,
   ListOrdered,
   MoreHorizontal,
   Minus,
@@ -51,7 +50,6 @@ import {
   Save,
   Search,
   Settings,
-  SlidersHorizontal,
   SquarePen,
   Strikethrough,
   TableColumnsSplit,
@@ -93,7 +91,7 @@ const initialWorkspace: WorkspaceInfo = {
 };
 
 const rootFolder: FolderSummary = {
-  name: "Workspace root",
+  name: "Workspace",
   path: "."
 };
 
@@ -272,10 +270,7 @@ export function App() {
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
-  const [isFolderFilterVisible, setIsFolderFilterVisible] = useState(false);
-  const [folderFilterQuery, setFolderFilterQuery] = useState("");
   const [isTrashExpanded, setIsTrashExpanded] = useState(false);
-  const [noteSort, setNoteSort] = useState<"title-asc" | "title-desc">("title-asc");
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -420,35 +415,37 @@ export function App() {
     };
   }, []);
 
+  const workspaceRootName =
+    fileModel?.workspace.name ??
+    workspace.name ??
+    (workspace.path ? fileNameFromPath(workspace.path) : rootFolder.name);
   const folders = useMemo(
-    () => [rootFolder, ...(fileModel?.folders ?? [])],
-    [fileModel]
+    () => [
+      { ...rootFolder, name: workspaceRootName },
+      ...(fileModel?.folders ?? [])
+    ],
+    [fileModel, workspaceRootName]
   );
   const notes = fileModel?.notes ?? [];
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
   const displayedNotes: Array<NoteSummary | SearchResult> = useMemo(() => {
     const source = hasActiveSearch ? searchResults : notes;
     return [...source].sort((firstNote, secondNote) => {
-      const direction = noteSort === "title-asc" ? 1 : -1;
       return noteNameFromPath(firstNote.path).localeCompare(
         noteNameFromPath(secondNote.path)
-      ) * direction;
+      );
     });
-  }, [hasActiveSearch, noteSort, notes, searchResults]);
+  }, [hasActiveSearch, notes, searchResults]);
   const folderTree = useMemo(
     () => buildFolderTree(folders, displayedNotes),
     [displayedNotes, folders]
   );
-  const filteredFolderTree = useMemo(
-    () => filterFolderTree(folderTree, folderFilterQuery),
-    [folderFilterQuery, folderTree]
-  );
   const visibleExpandedFolderPaths = useMemo(
     () =>
-      folderFilterQuery.trim().length > 0 || hasActiveSearch
-        ? new Set(collectFolderTreePaths(filteredFolderTree))
+      hasActiveSearch
+        ? new Set(collectFolderTreePaths(folderTree))
         : expandedFolderPaths,
-    [expandedFolderPaths, filteredFolderTree, folderFilterQuery, hasActiveSearch]
+    [expandedFolderPaths, folderTree, hasActiveSearch]
   );
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
@@ -804,6 +801,34 @@ export function App() {
       return false;
     } finally {
       pendingSettingsSavesRef.current.delete(savePromise);
+    }
+  }
+
+  async function clearRecentWorkspaces() {
+    setStatusMessage("Clearing recent workspaces");
+
+    const clearPromise = window.inknest.settings.clearRecentWorkspaces();
+    pendingSettingsSavesRef.current.add(clearPromise);
+
+    try {
+      const result = await clearPromise;
+
+      if (result.ok) {
+        setSettings(result.data);
+        setWorkspace((currentWorkspace) => ({
+          ...currentWorkspace,
+          recentWorkspaces: result.data.recentWorkspaces
+        }));
+        setStatusMessage("Recent workspaces cleared");
+        setWorkspaceError(null);
+        return true;
+      }
+
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Recent workspaces could not be cleared");
+      return false;
+    } finally {
+      pendingSettingsSavesRef.current.delete(clearPromise);
     }
   }
 
@@ -2267,131 +2292,26 @@ export function App() {
               </p>
             ) : null}
 
-            {workspace.recentWorkspaces.length > 0 ? (
-              <details className="collapsible-section border-b border-ink-100">
-                <summary className="collapsible-section-trigger">
-                  <span>Recent workspaces</span>
-                  <span className="section-count">{workspace.recentWorkspaces.length}</span>
-                  <ChevronRight className="collapsible-chevron" size={15} />
-                </summary>
-                <div className="space-y-1 px-3 pb-3">
-                  {workspace.recentWorkspaces.map((recentPath) => (
-                    <button
-                      key={recentPath}
-                      type="button"
-                      className="recent-workspace-row"
-                      onClick={() => void reopenWorkspace(recentPath)}
-                    >
-                      <BookOpenText size={15} />
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {recentPath.split(/[\\/]/).pop() ?? recentPath}
-                        </span>
-                        <span className="block truncate text-xs text-neutral-500">
-                          {recentPath}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </details>
-            ) : null}
-
             <div className="section-heading border-b border-ink-100">
               <h2 className="text-xs font-semibold uppercase text-neutral-500">
                 Folders
               </h2>
-              <div className="flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Filter folders"
-                  aria-pressed={isFolderFilterVisible}
-                  className="section-toggle"
-                  onClick={() => {
-                    setIsFolderFilterVisible((isVisible) => !isVisible);
-                    setIsFoldersExpanded(true);
-                  }}
-                >
-                  <ListFilter size={15} />
-                </button>
-                <button
-                  type="button"
-                  aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
-                  aria-expanded={isFoldersExpanded}
-                  className="section-toggle"
-                  onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
-                >
-                  {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-                </button>
-                <details className="action-menu note-sort-menu">
-                  <summary className="icon-button" aria-label="Sort notes" title="Sort notes">
-                    <SlidersHorizontal size={15} />
-                  </summary>
-                  <div className="action-menu-popover" role="menu" aria-label="Sort notes">
-                    {([
-                      ["title-asc", "Title: A to Z"],
-                      ["title-desc", "Title: Z to A"]
-                    ] as const).map(([value, label]) => (
-                      <button
-                        key={value}
-                        type="button"
-                        role="menuitemradio"
-                        aria-checked={noteSort === value}
-                        className="action-menu-item compact-menu-item"
-                        onClick={(event) => {
-                          setNoteSort(value);
-                          event.currentTarget.closest("details")?.removeAttribute("open");
-                        }}
-                      >
-                        <span className="menu-check">
-                          {noteSort === value ? <Check size={14} /> : null}
-                        </span>
-                        <strong>{label}</strong>
-                      </button>
-                    ))}
-                  </div>
-                </details>
-                <button
-                  type="button"
-                  aria-label="New note"
-                  title="New note"
-                  className="icon-button"
-                  onClick={() => void createNote()}
-                  disabled={!hasWorkspace || isBusy}
-                >
-                  <FilePlus2 size={15} />
-                </button>
-              </div>
+              <button
+                type="button"
+                aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
+                aria-expanded={isFoldersExpanded}
+                className="section-toggle"
+                onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
+              >
+                {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              </button>
             </div>
-
-            {isFolderFilterVisible ? (
-              <label className="folder-filter-input">
-                <Search size={14} />
-                <input
-                  type="search"
-                  aria-label="Filter folder list"
-                  placeholder="Filter folders"
-                  value={folderFilterQuery}
-                  onChange={(event) => setFolderFilterQuery(event.target.value)}
-                  autoFocus
-                />
-                {folderFilterQuery ? (
-                  <button
-                    type="button"
-                    aria-label="Clear folder filter"
-                    onClick={() => setFolderFilterQuery("")}
-                  >
-                    <X size={13} />
-                  </button>
-                ) : null}
-              </label>
-            ) : null}
 
             {isFoldersExpanded ? (
               <div className="px-3 py-3">
                 <div className="space-y-1" aria-label="Folder tree">
                   <FolderTree
-                    nodes={filteredFolderTree}
+                    nodes={folderTree}
                     selectedFolderPath={selectedFolderPath}
                     expandedFolderPaths={visibleExpandedFolderPaths}
                     activeMoveFolderPath={activeMoveFolderPath}
@@ -2466,6 +2386,50 @@ export function App() {
               </div>
             ) : null}
           </div>
+
+          {workspace.recentWorkspaces.length > 0 ? (
+            <details className="collapsible-section shrink-0 border-t border-ink-100">
+              <summary className="collapsible-section-trigger">
+                <span>Recent workspaces</span>
+                <span className="section-count">{workspace.recentWorkspaces.length}</span>
+                <button
+                  type="button"
+                  className="section-toggle"
+                  aria-label="Clear recent workspaces"
+                  title="Clear recent workspaces"
+                  disabled={isBusy}
+                  onClick={(event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    void clearRecentWorkspaces();
+                  }}
+                >
+                  <X size={14} />
+                </button>
+                <ChevronRight className="collapsible-chevron" size={15} />
+              </summary>
+              <div className="max-h-52 space-y-1 overflow-y-auto px-3 pb-3">
+                {workspace.recentWorkspaces.map((recentPath) => (
+                  <button
+                    key={recentPath}
+                    type="button"
+                    className="recent-workspace-row"
+                    onClick={() => void reopenWorkspace(recentPath)}
+                  >
+                    <BookOpenText size={15} />
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {recentPath.split(/[\\/]/).pop() ?? recentPath}
+                      </span>
+                      <span className="block truncate text-xs text-neutral-500">
+                        {recentPath}
+                      </span>
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </details>
+          ) : null}
 
           <div className="trash-section workspace-trash-section shrink-0 border-t border-ink-100">
             <button
@@ -3092,7 +3056,7 @@ function FolderTreeRow({
         }`}
         style={{ "--folder-depth": node.depth } as CSSProperties}
         onContextMenu={(event) => {
-          if (isRoot || isRenaming || !hasWorkspace || isBusy) {
+          if (isRenaming || !hasWorkspace || isBusy) {
             return;
           }
 
@@ -3168,7 +3132,7 @@ function FolderTreeRow({
             <span className="tree-count">{node.noteCount}</span>
           </button>
         )}
-        {!isRoot && !isRenaming ? (
+        {!isRenaming ? (
           <ContextMenu
             label="Folder"
             open={isMoveMenuOpen}
@@ -3201,32 +3165,36 @@ function FolderTreeRow({
               <FolderPlus size={14} />
               <span>New folder</span>
             </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="context-menu-item"
-              onClick={() => {
-                onToggleMove(node.path);
-                onStartRename(node);
-              }}
-              disabled={!hasWorkspace || isBusy}
-            >
-              <Edit3 size={14} />
-              <span>Rename</span>
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              className="context-menu-item danger"
-              onClick={() => {
-                onToggleMove(node.path);
-                onDelete(node);
-              }}
-              disabled={!hasWorkspace || isBusy}
-            >
-              <Trash2 size={14} />
-              <span>Delete</span>
-            </button>
+            {!isRoot ? (
+              <>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="context-menu-item"
+                  onClick={() => {
+                    onToggleMove(node.path);
+                    onStartRename(node);
+                  }}
+                  disabled={!hasWorkspace || isBusy}
+                >
+                  <Edit3 size={14} />
+                  <span>Rename</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="context-menu-item danger"
+                  onClick={() => {
+                    onToggleMove(node.path);
+                    onDelete(node);
+                  }}
+                  disabled={!hasWorkspace || isBusy}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
+                </button>
+              </>
+            ) : null}
           </ContextMenu>
         ) : null}
       </div>
@@ -3459,35 +3427,6 @@ function buildFolderTree(
   sortAndSetDepth(rootNode, 0);
 
   return [rootNode];
-}
-
-function filterFolderTree(nodes: FolderTreeNode[], query: string): FolderTreeNode[] {
-  const normalizedQuery = query.trim().toLocaleLowerCase();
-
-  if (!normalizedQuery) {
-    return nodes;
-  }
-
-  function filterNode(node: FolderTreeNode): FolderTreeNode | null {
-    const filteredChildren = node.children
-      .map(filterNode)
-      .filter((child): child is FolderTreeNode => child !== null);
-    const isRoot = node.path === ".";
-    const isMatch = node.name.toLocaleLowerCase().includes(normalizedQuery);
-
-    if (!isRoot && !isMatch && filteredChildren.length === 0) {
-      return null;
-    }
-
-    return {
-      ...node,
-      children: filteredChildren
-    };
-  }
-
-  return nodes
-    .map(filterNode)
-    .filter((node): node is FolderTreeNode => node !== null);
 }
 
 function collectFolderTreePaths(nodes: FolderTreeNode[]): string[] {

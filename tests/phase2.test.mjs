@@ -54,6 +54,7 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "notes:restore",
     "notes:save",
     "settings:get",
+    "settings:clear-recent-workspaces",
     "settings:save",
     "workspace:choose",
     "workspace:get-active",

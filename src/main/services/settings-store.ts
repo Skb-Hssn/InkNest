@@ -142,3 +142,10 @@ export async function rememberWorkspace(workspacePath: string) {
     ].slice(0, maxRecentWorkspaces)
   }));
 }
+
+export async function clearRecentWorkspaces() {
+  return updateSettings((settings) => ({
+    ...settings,
+    recentWorkspaces: []
+  }));
+}

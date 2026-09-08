@@ -387,7 +387,7 @@ left sidebar
   workspace switcher
   search input
   folder tree and nested note rows
-  folder filter, sort, and new-note controls
+  folders section expand/collapse control
   no-workspace empty state
   no-matching-notes empty state
 
@@ -536,6 +536,9 @@ It shows:
 - a missing-workspace prompt when the previous folder is gone
 - a permission prompt when the previous folder cannot be accessed
 - recent workspaces when settings contain remembered paths
+- a Clear recent workspaces action that removes remembered paths while keeping
+  the active workspace restore path intact
+- recent workspaces render directly above the Trash section in the sidebar
 
 Folder and note scanning remain deferred to later phases. Phase 4 only chooses,
 remembers, restores, and validates the workspace root.

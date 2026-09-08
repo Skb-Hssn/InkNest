@@ -304,7 +304,8 @@ export const ipcChannels = {
   },
   settings: {
     get: "settings:get",
-    save: "settings:save"
+    save: "settings:save",
+    clearRecentWorkspaces: "settings:clear-recent-workspaces"
   },
   links: {
     openExternal: "links:open-external",

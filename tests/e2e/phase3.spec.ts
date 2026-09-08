@@ -70,8 +70,13 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     const window = await app.firstWindow();
 
     await expect(window.getByRole("button", { name: "Toggle sidebar" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Filter folders" })).toBeVisible();
-    await expect(window.locator('summary[aria-label="Sort notes"]')).toBeVisible();
+    const foldersHeading = window.getByRole("heading", { name: "Folders", exact: true });
+    const foldersHeader = foldersHeading.locator("..");
+    await expect(foldersHeader.getByRole("button", { name: "Expand folders" })).toHaveCount(0);
+    await expect(foldersHeader.getByRole("button", { name: "Collapse folders" })).toBeVisible();
+    await expect(foldersHeader.getByRole("button", { name: "Filter folders" })).toHaveCount(0);
+    await expect(foldersHeader.locator('summary[aria-label="Sort notes"]')).toHaveCount(0);
+    await expect(foldersHeader.getByRole("button", { name: "New note" })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
 
     await expect(

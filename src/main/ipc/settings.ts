@@ -1,5 +1,9 @@
 import { ipcChannels, type AppSettings } from "../../shared/ipc";
-import { readSettings, updateSettings } from "../services/settings-store";
+import {
+  clearRecentWorkspaces,
+  readSettings,
+  updateSettings
+} from "../services/settings-store";
 import {
   assertAutoSaveDelay,
   assertBoolean,
@@ -12,6 +16,10 @@ import { registerIpcHandler } from "./register";
 
 export function registerSettingsHandlers() {
   registerIpcHandler<AppSettings>(ipcChannels.settings.get, () => readSettings());
+  registerIpcHandler<AppSettings>(
+    ipcChannels.settings.clearRecentWorkspaces,
+    () => clearRecentWorkspaces()
+  );
 
   registerIpcHandler<AppSettings>(ipcChannels.settings.save, (payload) => {
     assertPlainObject(payload);

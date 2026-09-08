@@ -65,7 +65,9 @@ const inknestApi: InkNestApi = {
   },
   settings: {
     get: () => ipcRenderer.invoke(ipcChannels.settings.get),
-    save: (payload) => ipcRenderer.invoke(ipcChannels.settings.save, payload)
+    save: (payload) => ipcRenderer.invoke(ipcChannels.settings.save, payload),
+    clearRecentWorkspaces: () =>
+      ipcRenderer.invoke(ipcChannels.settings.clearRecentWorkspaces)
   },
   links: {
     openExternal: (payload) =>

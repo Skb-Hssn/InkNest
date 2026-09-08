@@ -87,6 +87,7 @@ export type InkNestApi = {
   settings: {
     get: () => Promise<IpcResult<AppSettings>>;
     save: (payload: SaveSettingsPayload) => Promise<IpcResult<AppSettings>>;
+    clearRecentWorkspaces: () => Promise<IpcResult<AppSettings>>;
   };
   links: {
     openExternal: (

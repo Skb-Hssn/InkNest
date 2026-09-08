@@ -68,6 +68,38 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       }
     });
     expect(activeWorkspace).toEqual(selectedWorkspace);
+
+    const recentWorkspaces = window.locator("details.collapsible-section").filter({
+      hasText: "Recent workspaces"
+    });
+    await expect(recentWorkspaces).toBeVisible();
+    const recentWorkspacesBeforeTrash = await window.evaluate(() => {
+      const recent = document.querySelector("details.collapsible-section");
+      const trash = document.querySelector(".workspace-trash-section");
+
+      return Boolean(
+        recent &&
+          trash &&
+          (recent.compareDocumentPosition(trash) & Node.DOCUMENT_POSITION_FOLLOWING)
+      );
+    });
+    expect(recentWorkspacesBeforeTrash).toBe(true);
+    await recentWorkspaces.locator("summary").click();
+    await expect(
+      recentWorkspaces.getByRole("button", { name: "Clear recent workspaces" })
+    ).toBeVisible();
+    await recentWorkspaces
+      .getByRole("button", { name: "Clear recent workspaces" })
+      .click();
+    await expect(recentWorkspaces).toHaveCount(0);
+
+    const clearedWorkspace = await window.evaluate(() =>
+      window.inknest.workspace.getActive()
+    );
+    expect(clearedWorkspace).toMatchObject({
+      ok: true,
+      data: { recentWorkspaces: [] }
+    });
   } finally {
     await app.close();
   }
@@ -156,6 +188,11 @@ test("phase 4 shows a clear missing-workspace state on startup", async ({
       }
     });
     await expect(window.getByText("Previous workspace missing")).toBeVisible();
+    await window
+      .locator("details.collapsible-section")
+      .filter({ hasText: "Recent workspaces" })
+      .locator("summary")
+      .click();
     await expect(window.getByText(missingWorkspace).first()).toBeVisible();
   } finally {
     await app.close();
