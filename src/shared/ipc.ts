@@ -22,6 +22,10 @@ export type AppInfo = {
   phase: "phase-17-release-validation";
 };
 
+export type AppWindowState = {
+  isMaximized: boolean;
+};
+
 export type WorkspaceStatus =
   | "none"
   | "ready"
@@ -270,6 +274,11 @@ const workspaceChangedChannel = ["workspace", "changed"].join(":");
 export const ipcChannels = {
   app: {
     getInfo: "app:get-info",
+    getWindowState: "app:get-window-state",
+    minimizeWindow: "app:minimize-window",
+    toggleMaximizeWindow: "app:toggle-maximize-window",
+    closeWindow: "app:close-window",
+    windowStateChanged: "app:window-state-changed",
     prepareToClose: appPrepareToCloseChannel,
     closeReady: appCloseReadyChannel,
     closeCanceled: appCloseCanceledChannel

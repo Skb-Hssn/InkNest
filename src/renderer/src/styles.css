@@ -68,6 +68,44 @@ input {
     @apply text-red-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700;
   }
 
+  .app-window-bar {
+    @apply relative flex h-[34px] shrink-0 items-stretch border-b;
+    border-color: var(--app-border);
+    background: var(--app-surface);
+    color: var(--app-muted);
+    user-select: none;
+  }
+
+  .app-window-bar-drag-region {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    -webkit-app-region: drag;
+  }
+
+  .app-window-bar-title {
+    color: var(--app-text);
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+  }
+
+  .app-window-controls {
+    @apply relative z-10 ml-auto flex h-full items-stretch;
+    -webkit-app-region: no-drag;
+  }
+
+  .app-window-control {
+    @apply inline-flex h-full w-11 items-center justify-center border-l border-transparent text-neutral-500 transition hover:bg-ink-100 hover:text-ink-900 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-ink-500/40;
+    -webkit-app-region: no-drag;
+  }
+
+  .app-window-control-close {
+    @apply hover:bg-red-600 hover:text-white;
+  }
+
   .workspace-sidebar {
     display: grid;
     grid-template-columns: 42px minmax(0, 1fr);

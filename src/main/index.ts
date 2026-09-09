@@ -30,6 +30,7 @@ function createMainWindow() {
     height: 820,
     minWidth: 760,
     minHeight: 560,
+    frame: false,
     autoHideMenuBar: true,
     backgroundColor: "#f7f8f6",
     webPreferences: {
@@ -39,6 +40,17 @@ function createMainWindow() {
       sandbox: true
     }
   });
+
+  const sendWindowState = () => {
+    if (!mainWindow.isDestroyed()) {
+      mainWindow.webContents.send(ipcChannels.app.windowStateChanged, {
+        isMaximized: mainWindow.isMaximized()
+      });
+    }
+  };
+
+  mainWindow.on("maximize", sendWindowState);
+  mainWindow.on("unmaximize", sendWindowState);
 
   let closeHandshakeActive = false;
   let closeHandshakeTimer: NodeJS.Timeout | null = null;
@@ -86,6 +98,8 @@ function createMainWindow() {
 
   mainWindow.on("closed", () => {
     clearCloseHandshakeTimer();
+    mainWindow.removeListener("maximize", sendWindowState);
+    mainWindow.removeListener("unmaximize", sendWindowState);
     ipcMain.removeListener(ipcChannels.app.closeReady, handleCloseReady);
     ipcMain.removeListener(ipcChannels.app.closeCanceled, handleCloseCanceled);
   });

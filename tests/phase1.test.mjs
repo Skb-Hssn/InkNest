@@ -51,6 +51,7 @@ test("main process creates a secure InkNest browser window", async () => {
   const mainSource = await readText("src/main/index.ts");
 
   assert.match(mainSource, /title:\s*"InkNest"/);
+  assert.match(mainSource, /frame:\s*false/);
   assert.match(mainSource, /contextIsolation:\s*true/);
   assert.match(mainSource, /nodeIntegration:\s*false/);
   assert.match(mainSource, /sandbox:\s*true/);

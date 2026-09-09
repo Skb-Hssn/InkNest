@@ -116,7 +116,7 @@ The Phase 1 main process lives in `src/main/index.ts`.
 Its current responsibilities are:
 
 - Create the main `BrowserWindow`.
-- Keep the native window title as `InkNest`.
+- Use a frameless window with a renderer-owned draggable title bar and window controls.
 - Set the initial window size and minimum window size.
 - Hide the native application menu for a focused app shell.
 - Load the Vite development URL during development.
@@ -236,7 +236,9 @@ that define the app boundary:
 - `sandbox: true`
 - preload script attached from `src/preload/index.ts`
 
-The native menu remains hidden and the window title remains `InkNest`.
+The native menu remains hidden. The frameless renderer title bar displays
+`InkNest` and exposes minimize, maximize/restore, and close controls through the
+typed preload bridge.
 
 ### IPC Handler Layout
 
@@ -282,7 +284,12 @@ The current `window.inknest` surface is grouped by feature area:
 ```ts
 window.inknest = {
   app: {
-    getInfo()
+    getInfo(),
+    getWindowState(),
+    minimizeWindow(),
+    toggleMaximizeWindow(),
+    closeWindow(),
+    onWindowStateChanged(listener)
   },
   workspace: {
     getActive(),

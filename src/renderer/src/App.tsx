@@ -41,8 +41,10 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  Maximize2,
   MoreHorizontal,
   Minus,
+  Minimize2,
   PanelLeft,
   Quote,
   RotateCcw,
@@ -305,6 +307,7 @@ export function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
@@ -373,6 +376,27 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.inknest.app.getWindowState().then((result) => {
+      if (isMounted && result.ok) {
+        setIsWindowMaximized(result.data.isMaximized);
+      }
+    });
+
+    const unsubscribe = window.inknest.app.onWindowStateChanged((state) => {
+      if (isMounted) {
+        setIsWindowMaximized(state.isMaximized);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
 
   useEffect(() => {
     function closeActionMenus(event: Event) {
@@ -887,6 +911,26 @@ export function App() {
     while (pendingSettingsSavesRef.current.size > 0) {
       await Promise.allSettled([...pendingSettingsSavesRef.current]);
     }
+  }
+
+  async function minimizeWindow() {
+    const result = await window.inknest.app.minimizeWindow();
+
+    if (result.ok) {
+      setIsWindowMaximized(result.data.isMaximized);
+    }
+  }
+
+  async function toggleMaximizeWindow() {
+    const result = await window.inknest.app.toggleMaximizeWindow();
+
+    if (result.ok) {
+      setIsWindowMaximized(result.data.isMaximized);
+    }
+  }
+
+  async function closeWindow() {
+    await window.inknest.app.closeWindow();
   }
 
   function closeCommandPalette() {
@@ -2028,13 +2072,48 @@ export function App() {
 
   return (
     <main
-      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[34px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
       data-build-phase={phase}
       style={{
         "--app-font-size": `${settings.fontSize}px`,
         "--app-font-family": fontFamilyCssValue(settings.fontFamily)
       } as CSSProperties}
     >
+      <header className="app-window-bar" aria-label="Application window controls">
+        <div className="app-window-bar-drag-region">
+          <span className="app-window-bar-title">InkNest</span>
+        </div>
+        <div className="app-window-controls">
+          <button
+            type="button"
+            className="app-window-control"
+            aria-label="Minimize window"
+            title="Minimize window"
+            onClick={() => void minimizeWindow()}
+          >
+            <Minus size={15} />
+          </button>
+          <button
+            type="button"
+            className="app-window-control"
+            aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
+            title={isWindowMaximized ? "Restore window" : "Maximize window"}
+            onClick={() => void toggleMaximizeWindow()}
+          >
+            {isWindowMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+          </button>
+          <button
+            type="button"
+            className="app-window-control app-window-control-close"
+            aria-label="Close window"
+            title="Close window"
+            onClick={() => void closeWindow()}
+          >
+            <X size={15} />
+          </button>
+        </div>
+      </header>
+
       <section
         data-layout="app-layout-columns"
         data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}

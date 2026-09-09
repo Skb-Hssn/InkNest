@@ -2,12 +2,15 @@ import { ipcMain } from "electron";
 import type { IpcResult } from "../../shared/ipc";
 import { IpcRequestError } from "./errors";
 
-type Handler<T> = (payload: unknown) => Promise<T> | T;
+type Handler<T> = (
+  payload: unknown,
+  event: Electron.IpcMainInvokeEvent
+) => Promise<T> | T;
 
 export function registerIpcHandler<T>(channel: string, handler: Handler<T>) {
-  ipcMain.handle(channel, async (_event, payload): Promise<IpcResult<T>> => {
+  ipcMain.handle(channel, async (event, payload): Promise<IpcResult<T>> => {
     try {
-      const data = await handler(payload);
+      const data = await handler(payload, event);
       return { ok: true, data };
     } catch (error) {
       if (error instanceof IpcRequestError) {

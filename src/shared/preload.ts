@@ -1,5 +1,6 @@
 import type {
   AppInfo,
+  AppWindowState,
   AppSettings,
   CreateFolderPayload,
   CreateNotePayload,
@@ -40,6 +41,11 @@ import type {
 export type InkNestApi = {
   app: {
     getInfo: () => Promise<IpcResult<AppInfo>>;
+    getWindowState: () => Promise<IpcResult<AppWindowState>>;
+    minimizeWindow: () => Promise<IpcResult<AppWindowState>>;
+    toggleMaximizeWindow: () => Promise<IpcResult<AppWindowState>>;
+    closeWindow: () => Promise<IpcResult<{ closing: true }>>;
+    onWindowStateChanged: (listener: (state: AppWindowState) => void) => () => void;
     onPrepareToClose: (listener: () => void) => () => void;
     closeReady: () => void;
     closeCanceled: () => void;

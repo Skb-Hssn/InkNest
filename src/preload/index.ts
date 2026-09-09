@@ -9,6 +9,20 @@ const sendIpcMessage = ipcRenderer["send"].bind(ipcRenderer);
 const inknestApi: InkNestApi = {
   app: {
     getInfo: () => ipcRenderer.invoke(ipcChannels.app.getInfo),
+    getWindowState: () => ipcRenderer.invoke(ipcChannels.app.getWindowState),
+    minimizeWindow: () => ipcRenderer.invoke(ipcChannels.app.minimizeWindow),
+    toggleMaximizeWindow: () =>
+      ipcRenderer.invoke(ipcChannels.app.toggleMaximizeWindow),
+    closeWindow: () => ipcRenderer.invoke(ipcChannels.app.closeWindow),
+    onWindowStateChanged: (listener) => {
+      const handler = (_event: unknown, state: Parameters<typeof listener>[0]) =>
+        listener(state);
+      subscribeToIpcMessage(ipcChannels.app.windowStateChanged, handler);
+
+      return () => {
+        unsubscribeFromIpcMessage(ipcChannels.app.windowStateChanged, handler);
+      };
+    },
     onPrepareToClose: (listener) => {
       const handler = () => listener();
       subscribeToIpcMessage(ipcChannels.app.prepareToClose, handler);

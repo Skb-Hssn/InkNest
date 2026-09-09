@@ -33,6 +33,9 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(
       window.getByRole("heading", { name: "InkNest", exact: true })
     ).toBeVisible();
+    await expect(window.getByRole("button", { name: "Minimize window" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Maximize window" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Close window" })).toBeVisible();
     await expect(
       window.getByRole("button", { name: /No workspace Local Markdown/ })
     ).toBeVisible();
@@ -85,6 +88,21 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     await expect(window.getByRole("button", { name: "Import options" })).toHaveCount(0);
 
     await expect(window.locator(".markdown-toolbar")).not.toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("phase 3 controls the frameless window from the in-app title bar", async ({}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    const maximize = window.getByRole("button", { name: "Maximize window" });
+    await maximize.click();
+    await expect(window.getByRole("button", { name: "Restore window" })).toBeVisible();
+    await window.getByRole("button", { name: "Restore window" }).click();
+    await expect(window.getByRole("button", { name: "Maximize window" })).toBeVisible();
   } finally {
     await app.close();
   }

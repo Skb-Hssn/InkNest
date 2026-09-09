@@ -25,7 +25,7 @@ test("phase 3 renderer defines the workspace-sidebar and editor layout", async (
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
-    "grid-rows-[minmax(0,1fr)_34px]",
+    "grid-rows-[34px_minmax(0,1fr)_34px]",
     "grid-cols-[300px_minmax(0,1fr)]",
     "sidebar-resize-handle",
     "Resize workspace sidebar",
