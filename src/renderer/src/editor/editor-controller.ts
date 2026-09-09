@@ -30,6 +30,7 @@ import type { Mark } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { getMarkdown, insert } from "@milkdown/kit/utils";
+import { calloutPattern } from "./extensions/callout-plugin";
 import type {
   MarkdownEditorCommand,
   MarkdownEditorCommandOptions
@@ -292,6 +293,35 @@ export function insertCodeLineBreak(view: EditorView) {
       .insertText(`\n${indentation}`, from, to)
       .scrollIntoView()
   );
+  return true;
+}
+
+/** Insert an empty paragraph after the enclosing callout. */
+export function insertParagraphAfterCallout(view: EditorView) {
+  const { state } = view;
+  const { $from } = state.selection;
+  let calloutDepth: number | null = null;
+
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    if (node.type.name === "blockquote" && calloutPattern.test(node.textContent)) {
+      calloutDepth = depth;
+      break;
+    }
+  }
+
+  if (calloutDepth === null) {
+    return false;
+  }
+
+  const insertPosition = $from.after(calloutDepth);
+  const paragraph = state.schema.nodes.paragraph.create();
+  const transaction = state.tr.insert(insertPosition, paragraph);
+
+  transaction.setSelection(
+    TextSelection.near(transaction.doc.resolve(insertPosition + 1), 1)
+  );
+  view.dispatch(transaction.scrollIntoView());
   return true;
 }
 

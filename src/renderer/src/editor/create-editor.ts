@@ -22,7 +22,8 @@ import { runSlashCommand, slashCommandPlugin } from "./extensions/slash-command-
 import {
   collectActiveEditorCommands,
   insertCodeIndent,
-  insertCodeLineBreak
+  insertCodeLineBreak,
+  insertParagraphAfterCallout
 } from "./editor-controller";
 import type { MarkdownEditorProps } from "./types";
 
@@ -63,6 +64,18 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           spellcheck: "true"
         },
         handleKeyDown(view, event) {
+          if (
+            event.key === "Enter" &&
+            event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey &&
+            !event.altKey &&
+            insertParagraphAfterCallout(view)
+          ) {
+            event.preventDefault();
+            return true;
+          }
+
           if (
             event.key === "Enter" &&
             !event.ctrlKey &&

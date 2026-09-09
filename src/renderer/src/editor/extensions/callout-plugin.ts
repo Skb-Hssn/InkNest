@@ -2,7 +2,7 @@ import { $prose } from "@milkdown/kit/utils";
 import { Plugin } from "@milkdown/kit/prose/state";
 import { Decoration, DecorationSet } from "@milkdown/kit/prose/view";
 
-const calloutPattern = /^\[!(NOTE|WARNING|INFO|SUCCESS)\]/i;
+export const calloutPattern = /^\[!(NOTE|WARNING|INFO|SUCCESS)\]/i;
 
 export const calloutPlugin = $prose(() =>
   new Plugin({
