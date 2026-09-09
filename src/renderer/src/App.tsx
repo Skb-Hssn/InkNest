@@ -2513,14 +2513,6 @@ export function App() {
             </div>
             {selectedNoteContent ? (
               <div className="app-editor-header-actions flex items-center gap-2">
-                <span
-                  className="status-pill"
-                  aria-live="polite"
-                  title={saveError ? `${statusMessage}: ${saveError}` : statusMessage}
-                >
-                  <Check size={13} />
-                  {editorStatusLabel}
-                </span>
                 <button
                   type="button"
                   className="secondary-button"
