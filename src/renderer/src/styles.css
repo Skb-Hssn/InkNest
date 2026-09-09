@@ -960,7 +960,9 @@ main[style] {
 
 [data-layout="app-layout-columns"] > .workspace-sidebar {
   min-width: 0;
-  overflow: hidden;
+  /* Keep sidebar popovers above the resize divider's stacking context. */
+  z-index: 20;
+  overflow: visible;
   opacity: 1;
   visibility: visible;
   transform: translateX(0);
@@ -972,6 +974,7 @@ main[style] {
 }
 
 [data-layout="app-layout-columns"][data-workspace-sidebar="hidden"] > .workspace-sidebar {
+  overflow: hidden;
   pointer-events: none;
   opacity: 0;
   visibility: hidden;
