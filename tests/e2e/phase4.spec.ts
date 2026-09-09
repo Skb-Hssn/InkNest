@@ -73,17 +73,6 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       hasText: "Recent workspaces"
     });
     await expect(recentWorkspaces).toBeVisible();
-    const recentWorkspacesBeforeTrash = await window.evaluate(() => {
-      const recent = document.querySelector("details.collapsible-section");
-      const trash = document.querySelector(".workspace-trash-section");
-
-      return Boolean(
-        recent &&
-          trash &&
-          (recent.compareDocumentPosition(trash) & Node.DOCUMENT_POSITION_FOLLOWING)
-      );
-    });
-    expect(recentWorkspacesBeforeTrash).toBe(true);
     await recentWorkspaces.locator("summary").click();
     await expect(
       recentWorkspaces.getByRole("button", { name: "Clear recent workspaces" })

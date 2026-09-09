@@ -1903,6 +1903,77 @@ export function App() {
     }
   }
 
+  function renderSidebarTree() {
+    return (
+      <div className="sidebar-tree">
+        <div className="space-y-1" aria-label="Folder tree">
+          <FolderTree
+            nodes={folderTree}
+            selectedFolderPath={selectedFolderPath}
+            expandedFolderPaths={visibleExpandedFolderPaths}
+            activeMoveFolderPath={activeMoveFolderPath}
+            editingFolderPath={editingFolderPath}
+            folderNameDraft={folderNameDraft}
+            hasWorkspace={hasWorkspace}
+            isBusy={isBusy}
+            onSelect={(folderPath) => {
+              setActiveMoveNotePath(null);
+              setSelectedFolderPath(folderPath);
+            }}
+            onToggle={toggleFolder}
+            onStartRename={startRenamingFolder}
+            onRenameDraftChange={setFolderNameDraft}
+            onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
+            onCancelRename={() => {
+              setEditingFolderPath(null);
+              setFolderNameDraft("");
+            }}
+            onToggleMove={(folderPath) =>
+              setActiveMoveFolderPath((currentPath) =>
+                currentPath === folderPath ? null : folderPath
+              )
+            }
+            onNewNote={(folderPath) => void createNote(folderPath)}
+            onNewFolder={(parentPath) => void createFolder(parentPath)}
+            onDelete={(folder) => void deleteFolder(folder)}
+            renderNote={(note) => (
+              <NoteRow
+                key={note.path}
+                note={note}
+                selected={note.path === selectedNotePath}
+                isRenaming={note.path === editingNotePath}
+                noteNameDraft={noteNameDraft}
+                isMoveMenuOpen={note.path === activeMoveNotePath}
+                isBusy={isBusy}
+                onOpen={() => {
+                  if ("snippet" in note) {
+                    openSearchResult(note);
+                  } else {
+                    void openNote(note.path);
+                  }
+                }}
+                onRename={() => startRenamingNote(note)}
+                onRenameDraftChange={setNoteNameDraft}
+                onSubmitRename={() => void renameNote(note, noteNameDraft)}
+                onCancelRename={() => {
+                  setEditingNotePath(null);
+                  setNoteNameDraft("");
+                }}
+                onDuplicate={() => void duplicateNote(note)}
+                onToggleMove={() =>
+                  setActiveMoveNotePath((currentPath) =>
+                    currentPath === note.path ? null : note.path
+                  )
+                }
+                onDelete={() => void deleteNote(note)}
+              />
+            )}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main
       className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
@@ -1920,348 +1991,47 @@ export function App() {
         style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
         <aside
-          className="workspace-sidebar flex min-h-0 flex-col border-r border-ink-100 bg-white"
+          className="workspace-sidebar"
           aria-hidden={!settings.sidebarVisible}
         >
-          <div className="flex shrink-0 items-center gap-2 border-b border-ink-100 px-3 py-3">
-            <button
-              type="button"
-              aria-label="Toggle sidebar"
-              aria-pressed={settings.sidebarVisible}
-              title="Toggle sidebar"
-              className="icon-button"
-              onClick={() => void updateAppSettings({ sidebarVisible: !settings.sidebarVisible })}
-            >
-              <PanelLeft size={18} />
-            </button>
-            <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
-              <SquarePen size={17} />
+          <div className="sidebar-ribbon" aria-label="Sidebar controls">
+            <div className="sidebar-ribbon-brand" title="InkNest" aria-hidden="true">
+              <SquarePen size={16} />
             </div>
-            <h1 className="truncate text-sm font-semibold leading-5">InkNest</h1>
-          </div>
-          <div className="space-y-3 border-b border-ink-100 p-3">
             <button
               type="button"
-              className="workspace-button"
-              onClick={() => void chooseWorkspace()}
-              disabled={isBusy}
+              aria-label="File explorer"
+              aria-pressed="true"
+              title="File explorer"
+              className="sidebar-ribbon-button sidebar-ribbon-button-active"
+              onClick={() => document.querySelector<HTMLElement>(".sidebar-content")?.scrollTo({ top: 0, behavior: "smooth" })}
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-ink-700 text-white">
-                <FolderOpen size={15} />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">
-                  {isBusy ? "Working" : workspaceName}
-                </span>
-                <span className="block truncate text-xs text-neutral-500">
-                  {hasWorkspace ? workspace.path : "Local Markdown folder"}
-                </span>
-              </span>
-              <ChevronDown className="ml-auto text-neutral-400" size={16} />
+              <FolderOpen size={18} />
             </button>
-
-            <label className="search-box">
-              <Search size={16} />
-              <input
-                type="search"
-                placeholder="Search notes"
-                aria-label="Search notes"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-            </label>
-
-            {tagSummaries.length > 0 ? (
-              <div className="tag-filter-panel" aria-label="Filter notes by tag">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase text-neutral-500">Tags</p>
-                  {selectedTag ? (
-                    <button
-                      type="button"
-                      className="tag-filter-clear"
-                      onClick={() => setSelectedTag("")}
-                    >
-                      Clear
-                    </button>
-                  ) : null}
-                </div>
-                <div className="tag-filter-list">
-                  {tagSummaries.map((tagSummary) => (
-                    <button
-                      key={tagSummary.tag}
-                      type="button"
-                      className={`tag-filter-chip ${
-                        selectedTag === tagSummary.tag ? "tag-filter-chip-active" : ""
-                      }`}
-                      aria-pressed={selectedTag === tagSummary.tag}
-                      onClick={() =>
-                        setSelectedTag((currentTag) =>
-                          currentTag === tagSummary.tag ? "" : tagSummary.tag
-                        )
-                      }
-                    >
-                      <span>#{tagSummary.tag}</span>
-                      <span className="tag-filter-count">{tagSummary.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-          </div>
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {!hasWorkspace ? (
-              <div className="border-b border-ink-100 px-4 py-4">
-                <EmptyState
-                  icon={
-                    workspace.status === "missing" ||
-                    workspace.status === "permission-denied" ? (
-                      <AlertTriangle size={18} />
-                    ) : (
-                      <Folder size={18} />
-                    )
-                  }
-                  title={workspacePromptTitle}
-                  description={workspace.message}
-                />
-                <button
-                  type="button"
-                  className="secondary-button mt-3 w-full justify-center"
-                  onClick={() => void chooseWorkspace()}
-                  disabled={isBusy}
-                >
-                  <FolderOpen size={16} />
-                  <span>Choose workspace</span>
-                </button>
-              </div>
-            ) : null}
-
-            {workspaceError ? (
-              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {workspaceError}
-              </p>
-            ) : null}
-
-            {searchError ? (
-              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {searchError}
-              </p>
-            ) : null}
-
-            <div className="section-heading border-b border-ink-100">
-              <h2 className="text-xs font-semibold uppercase text-neutral-500">
-                Folders
-              </h2>
-              <button
-                type="button"
-                aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
-                aria-expanded={isFoldersExpanded}
-                className="section-toggle"
-                onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
-              >
-                {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
-              </button>
-            </div>
-
-            {isFoldersExpanded ? (
-              <div className="px-3 py-3">
-                <div className="space-y-1" aria-label="Folder tree">
-                  <FolderTree
-                    nodes={folderTree}
-                    selectedFolderPath={selectedFolderPath}
-                    expandedFolderPaths={visibleExpandedFolderPaths}
-                    activeMoveFolderPath={activeMoveFolderPath}
-                    editingFolderPath={editingFolderPath}
-                    folderNameDraft={folderNameDraft}
-                    hasWorkspace={hasWorkspace}
-                    isBusy={isBusy}
-                    onSelect={(folderPath) => {
-                      setActiveMoveNotePath(null);
-                      setSelectedFolderPath(folderPath);
-                    }}
-                    onToggle={toggleFolder}
-                    onStartRename={startRenamingFolder}
-                    onRenameDraftChange={setFolderNameDraft}
-                    onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
-                    onCancelRename={() => {
-                      setEditingFolderPath(null);
-                      setFolderNameDraft("");
-                    }}
-                    onToggleMove={(folderPath) =>
-                      setActiveMoveFolderPath((currentPath) =>
-                        currentPath === folderPath ? null : folderPath
-                      )
-                    }
-                    onNewNote={(folderPath) => void createNote(folderPath)}
-                    onNewFolder={(parentPath) => void createFolder(parentPath)}
-                    onDelete={(folder) => void deleteFolder(folder)}
-                    renderNote={(note) => (
-                      <NoteRow
-                        key={note.path}
-                        note={note}
-                        selected={note.path === selectedNotePath}
-                        isRenaming={note.path === editingNotePath}
-                        noteNameDraft={noteNameDraft}
-                        isMoveMenuOpen={note.path === activeMoveNotePath}
-                        isBusy={isBusy}
-                        onOpen={() => {
-                          if (hasActiveSearch && "snippet" in note) {
-                            openSearchResult(note);
-                          } else {
-                            void openNote(note.path);
-                          }
-                        }}
-                        onRename={() => startRenamingNote(note)}
-                        onRenameDraftChange={setNoteNameDraft}
-                        onSubmitRename={() => void renameNote(note, noteNameDraft)}
-                        onCancelRename={() => {
-                          setEditingNotePath(null);
-                          setNoteNameDraft("");
-                        }}
-                        onDuplicate={() => void duplicateNote(note)}
-                        onToggleMove={() =>
-                          setActiveMoveNotePath((currentPath) =>
-                            currentPath === note.path ? null : note.path
-                          )
-                        }
-                        onDelete={() => void deleteNote(note)}
-                      />
-                    )}
-                  />
-                </div>
-              </div>
-            ) : null}
-
-            {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 ? (
-              <div className="border-t border-ink-100 px-4 py-4">
-                <EmptyState
-                  icon={<Search size={18} />}
-                  title="No matching notes"
-                  description="No search results for the current query."
-                />
-              </div>
-            ) : null}
-          </div>
-
-          {workspace.recentWorkspaces.length > 0 ? (
-            <details className="collapsible-section shrink-0 border-t border-ink-100">
-              <summary className="collapsible-section-trigger">
-                <span>Recent workspaces</span>
-                <span className="section-count">{workspace.recentWorkspaces.length}</span>
-                <button
-                  type="button"
-                  className="section-toggle"
-                  aria-label="Clear recent workspaces"
-                  title="Clear recent workspaces"
-                  disabled={isBusy}
-                  onClick={(event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    void clearRecentWorkspaces();
-                  }}
-                >
-                  <X size={14} />
-                </button>
-                <ChevronRight className="collapsible-chevron" size={15} />
-              </summary>
-              <div className="max-h-52 space-y-1 overflow-y-auto px-3 pb-3">
-                {workspace.recentWorkspaces.map((recentPath) => (
-                  <button
-                    key={recentPath}
-                    type="button"
-                    className="recent-workspace-row"
-                    onClick={() => void reopenWorkspace(recentPath)}
-                  >
-                    <BookOpenText size={15} />
-                    <span className="min-w-0">
-                      <span className="block truncate font-medium">
-                        {recentPath.split(/[\\/]/).pop() ?? recentPath}
-                      </span>
-                      <span className="block truncate text-xs text-neutral-500">
-                        {recentPath}
-                      </span>
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </details>
-          ) : null}
-
-          <div className="trash-section workspace-trash-section shrink-0 border-t border-ink-100">
+            <div className="sidebar-ribbon-spacer" />
             <button
               type="button"
-              className="collapsible-section-trigger w-full"
-              aria-label="Trash"
-              aria-expanded={isTrashExpanded}
-              aria-controls="trash-notes"
-              onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
+              aria-label="Open command palette"
+              title="Open command palette (Ctrl+K)"
+              aria-keyshortcuts="Control+K"
+              className="sidebar-ribbon-button"
+              onClick={() => {
+                setIsCommandPaletteOpen(true);
+                setIsSettingsOpen(false);
+              }}
             >
-              <Trash2 size={15} />
-              <span>Trash</span>
-              {trashNotes.length === 0 ? (
-                <span className="section-empty-label">Trash is empty.</span>
-              ) : (
-                <span className="section-count">{trashNotes.length}</span>
-              )}
-              {isTrashExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+              <Command size={18} />
             </button>
-            {isTrashExpanded && trashNotes.length > 0 ? (
-              <div id="trash-notes" className="space-y-1 overflow-y-auto px-3 pb-3">
-                {trashNotes.map((note) => (
-                  <div key={note.trashPath} className="trash-row">
-                    <p
-                      className="min-w-0 truncate text-sm font-medium"
-                      title={noteNameFromPath(note.originalPath)}
-                    >
-                      {noteNameFromPath(note.originalPath)}
-                    </p>
-                    <button
-                      type="button"
-                      aria-label="Restore note"
-                      className="icon-button"
-                      onClick={() => void restoreNote(note)}
-                      disabled={isBusy}
-                    >
-                      <RotateCcw size={15} />
-                    </button>
-                    <button
-                      type="button"
-                      aria-label="Permanently delete note"
-                      className="icon-button danger"
-                      onClick={() => void permanentlyDeleteNote(note.trashPath)}
-                      disabled={isBusy}
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            ) : null}
-          </div>
-          {settings.sidebarVisible ? (
-            <div className="sidebar-footer relative flex shrink-0 items-center gap-1 border-t border-ink-100 p-3">
+            <div className="sidebar-ribbon-settings">
               <button
                 type="button"
                 aria-label="Settings"
                 aria-pressed={isSettingsOpen}
                 title="Settings"
-                className="icon-button"
+                className="sidebar-ribbon-button"
                 onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
               >
                 <Settings size={18} />
-              </button>
-              <button
-                type="button"
-                aria-label="Open command palette"
-                title="Open command palette (Ctrl+K)"
-                aria-keyshortcuts="Control+K"
-                className="icon-button"
-                onClick={() => {
-                  setIsCommandPaletteOpen(true);
-                  setIsSettingsOpen(false);
-                }}
-              >
-                <Command size={18} />
               </button>
               {isSettingsOpen && settings.sidebarVisible ? (
                 <SettingsPopover
@@ -2272,7 +2042,275 @@ export function App() {
                 />
               ) : null}
             </div>
-          ) : null}
+            <button
+              type="button"
+              aria-label="Toggle sidebar"
+              aria-pressed={settings.sidebarVisible}
+              title="Collapse sidebar"
+              className="sidebar-ribbon-button sidebar-collapse-ribbon-button"
+              onClick={() => void updateAppSettings({ sidebarVisible: false })}
+            >
+              <PanelLeft size={18} />
+            </button>
+          </div>
+
+          <div className="sidebar-dock">
+            <header className="sidebar-brand">
+              <div className="sidebar-brand-identity">
+                <div className="min-w-0">
+                  <h1>InkNest</h1>
+                  <p className="sidebar-brand-label">File explorer</p>
+                </div>
+              </div>
+            </header>
+
+          <div className="sidebar-unified">
+            <section className="sidebar-main-view" aria-label="Workspace files">
+                <div className="sidebar-workspace-controls">
+                  <button
+                    type="button"
+                    className="workspace-button"
+                    onClick={() => void chooseWorkspace()}
+                    disabled={isBusy}
+                  >
+                    <span className="workspace-button-icon">
+                      <FolderOpen size={15} />
+                    </span>
+                    <span className="workspace-button-copy">
+                      <span className="workspace-button-name">
+                        {isBusy ? "Working" : workspaceName}
+                      </span>
+                      <span className="workspace-button-path">
+                        {hasWorkspace ? workspace.path : "Local Markdown folder"}
+                      </span>
+                    </span>
+                    <ChevronDown className="workspace-button-chevron" size={15} />
+                  </button>
+
+                  <label className="search-box">
+                    <Search size={16} />
+                    <input
+                      type="search"
+                      placeholder="Search notes"
+                      aria-label="Search notes"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
+                    {searchQuery ? (
+                      <button
+                        type="button"
+                        aria-label="Clear search"
+                        className="search-clear-button"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <X size={13} />
+                      </button>
+                    ) : null}
+                  </label>
+
+                  {tagSummaries.length > 0 ? (
+                    <div className="tag-filter-panel" aria-label="Filter notes by tag">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase text-neutral-500">Tags</p>
+                        {selectedTag ? (
+                          <button
+                            type="button"
+                            className="tag-filter-clear"
+                            onClick={() => setSelectedTag("")}
+                          >
+                            Clear
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="tag-filter-list">
+                        {tagSummaries.map((tagSummary) => (
+                          <button
+                            key={tagSummary.tag}
+                            type="button"
+                            className={`tag-filter-chip ${
+                              selectedTag === tagSummary.tag ? "tag-filter-chip-active" : ""
+                            }`}
+                            aria-pressed={selectedTag === tagSummary.tag}
+                            onClick={() =>
+                              setSelectedTag((currentTag) =>
+                                currentTag === tagSummary.tag ? "" : tagSummary.tag
+                              )
+                            }
+                          >
+                            <span>#{tagSummary.tag}</span>
+                            <span className="tag-filter-count">{tagSummary.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+
+                <div className="sidebar-content">
+                  {workspaceError ? <p className="sidebar-alert">{workspaceError}</p> : null}
+                  {searchError ? <p className="sidebar-alert">{searchError}</p> : null}
+                  {!hasWorkspace ? (
+                    <div className="sidebar-empty-state">
+                      <EmptyState
+                        icon={
+                          workspace.status === "missing" ||
+                          workspace.status === "permission-denied" ? (
+                            <AlertTriangle size={18} />
+                          ) : (
+                            <Folder size={18} />
+                          )
+                        }
+                        title={workspacePromptTitle}
+                        description={workspace.message}
+                      />
+                      <button
+                        type="button"
+                        className="secondary-button mt-3 w-full justify-center"
+                        onClick={() => void chooseWorkspace()}
+                        disabled={isBusy}
+                      >
+                        <FolderOpen size={16} />
+                        <span>Choose workspace</span>
+                      </button>
+                    </div>
+                  ) : null}
+
+                  <div className="section-heading sidebar-section-heading">
+                    <h2>{hasActiveSearch ? "Search results" : "Folders"}</h2>
+                    {hasActiveSearch ? (
+                      <span className="section-count">{displayedNotes.length}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
+                      aria-expanded={isFoldersExpanded}
+                      className="section-toggle"
+                      onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
+                    >
+                      {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </button>
+                  </div>
+                  {isFoldersExpanded ? renderSidebarTree() : null}
+
+                  {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 ? (
+                    <div className="sidebar-empty-state">
+                      <EmptyState
+                        icon={<Search size={18} />}
+                        title="No matching notes"
+                        description="Try a different word or clear the active tag."
+                      />
+                    </div>
+                  ) : null}
+                </div>
+            </section>
+          </div>
+
+          <div className="sidebar-bottom">
+            {workspace.recentWorkspaces.length > 0 ? (
+              <details className="collapsible-section sidebar-bottom-section shrink-0">
+                <summary className="collapsible-section-trigger">
+                  <BookOpenText size={15} />
+                  <span className="collapsible-section-label">Recent workspaces</span>
+                  <span className="section-count">{workspace.recentWorkspaces.length}</span>
+                  <button
+                    type="button"
+                    className="section-toggle sidebar-inline-action"
+                    aria-label="Clear recent workspaces"
+                    title="Clear recent workspaces"
+                    disabled={isBusy}
+                    onClick={(event) => {
+                      event.preventDefault();
+                      event.stopPropagation();
+                      void clearRecentWorkspaces();
+                    }}
+                  >
+                    <X size={13} />
+                  </button>
+                  <ChevronRight className="collapsible-chevron" size={14} />
+                </summary>
+                <div className="recent-workspace-list">
+                  {workspace.recentWorkspaces.map((recentPath) => (
+                    <button
+                      key={recentPath}
+                      type="button"
+                      className="recent-workspace-row"
+                      onClick={() => void reopenWorkspace(recentPath)}
+                    >
+                      <span className="recent-workspace-icon"><BookOpenText size={14} /></span>
+                      <span className="min-w-0">
+                        <span className="block truncate font-medium">
+                          {recentPath.split(/[\\/]/).pop() ?? recentPath}
+                        </span>
+                        <span className="block truncate text-[11px] text-neutral-500">
+                          {recentPath}
+                        </span>
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+
+            <div className="trash-section workspace-trash-section sidebar-bottom-section shrink-0">
+              <button
+                type="button"
+                className="collapsible-section-trigger w-full"
+                aria-label="Trash"
+                aria-expanded={isTrashExpanded}
+                aria-controls="trash-notes"
+                onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
+              >
+                <Trash2 size={15} />
+                <span className="collapsible-section-label">Trash</span>
+                {trashNotes.length > 0 ? (
+                  <span className="section-count">{trashNotes.length}</span>
+                ) : (
+                  <span className="section-empty-label">Empty</span>
+                )}
+                {isTrashExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
+              {isTrashExpanded ? (
+                <div id="trash-notes" className="trash-note-list">
+                  {trashNotes.length > 0 ? (
+                    trashNotes.map((note) => (
+                      <div key={note.trashPath} className="trash-row">
+                        <p
+                          className="min-w-0 truncate text-sm font-medium"
+                          title={noteNameFromPath(note.originalPath)}
+                        >
+                          {noteNameFromPath(note.originalPath)}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Restore note"
+                          title="Restore note"
+                          className="icon-button"
+                          onClick={() => void restoreNote(note)}
+                          disabled={isBusy}
+                        >
+                          <RotateCcw size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Permanently delete note"
+                          title="Permanently delete note"
+                          className="icon-button danger"
+                          onClick={() => void permanentlyDeleteNote(note.trashPath)}
+                          disabled={isBusy}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="trash-empty-message">Trash is empty.</p>
+                  )}
+                </div>
+              ) : null}
+            </div>
+
+          </div>
+          </div>
         </aside>
 
         <div
@@ -3003,7 +3041,7 @@ function FolderTreeRow({
       <div
         className={`tree-row group ${
           node.path === selectedFolderPath ? "tree-row-active" : ""
-        }`}
+        } ${isRoot ? "tree-row-root" : ""}`}
         style={{ "--folder-depth": node.depth } as CSSProperties}
         onContextMenu={(event) => {
           if (isRenaming || !hasWorkspace || isBusy) {

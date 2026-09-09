@@ -36,7 +36,6 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(
       window.getByRole("button", { name: /No workspace Local Markdown/ })
     ).toBeVisible();
-    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
@@ -47,6 +46,8 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(
       window.locator('[aria-label="Folder tree"] .tree-open-area').first()
     ).toBeVisible();
+    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
+    await window.getByRole("button", { name: "Trash", exact: true }).click();
     await expect(window.getByText("Trash is empty.")).toBeVisible();
 
     await expect(window.getByRole("heading", { name: "Editor" })).toBeVisible();

@@ -32,10 +32,10 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
     await expect(
       window.getByRole("button", { name: /No workspace Local Markdown/ })
     ).toBeVisible();
-    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
+    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "Notes", exact: true })).toHaveCount(0);
     await expect(window.getByRole("heading", { name: "Editor", exact: true })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();

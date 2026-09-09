@@ -382,14 +382,15 @@ application shell
   editor and workspace surfaces
 
 left sidebar
-  InkNest identity and sidebar toggle
-  workspace switcher
-  search input
-  folder tree and nested note rows
-  folders section expand/collapse control
-  no-workspace empty state
-  no-matching-notes empty state
-  bottom-left settings and command-palette controls
+  Obsidian-style narrow ribbon
+    InkNest mark and active File explorer affordance
+    pinned command palette, settings, and sidebar toggle controls
+  File Explorer dock
+    InkNest and File explorer heading
+    workspace switcher and persistent note search
+    scrollable folder tree with notes nested under their folders
+    search and tag filters update the tree in place
+    recent workspaces and trash remain clearly labeled above the footer
 
 editor area
   note title and file path placeholder
@@ -413,9 +414,11 @@ Reusable static-shell controls are defined in `src/renderer/src/styles.css`:
 - `.toolbar-button`
 - `.status-pill`
 
-The layout remains quiet and work-focused, with stable column sizes and visible
-controls for common actions. Later phases should preserve this structure while
-replacing placeholder rows and empty states with real workspace and note data.
+The sidebar follows Obsidian's familiar ribbon-plus-file-explorer model. The
+ribbon is intentionally limited to app-level controls; workspace selection,
+search, folders, and notes remain visible together in the dock. Secondary
+sections stay compact and expandable at the bottom, leaving most vertical space
+for the folder tree while keeping every destination discoverable.
 
 ### Phase 3 Data Flow
 

@@ -147,9 +147,10 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
       .getByRole("menuitem", { name: "Delete" })
       .click();
     await expect.poll(() => existsSync(renamedNotePath)).toBe(false);
-    await expect(window.getByRole("button", { name: "Restore note" })).toBeVisible();
-
-    await window.getByRole("button", { name: "Restore note" }).click();
+    const restoreButton = window.getByRole("button", { name: "Restore note" });
+    await expect(restoreButton).toBeVisible();
+    await expect(restoreButton).toBeEnabled();
+    await restoreButton.click();
     await expect(window.locator(".note-open-area").first()).toBeVisible();
   } finally {
     await app.close();
