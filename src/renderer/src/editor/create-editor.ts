@@ -21,6 +21,7 @@ import { listItemView } from "./extensions/list-item-view";
 import { runSlashCommand, slashCommandPlugin } from "./extensions/slash-command-plugin";
 import {
   collectActiveEditorCommands,
+  handleDeletableBlockKey,
   insertCodeIndent,
   insertCodeLineBreak,
   insertParagraphAfterCallout
@@ -64,6 +65,18 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           spellcheck: "true"
         },
         handleKeyDown(view, event) {
+          if (
+            (event.key === "Backspace" || event.key === "Delete") &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.shiftKey &&
+            !event.altKey &&
+            handleDeletableBlockKey(view, event.key)
+          ) {
+            event.preventDefault();
+            return true;
+          }
+
           if (
             event.key === "Enter" &&
             event.ctrlKey &&

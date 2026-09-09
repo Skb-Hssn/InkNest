@@ -26,7 +26,7 @@ import {
   toggleStrikethroughCommand
 } from "@milkdown/kit/preset/gfm";
 import { deleteColumn, deleteRow } from "@milkdown/kit/prose/tables";
-import type { Mark } from "@milkdown/kit/prose/model";
+import type { Mark, Node } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { getMarkdown, insert } from "@milkdown/kit/utils";
@@ -35,6 +35,15 @@ import type {
   MarkdownEditorCommand,
   MarkdownEditorCommandOptions
 } from "./types";
+
+export type DeletableBlockKind = "callout" | "table" | "code";
+
+export type DeletableBlock = {
+  kind: DeletableBlockKind;
+  from: number;
+  to: number;
+  node: Node;
+};
 
 export function runEditorCommand(
   editor: Editor,
@@ -322,6 +331,201 @@ export function insertParagraphAfterCallout(view: EditorView) {
     TextSelection.near(transaction.doc.resolve(insertPosition + 1), 1)
   );
   view.dispatch(transaction.scrollIntoView());
+  return true;
+}
+
+function getDeletableBlockKind(node: Node): DeletableBlockKind | null {
+  if (node.type.name === "blockquote") {
+    return calloutPattern.test(node.textContent) ? "callout" : null;
+  }
+  if (node.type.name === "table") {
+    return "table";
+  }
+  if (node.type.name === "code_block") {
+    return "code";
+  }
+  return null;
+}
+
+function getDeletableBlockAtSelection(view: EditorView): DeletableBlock | null {
+  const { state } = view;
+
+  if (state.selection instanceof NodeSelection) {
+    const kind = getDeletableBlockKind(state.selection.node);
+    if (kind) {
+      return {
+        kind,
+        from: state.selection.from,
+        to: state.selection.to,
+        node: state.selection.node
+      };
+    }
+  }
+
+  const { $from } = state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const node = $from.node(depth);
+    const kind = getDeletableBlockKind(node);
+    if (kind) {
+      const from = $from.before(depth);
+      return {
+        kind,
+        from,
+        to: from + node.nodeSize,
+        node
+      };
+    }
+  }
+
+  return null;
+}
+
+/** Resolve a DOM-derived position to the nearest deletable block. */
+export function getDeletableBlockAtPosition(
+  view: EditorView,
+  position: number
+): DeletableBlock | null {
+  const { state } = view;
+  const boundedPosition = Math.max(0, Math.min(position, state.doc.content.size));
+  const $position = state.doc.resolve(boundedPosition);
+  const nodeAfter = $position.nodeAfter;
+  if (nodeAfter) {
+    const kind = getDeletableBlockKind(nodeAfter);
+    if (kind) {
+      return {
+        kind,
+        from: boundedPosition,
+        to: boundedPosition + nodeAfter.nodeSize,
+        node: nodeAfter
+      };
+    }
+  }
+
+  for (let depth = $position.depth; depth > 0; depth -= 1) {
+    const node = $position.node(depth);
+    const kind = getDeletableBlockKind(node);
+    if (kind) {
+      const from = $position.before(depth);
+      return {
+        kind,
+        from,
+        to: from + node.nodeSize,
+        node
+      };
+    }
+  }
+
+  return null;
+}
+
+function getFirstTextPosition(block: DeletableBlock) {
+  let firstTextOffset: number | null = null;
+  let firstTextblockOffset: number | null = null;
+  block.node.descendants((node, position) => {
+    if (node.isTextblock && firstTextblockOffset === null) {
+      firstTextblockOffset = position;
+    }
+    if (node.isText && firstTextOffset === null) {
+      firstTextOffset = position;
+      return false;
+    }
+    return firstTextOffset === null;
+  });
+
+  if (firstTextOffset !== null) {
+    return block.from + 1 + firstTextOffset;
+  }
+
+  // Empty table cells still have a paragraph content boundary to place the
+  // caret in, even though there is no text node to report.
+  return block.from + 1 + (firstTextblockOffset === null ? 0 : firstTextblockOffset + 1);
+}
+
+function isCaretAtBlockStart(view: EditorView, block: DeletableBlock) {
+  const { state } = view;
+  if (!state.selection.empty) {
+    return false;
+  }
+
+  const firstTextPosition = getFirstTextPosition(block);
+  const visualStartPosition =
+    block.kind === "callout"
+      ? firstTextPosition + (block.node.textContent.match(calloutPattern)?.[0].length ?? 0)
+      : firstTextPosition;
+
+  return state.selection.from <= visualStartPosition;
+}
+
+function isEmptyDeletableBlock(block: DeletableBlock) {
+  if (block.kind === "code") {
+    return block.node.textContent.trim() === "";
+  }
+  if (block.kind === "callout") {
+    const marker = block.node.textContent.match(calloutPattern)?.[0];
+    return marker !== undefined && block.node.textContent.slice(marker.length).trim() === "";
+  }
+  return false;
+}
+
+function replaceWithParagraph(view: EditorView, block: DeletableBlock) {
+  const paragraph = view.state.schema.nodes.paragraph.create();
+  const transaction = view.state.tr.replaceWith(block.from, block.to, paragraph);
+  transaction.setSelection(TextSelection.near(transaction.doc.resolve(block.from + 1), 1));
+  view.dispatch(transaction.scrollIntoView());
+}
+
+function deleteBlockRange(view: EditorView, from: number, to: number) {
+  const transaction = view.state.tr.delete(from, to);
+
+  // Keep the document editable when the deleted block was the only node.
+  if (transaction.doc.content.size === 0) {
+    transaction.insert(0, view.state.schema.nodes.paragraph.create());
+    transaction.setSelection(TextSelection.near(transaction.doc.resolve(1), 1));
+  }
+
+  view.dispatch(transaction.scrollIntoView());
+}
+
+/** Handle Backspace/Delete for callouts, tables, and code blocks. */
+export function handleDeletableBlockKey(view: EditorView, key: "Backspace" | "Delete") {
+  const selectedBlock = getDeletableBlockAtSelection(view);
+  if (!selectedBlock) {
+    return false;
+  }
+
+  if (view.state.selection instanceof NodeSelection) {
+    deleteBlockRange(view, selectedBlock.from, selectedBlock.to);
+    return true;
+  }
+
+  if (key !== "Backspace" || !isCaretAtBlockStart(view, selectedBlock)) {
+    return false;
+  }
+
+  if (
+    (selectedBlock.kind === "code" || selectedBlock.kind === "callout") &&
+    isEmptyDeletableBlock(selectedBlock)
+  ) {
+    replaceWithParagraph(view, selectedBlock);
+    return true;
+  }
+
+  view.dispatch(
+    view.state.tr
+      .setSelection(NodeSelection.create(view.state.doc, selectedBlock.from))
+      .scrollIntoView()
+  );
+  return true;
+}
+
+/** Delete a specific block immediately from the editor action menu. */
+export function deleteBlockAtPosition(view: EditorView, position: number) {
+  const block = getDeletableBlockAtPosition(view, position);
+  if (!block) {
+    return false;
+  }
+
+  deleteBlockRange(view, block.from, block.to);
   return true;
 }
 

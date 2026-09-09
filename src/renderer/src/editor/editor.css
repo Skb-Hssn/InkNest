@@ -1,9 +1,73 @@
 .inknest-editor {
+  position: relative;
   min-height: 100%;
   color: var(--app-text);
   font-family: var(--app-font-family, inherit);
   font-size: var(--app-font-size, 1rem);
   line-height: 1.75;
+}
+
+.inknest-editor-root {
+  min-height: 100%;
+}
+
+.inknest-block-handle {
+  position: absolute;
+  z-index: 10;
+  display: inline-flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--app-border);
+  border-radius: 0.4rem;
+  background: var(--app-surface);
+  color: var(--app-muted);
+  box-shadow: 0 2px 7px rgb(15 23 19 / 12%);
+  cursor: pointer;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.inknest-block-handle:hover,
+.inknest-block-handle:focus-visible {
+  border-color: color-mix(in srgb, #4f8f68 45%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-subtle) 78%, #4f8f68 22%);
+  color: var(--app-text);
+  outline: none;
+}
+
+.inknest-block-menu {
+  position: absolute;
+  z-index: 20;
+  min-width: 10rem;
+  padding: 0.25rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.45rem;
+  background: var(--app-surface);
+  box-shadow: 0 5px 16px rgb(15 23 19 / 16%);
+}
+
+.inknest-block-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.45rem 0.55rem;
+  border: 0;
+  border-radius: 0.3rem;
+  background: transparent;
+  color: var(--app-text);
+  cursor: pointer;
+  font-size: 0.75rem;
+  text-align: left;
+}
+
+.inknest-block-menu-item:hover,
+.inknest-block-menu-item:focus-visible {
+  background: color-mix(in srgb, #fee4e2 65%, var(--app-surface));
+  color: #b42318;
+  border-color: color-mix(in srgb, #b42318 40%, var(--app-border));
+  outline: none;
 }
 
 .inknest-editor .milkdown,
