@@ -79,7 +79,7 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     await expect(foldersHeader.locator('summary[aria-label="Sort notes"]')).toHaveCount(0);
     await expect(foldersHeader.getByRole("button", { name: "New note" })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Open command palette" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Open command palette" })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "New note", exact: true })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "New folder", exact: true })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "Import options" })).toHaveCount(0);

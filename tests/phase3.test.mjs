@@ -43,8 +43,7 @@ test("phase 3 sidebar exposes global app controls", async () => {
   assertIncludesAll(appSource, [
     "InkNest",
     "Toggle sidebar",
-    "Settings",
-    "Open command palette"
+    "Settings"
   ]);
   assert.doesNotMatch(appSource, /<header[\s\S]*app-header-actions/);
   assert.doesNotMatch(appSource, /aria-label=\"Import options\"/);

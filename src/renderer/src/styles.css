@@ -480,6 +480,70 @@ input {
     margin-top: 0.125rem;
   }
 
+  .sidebar-action-section {
+    @apply min-w-0;
+  }
+
+  .sidebar-section-header {
+    @apply relative min-w-0;
+  }
+
+  .sidebar-section-header > .collapsible-section,
+  .sidebar-section-header > .collapsible-section-trigger {
+    @apply min-w-0;
+  }
+
+  .sidebar-section-header > .collapsible-section > summary,
+  .sidebar-section-header > .collapsible-section-trigger {
+    padding-right: 0.5rem;
+  }
+
+  .sidebar-section-header-recent:has(> .collapsible-section > summary:hover) > .collapsible-section > summary,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:hover) > .collapsible-section > summary,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:focus-within) > .collapsible-section > summary,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu.context-menu-anchor-open) > .collapsible-section > summary,
+  .sidebar-section-header-trash:hover > .collapsible-section-trigger,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:hover) > .collapsible-section-trigger,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:focus-within) > .collapsible-section-trigger,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu.context-menu-anchor-open) > .collapsible-section-trigger {
+    padding-right: 1.5rem;
+  }
+
+  .context-menu-anchor.sidebar-section-action-menu {
+    top: 0.25rem;
+    right: 0;
+    transform: none;
+  }
+
+  .sidebar-section-action-menu .context-menu-trigger {
+    pointer-events: none;
+  }
+
+  .sidebar-section-header-trash:hover > .sidebar-section-action-menu,
+  .sidebar-section-header-recent:has(> .collapsible-section > summary:hover) > .sidebar-section-action-menu,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:hover) > .sidebar-section-action-menu,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:focus-within) > .sidebar-section-action-menu,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:hover) > .sidebar-section-action-menu,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:focus-within) > .sidebar-section-action-menu,
+  .sidebar-section-action-menu.context-menu-anchor-open {
+    opacity: 1;
+  }
+
+  .sidebar-section-header-trash:hover > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-header-recent:has(> .collapsible-section > summary:hover) > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:hover) > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-header-recent:has(> .sidebar-section-action-menu:focus-within) > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:hover) > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-header-trash:has(> .sidebar-section-action-menu:focus-within) > .sidebar-section-action-menu .context-menu-trigger,
+  .sidebar-section-action-menu.context-menu-anchor-open .context-menu-trigger {
+    pointer-events: auto;
+  }
+
+  .sidebar-section-action-menu .context-menu {
+    top: auto;
+    bottom: calc(100% + 0.25rem);
+  }
+
   .sidebar-inline-action {
     @apply h-6 w-6 opacity-60;
   }
@@ -933,6 +997,65 @@ main[style] {
 .status-bar-mode {
   @apply rounded-full bg-ink-50 px-2 py-1 font-medium text-ink-700;
   white-space: nowrap;
+}
+
+.confirmation-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  background: rgb(15 23 19 / 46%);
+}
+
+.confirmation-modal {
+  width: min(28rem, 100%);
+  border: 1px solid var(--app-border);
+  border-radius: 0.75rem;
+  padding: 1.1rem;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 24px 70px rgb(15 23 19 / 28%);
+}
+
+.confirmation-modal-header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 0.75rem;
+}
+
+.confirmation-modal-icon {
+  display: inline-flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.6rem;
+  color: #b42318;
+  background: color-mix(in srgb, #fee4e2 72%, var(--app-surface));
+}
+
+.confirmation-modal h2 {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.confirmation-modal-header p {
+  margin: 0.35rem 0 0;
+  color: var(--app-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+
+.confirmation-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+  margin-top: 1.25rem;
 }
 
 .command-palette-backdrop {

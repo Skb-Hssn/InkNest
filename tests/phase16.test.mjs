@@ -19,8 +19,8 @@ test("phase 16 exposes accessible keyboard and responsive renderer behavior", as
   for (const expected of [
     "phase-16-accessibility-and-ui-polish",
     "Command palette",
-    "Open command palette",
-    "Control+K",
+    "setIsCommandPaletteOpen(true)",
+    "Ctrl+K",
     "aria-keyshortcuts",
     "focus-visible",
     "currentMode",

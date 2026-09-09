@@ -384,7 +384,8 @@ application shell
 left sidebar
   Obsidian-style narrow ribbon
     InkNest mark and active File explorer affordance
-    pinned command palette, settings, and sidebar toggle controls
+    pinned settings and sidebar toggle controls
+    command palette remains available from Ctrl/Cmd+K without a permanent button
   File Explorer dock
     InkNest and File explorer heading
     workspace switcher and persistent note search
@@ -1397,7 +1398,7 @@ secondary panels at narrow widths, keeping the editor usable without changing
 the underlying workspace model.
 
 ```text
-Keyboard shortcut or command button
+Keyboard shortcut
   -> renderer focuses the requested control or runs an existing app action
   -> action continues through the typed preload bridge
   -> status bar reports mode, path, save state, and document counts

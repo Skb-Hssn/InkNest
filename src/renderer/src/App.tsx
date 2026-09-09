@@ -270,6 +270,8 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
   const [isTrashExpanded, setIsTrashExpanded] = useState(false);
+  const [activeSidebarMenu, setActiveSidebarMenu] = useState<"recent" | "trash" | null>(null);
+  const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -381,6 +383,8 @@ export function App() {
 
         setActiveMoveFolderPath(null);
         setActiveMoveNotePath(null);
+        setActiveSidebarMenu(null);
+        setIsEmptyTrashDialogOpen(false);
       }
 
       const eventTarget = event.target instanceof Element ? event.target : null;
@@ -392,6 +396,7 @@ export function App() {
       if (!clickedContextMenu) {
         setActiveMoveFolderPath(null);
         setActiveMoveNotePath(null);
+        setActiveSidebarMenu(null);
       }
 
       document
@@ -829,6 +834,53 @@ export function App() {
     } finally {
       pendingSettingsSavesRef.current.delete(clearPromise);
     }
+  }
+
+  function requestEmptyTrash() {
+    setActiveSidebarMenu(null);
+    setIsEmptyTrashDialogOpen(true);
+  }
+
+  async function emptyTrash() {
+    setIsEmptyTrashDialogOpen(false);
+
+    if (trashNotes.length === 0) {
+      setStatusMessage("Trash is already empty");
+      return;
+    }
+
+    setIsBusy(true);
+    setWorkspaceError(null);
+
+    let deletedCount = 0;
+    let errorMessage: string | null = null;
+
+    for (const note of trashNotes) {
+      const result = await window.inknest.notes.permanentlyDelete({
+        trashPath: note.trashPath,
+        confirmed: true
+      });
+
+      if (!result.ok) {
+        errorMessage = result.error.message;
+        break;
+      }
+
+      deletedCount += 1;
+    }
+
+    await refreshWorkspace();
+
+    if (errorMessage) {
+      setWorkspaceError(errorMessage);
+      setStatusMessage(
+        deletedCount > 0 ? `Trash partially emptied (${deletedCount} deleted)` : "Trash could not be emptied"
+      );
+    } else {
+      setStatusMessage("Trash emptied");
+    }
+
+    setIsBusy(false);
   }
 
   async function flushPendingSettings() {
@@ -2009,19 +2061,6 @@ export function App() {
               <FolderOpen size={18} />
             </button>
             <div className="sidebar-ribbon-spacer" />
-            <button
-              type="button"
-              aria-label="Open command palette"
-              title="Open command palette (Ctrl+K)"
-              aria-keyshortcuts="Control+K"
-              className="sidebar-ribbon-button"
-              onClick={() => {
-                setIsCommandPaletteOpen(true);
-                setIsSettingsOpen(false);
-              }}
-            >
-              <Command size={18} />
-            </button>
             <div className="sidebar-ribbon-settings">
               <button
                 type="button"
@@ -2207,68 +2246,113 @@ export function App() {
 
           <div className="sidebar-bottom">
             {workspace.recentWorkspaces.length > 0 ? (
-              <details className="collapsible-section sidebar-bottom-section shrink-0">
-                <summary className="collapsible-section-trigger">
-                  <BookOpenText size={15} />
-                  <span className="collapsible-section-label">Recent workspaces</span>
-                  <span className="section-count">{workspace.recentWorkspaces.length}</span>
-                  <button
-                    type="button"
-                    className="section-toggle sidebar-inline-action"
-                    aria-label="Clear recent workspaces"
-                    title="Clear recent workspaces"
-                    disabled={isBusy}
-                    onClick={(event) => {
-                      event.preventDefault();
-                      event.stopPropagation();
-                      void clearRecentWorkspaces();
-                    }}
-                  >
-                    <X size={13} />
-                  </button>
-                  <ChevronRight className="collapsible-chevron" size={14} />
-                </summary>
-                <div className="recent-workspace-list">
-                  {workspace.recentWorkspaces.map((recentPath) => (
-                    <button
-                      key={recentPath}
-                      type="button"
-                      className="recent-workspace-row"
-                      onClick={() => void reopenWorkspace(recentPath)}
+              <div className="sidebar-bottom-section sidebar-action-section shrink-0">
+                <div className="sidebar-section-header sidebar-section-header-recent">
+                  <details className="collapsible-section">
+                    <summary
+                      className="collapsible-section-trigger"
+                      onClick={() => setActiveSidebarMenu(null)}
                     >
-                      <span className="recent-workspace-icon"><BookOpenText size={14} /></span>
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {recentPath.split(/[\\/]/).pop() ?? recentPath}
-                        </span>
-                        <span className="block truncate text-[11px] text-neutral-500">
-                          {recentPath}
-                        </span>
-                      </span>
+                      <BookOpenText size={15} />
+                      <span className="collapsible-section-label">Recent workspaces</span>
+                      <span className="section-count">{workspace.recentWorkspaces.length}</span>
+                      <ChevronRight className="collapsible-chevron" size={14} />
+                    </summary>
+                    <div className="recent-workspace-list">
+                      {workspace.recentWorkspaces.map((recentPath) => (
+                        <button
+                          key={recentPath}
+                          type="button"
+                          className="recent-workspace-row"
+                          onClick={() => void reopenWorkspace(recentPath)}
+                        >
+                          <span className="recent-workspace-icon"><BookOpenText size={14} /></span>
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {recentPath.split(/[\\/]/).pop() ?? recentPath}
+                            </span>
+                            <span className="block truncate text-[11px] text-neutral-500">
+                              {recentPath}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                  <ContextMenu
+                    label="Recent workspaces"
+                    className="sidebar-section-action-menu"
+                    open={activeSidebarMenu === "recent"}
+                    onToggle={() =>
+                      setActiveSidebarMenu((currentMenu) =>
+                        currentMenu === "recent" ? null : "recent"
+                      )
+                    }
+                    onContextMenu={() => setActiveSidebarMenu("recent")}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="context-menu-item"
+                      onClick={() => {
+                        setActiveSidebarMenu(null);
+                        void clearRecentWorkspaces();
+                      }}
+                      disabled={isBusy}
+                    >
+                      <X size={14} />
+                      <span>Clear recent workspaces</span>
                     </button>
-                  ))}
+                  </ContextMenu>
                 </div>
-              </details>
+              </div>
             ) : null}
 
-            <div className="trash-section workspace-trash-section sidebar-bottom-section shrink-0">
-              <button
-                type="button"
-                className="collapsible-section-trigger w-full"
-                aria-label="Trash"
-                aria-expanded={isTrashExpanded}
-                aria-controls="trash-notes"
-                onClick={() => setIsTrashExpanded((isExpanded) => !isExpanded)}
-              >
-                <Trash2 size={15} />
-                <span className="collapsible-section-label">Trash</span>
-                {trashNotes.length > 0 ? (
-                  <span className="section-count">{trashNotes.length}</span>
-                ) : (
-                  <span className="section-empty-label">Empty</span>
-                )}
-                {isTrashExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-              </button>
+            <div className="trash-section workspace-trash-section sidebar-bottom-section sidebar-action-section shrink-0">
+              <div className="sidebar-section-header sidebar-section-header-trash">
+                <button
+                  type="button"
+                  className="collapsible-section-trigger w-full"
+                  aria-label="Trash"
+                  aria-expanded={isTrashExpanded}
+                  aria-controls="trash-notes"
+                  onClick={() => {
+                    setActiveSidebarMenu(null);
+                    setIsTrashExpanded((isExpanded) => !isExpanded);
+                  }}
+                >
+                  <Trash2 size={15} />
+                  <span className="collapsible-section-label">Trash</span>
+                  {trashNotes.length > 0 ? (
+                    <span className="section-count">{trashNotes.length}</span>
+                  ) : (
+                    <span className="section-empty-label">Empty</span>
+                  )}
+                  {isTrashExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                <ContextMenu
+                  label="Trash"
+                  className="sidebar-section-action-menu"
+                  open={activeSidebarMenu === "trash"}
+                  onToggle={() =>
+                    setActiveSidebarMenu((currentMenu) =>
+                      currentMenu === "trash" ? null : "trash"
+                    )
+                  }
+                  onContextMenu={() => setActiveSidebarMenu("trash")}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="context-menu-item danger"
+                    onClick={requestEmptyTrash}
+                    disabled={isBusy || !hasWorkspace}
+                  >
+                    <Trash2 size={14} />
+                    <span>Empty Trash</span>
+                  </button>
+                </ContextMenu>
+              </div>
               {isTrashExpanded ? (
                 <div id="trash-notes" className="trash-note-list">
                   {trashNotes.length > 0 ? (
@@ -2617,19 +2701,6 @@ export function App() {
           >
             <Settings size={18} />
           </button>
-          <button
-            type="button"
-            aria-label="Open command palette"
-            title="Open command palette (Ctrl+K)"
-            aria-keyshortcuts="Control+K"
-            className="icon-button"
-            onClick={() => {
-              setIsCommandPaletteOpen(true);
-              setIsSettingsOpen(false);
-            }}
-          >
-            <Command size={18} />
-          </button>
           {isSettingsOpen && !settings.sidebarVisible ? (
             <SettingsPopover
               settings={settings}
@@ -2656,6 +2727,68 @@ export function App() {
           {saveError ? `: ${saveError}` : ""}
         </span>
       </footer>
+
+      {isEmptyTrashDialogOpen ? (
+        <div
+          className="confirmation-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setIsEmptyTrashDialogOpen(false);
+            }
+          }}
+        >
+          <div
+            className="confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="empty-trash-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="confirmation-modal-header">
+              <span className="confirmation-modal-icon" aria-hidden="true">
+                <Trash2 size={18} />
+              </span>
+              <div className="min-w-0">
+                <h2 id="empty-trash-dialog-title">Empty Trash?</h2>
+                <p>
+                  {trashNotes.length > 0
+                    ? `This permanently deletes ${trashNotes.length} ${trashNotes.length === 1 ? "note" : "notes"}. This cannot be undone.`
+                    : "Trash is already empty."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close confirmation"
+                title="Close confirmation"
+                onClick={() => setIsEmptyTrashDialogOpen(false)}
+                disabled={isBusy}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="confirmation-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsEmptyTrashDialogOpen(false)}
+                disabled={isBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="secondary-button danger"
+                onClick={() => void emptyTrash()}
+                disabled={isBusy || trashNotes.length === 0}
+              >
+                <Trash2 size={15} />
+                Empty Trash
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isCommandPaletteOpen ? (
         <div
@@ -2885,13 +3018,21 @@ type ContextMenuProps = {
   open: boolean;
   onToggle: () => void;
   onContextMenu?: () => void;
+  className?: string;
   children: ReactNode;
 };
 
-function ContextMenu({ label, open, onToggle, onContextMenu, children }: ContextMenuProps) {
+function ContextMenu({
+  label,
+  open,
+  onToggle,
+  onContextMenu,
+  className = "",
+  children
+}: ContextMenuProps) {
   return (
     <div
-      className={`context-menu-anchor ${open ? "context-menu-anchor-open" : ""}`}
+      className={`context-menu-anchor ${className} ${open ? "context-menu-anchor-open" : ""}`}
       data-context-menu
       onContextMenu={(event) => {
         event.preventDefault();

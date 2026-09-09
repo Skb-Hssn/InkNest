@@ -103,3 +103,41 @@ test("phase 15 marks deleted notes and saves local content as a new note", async
     await app.close();
   }
 });
+
+test("phase 15 empties trash from the sidebar action menu after confirmation", async ({}, testInfo) => {
+  const userDataDir = testInfo.outputPath("user-data");
+  const workspaceDir = testInfo.outputPath("workspace");
+  const notePath = path.join(workspaceDir, "trash-me.md");
+  await mkdir(workspaceDir, { recursive: true });
+  await writeFile(notePath, "# Trash me\n", "utf8");
+
+  const app = await launchInkNest(userDataDir);
+
+  try {
+    const window = await app.firstWindow();
+    await window.evaluate(async (workspacePath) => {
+      await window.inknest.workspace.select(workspacePath);
+      await window.inknest.notes.delete({ path: "trash-me.md" });
+    }, workspaceDir);
+    await window.reload();
+
+    const trashSection = window.locator(".workspace-trash-section");
+    await trashSection.getByRole("button", { name: "Trash", exact: true }).click();
+    await expect(trashSection.getByText("trash-me")).toBeVisible();
+
+    const trashActions = trashSection.getByRole("button", { name: "Trash actions" });
+    await trashSection.getByRole("button", { name: "Trash", exact: true }).hover();
+    await trashActions.click();
+    await expect(
+      trashSection.getByRole("menu", { name: "Trash options" })
+    ).toBeVisible();
+    await trashSection.getByRole("menuitem", { name: "Empty Trash" }).click();
+
+    const confirmation = window.getByRole("dialog", { name: "Empty Trash?" });
+    await expect(confirmation).toBeVisible();
+    await confirmation.getByRole("button", { name: "Empty Trash" }).click();
+    await expect(trashSection.getByText("Trash is empty.")).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
