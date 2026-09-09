@@ -111,18 +111,54 @@
   background: var(--app-surface-subtle);
 }
 
+.inknest-editor .inknest-callout-marker {
+  display: none;
+}
+
 .inknest-editor blockquote[data-callout="warning"] {
   border-left-color: #d97706;
-  background: color-mix(in srgb, #fef3c7 70%, transparent);
+  background: color-mix(in srgb, #fef3c7 70%, var(--app-surface) 30%);
+  color: #78350f;
 }
 
 .inknest-editor blockquote[data-callout="success"] {
   border-left-color: #15803d;
 }
 
-.inknest-editor blockquote[data-callout="info"],
 .inknest-editor blockquote[data-callout="note"] {
   border-left-color: #2563eb;
+}
+
+.inknest-editor blockquote[data-callout="info"] {
+  border-left-color: #0f766e;
+  background: color-mix(in srgb, #ccfbf1 70%, var(--app-surface) 30%);
+  color: #115e59;
+}
+
+:root[data-theme="dark"] .inknest-editor blockquote[data-callout="warning"] {
+  border-left-color: #fbbf24;
+  background: color-mix(in srgb, #78350f 58%, var(--app-surface) 42%);
+  color: #fde68a;
+}
+
+:root[data-theme="dark"] .inknest-editor blockquote[data-callout="info"] {
+  border-left-color: #2dd4bf;
+  background: color-mix(in srgb, #134e4a 62%, var(--app-surface) 38%);
+  color: #99f6e4;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] .inknest-editor blockquote[data-callout="warning"] {
+    border-left-color: #fbbf24;
+    background: color-mix(in srgb, #78350f 58%, var(--app-surface) 42%);
+    color: #fde68a;
+  }
+
+  :root[data-theme="system"] .inknest-editor blockquote[data-callout="info"] {
+    border-left-color: #2dd4bf;
+    background: color-mix(in srgb, #134e4a 62%, var(--app-surface) 38%);
+    color: #99f6e4;
+  }
 }
 
 .inknest-editor code {
