@@ -30,7 +30,7 @@ import type { Mark, Node } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { getMarkdown, insert } from "@milkdown/kit/utils";
-import { calloutPattern } from "./extensions/callout-plugin";
+import { calloutPattern, focusCalloutBody } from "./extensions/callout-plugin";
 import type {
   MarkdownEditorCommand,
   MarkdownEditorCommandOptions
@@ -95,6 +95,7 @@ export function runEditorCommand(
     if (command.startsWith("callout-")) {
       const type = command.slice("callout-".length).toUpperCase();
       insert(`> [!${type}]\n> `)(ctx);
+      focusCalloutBody(view);
       return true;
     }
 

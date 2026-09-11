@@ -12,7 +12,10 @@ import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { history } from "@milkdown/kit/plugin/history";
 import { trailing } from "@milkdown/kit/plugin/trailing";
 import { TextSelection } from "@milkdown/kit/prose/state";
-import { calloutPlugin } from "./extensions/callout-plugin";
+import {
+  calloutPlugin,
+  moveCaretToCalloutBodyIfNeeded
+} from "./extensions/callout-plugin";
 import { codeBlockView } from "./extensions/code-block-view";
 import { codeHighlightPlugin } from "./extensions/code-highlight-plugin";
 import { createDocumentObserverPlugin } from "./extensions/document-observer-plugin";
@@ -109,6 +112,19 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           ) {
             event.preventDefault();
             return true;
+          }
+
+          if (
+            event.key.length === 1 &&
+            !event.ctrlKey &&
+            !event.metaKey &&
+            !event.altKey &&
+            !event.isComposing
+          ) {
+            // A click can place the caret before the hidden callout marker.
+            // Move it into the body before ProseMirror handles this key so
+            // the marker can never end up after newly typed text.
+            moveCaretToCalloutBodyIfNeeded(view);
           }
 
           return (

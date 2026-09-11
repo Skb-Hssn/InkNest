@@ -10,6 +10,7 @@ import { insertTableCommand } from "@milkdown/kit/preset/gfm";
 import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
+import { focusCalloutBody } from "./callout-plugin";
 
 const slashCommands = new Set([
   "/heading",
@@ -85,7 +86,8 @@ export function runSlashCommand(ctx: Ctx, view: EditorView, event: KeyboardEvent
   }
 
   const type = command.slice(1).toUpperCase();
-  view.dispatch(view.state.tr.insertText(`[!${type}]`));
+  view.dispatch(view.state.tr.insertText(`[!${type}] `));
   commands.call(wrapInBlockquoteCommand.key);
+  focusCalloutBody(view);
   return true;
 }
