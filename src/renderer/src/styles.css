@@ -1010,6 +1010,101 @@ main[style] {
 .editor-pane {
   container-name: editor-pane;
   container-type: inline-size;
+  min-width: 0;
+}
+
+.note-tab-bar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  min-width: 0;
+  height: 40px;
+  padding-right: 6px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface-muted);
+}
+
+.note-tab-list {
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+  height: 100%;
+  overflow-x: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--app-border) transparent;
+}
+
+.note-tab {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  max-width: 220px;
+  border-right: 1px solid var(--app-border);
+  border-bottom: 2px solid transparent;
+  color: var(--app-muted);
+}
+
+.note-tab[data-active="true"] {
+  border-bottom-color: #4f8f68;
+  background: var(--app-surface);
+  color: var(--app-text);
+}
+
+.note-tab-select {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 100%;
+  padding: 0 8px 0 12px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.note-tab-select svg,
+.note-tab-dirty {
+  flex-shrink: 0;
+}
+
+.note-tab-dirty {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.note-tab-close {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.note-tab-select:hover,
+.note-tab-close:hover {
+  background: var(--app-surface-subtle);
+  color: var(--app-text);
+}
+
+.note-tab-add {
+  margin-left: 4px;
+}
+
+.note-tab-bar button:disabled,
+.note-tab-bar button[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .app-editor-header-copy {

@@ -46,6 +46,7 @@ import {
   Minus,
   Minimize2,
   PanelLeft,
+  Plus,
   Quote,
   RotateCcw,
   Save,
@@ -284,6 +285,7 @@ export function App() {
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
   const [selectedFolderPath, setSelectedFolderPath] = useState(".");
   const [selectedNotePath, setSelectedNotePath] = useState<string | null>(null);
+  const [openNotePaths, setOpenNotePaths] = useState<string[]>([]);
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
   const [editorMarkdown, setEditorMarkdown] = useState("");
   const [lastSavedMarkdown, setLastSavedMarkdown] = useState("");
@@ -323,6 +325,11 @@ export function App() {
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
   const sidebarResizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
+  const noteNavigationRef = useRef(false);
+
+  useEffect(() => {
+    document.getElementById("active-note-tab")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selectedNotePath, openNotePaths]);
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
@@ -690,6 +697,11 @@ export function App() {
   }
 
   function applyNoteContent(note: NoteContent) {
+    setOpenNotePaths((currentPaths) =>
+      currentPaths.includes(note.path) ? currentPaths : [...currentPaths, note.path]
+    );
+    setLinkDialog(null);
+    setActiveToolbarCommands(new Set());
     selectedNoteContentRef.current = note;
     editorMarkdownRef.current = note.markdown;
     lastSavedMarkdownRef.current = note.markdown;
@@ -762,6 +774,11 @@ export function App() {
     }
 
     const openNotePath = selectedNoteContentRef.current?.path;
+    setOpenNotePaths((currentPaths) =>
+      currentPaths.filter((notePath) =>
+        notePath === openNotePath || !change.deletedPaths.includes(notePath)
+      )
+    );
     const noteWasDeleted = openNotePath
       ? change.deletedPaths.includes(openNotePath)
       : false;
@@ -1046,6 +1063,7 @@ export function App() {
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
+      setOpenNotePaths([]);
       if (result.data.status === "ready") {
         await refreshWorkspace();
       }
@@ -1071,6 +1089,7 @@ export function App() {
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
+      setOpenNotePaths([]);
       await refreshWorkspace();
     } else {
       setWorkspaceError(result.error.message);
@@ -1141,29 +1160,82 @@ export function App() {
     setSelectedNoteContent(null);
     setEditorMarkdown("");
     setLastSavedMarkdown("");
+    setExternalNoteChange(null);
+    setLinkDialog(null);
     updateSaveState("saved");
     updateSaveError(null);
     setActiveToolbarCommands(new Set());
   }
 
   async function openNote(notePath: string) {
-    if (!(await flushCurrentNote())) {
+    if (noteNavigationRef.current) {
       return;
     }
 
-    setActiveMoveNotePath(null);
-    setIsBusy(true);
-    const result = await window.inknest.notes.read(notePath);
-
-    if (result.ok) {
-      applyNoteContent(result.data);
-      updateSaveState("saved");
-      setStatusMessage("Note opened");
-    } else {
-      setWorkspaceError(result.error.message);
+    if (selectedNoteContentRef.current?.path === notePath) {
+      return;
     }
 
-    setIsBusy(false);
+    noteNavigationRef.current = true;
+    setIsBusy(true);
+    try {
+      if (!(await flushCurrentNote())) {
+        return;
+      }
+
+      setActiveMoveNotePath(null);
+      const result = await window.inknest.notes.read(notePath);
+
+      if (result.ok) {
+        applyNoteContent(result.data);
+        setWorkspaceError(null);
+        setStatusMessage("Note opened");
+      } else {
+        setWorkspaceError(result.error.message);
+      }
+    } finally {
+      noteNavigationRef.current = false;
+      setIsBusy(false);
+    }
+  }
+
+  function remapNoteTabs(fromPath: string, toPath: string) {
+    setOpenNotePaths((currentPaths) => [...new Set(currentPaths.map((notePath) =>
+      notePath === fromPath ? toPath : notePath
+    ))]);
+  }
+
+  async function removeNoteTabs(notePaths: string[]) {
+    const remainingPaths = openNotePaths.filter((notePath) => !notePaths.includes(notePath));
+    const activePath = selectedNoteContentRef.current?.path;
+    setOpenNotePaths((currentPaths) => currentPaths.filter((notePath) => !notePaths.includes(notePath)));
+
+    if (activePath && notePaths.includes(activePath)) {
+      const activeIndex = openNotePaths.indexOf(activePath);
+      const nextPath = remainingPaths[Math.min(activeIndex, remainingPaths.length - 1)];
+      clearSelectedNote();
+      if (nextPath) {
+        await openNote(nextPath);
+      }
+    }
+  }
+
+  async function closeNoteTab(notePath: string) {
+    if (isBusy || noteNavigationRef.current) {
+      return;
+    }
+    noteNavigationRef.current = true;
+    setIsBusy(true);
+    try {
+      if (selectedNoteContentRef.current?.path === notePath && !(await flushCurrentNote())) {
+        return;
+      }
+      noteNavigationRef.current = false;
+      await removeNoteTabs([notePath]);
+    } finally {
+      noteNavigationRef.current = false;
+      setIsBusy(false);
+    }
   }
 
   function openSearchResult(result: SearchResult) {
@@ -1331,6 +1403,7 @@ export function App() {
     }
 
     await refreshWorkspace();
+    remapNoteTabs(note.path, saved.data.path);
     applyNoteContent(saved.data);
     setIsBusy(false);
     setStatusMessage("Saved local version as new note");
@@ -1604,6 +1677,9 @@ export function App() {
   }
 
   async function createNote(folderPath = selectedFolderPath) {
+    if (isBusy || !(await flushCurrentNote())) {
+      return;
+    }
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
     setEditingNotePath(null);
@@ -1712,8 +1788,14 @@ export function App() {
       setEditingFolderPath(null);
       setFolderNameDraft("");
 
+      setOpenNotePaths((currentPaths) => currentPaths.map((notePath) =>
+        notePath.startsWith(`${folder.path}/`)
+          ? `${result.data.path}${notePath.slice(folder.path.length)}`
+          : notePath
+      ));
+
       if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        clearSelectedNote();
+        await openNote(`${result.data.path}${selectedNote.path.slice(folder.path.length)}`);
       }
 
       await refreshWorkspace();
@@ -1761,12 +1843,7 @@ export function App() {
         setSelectedFolderPath(".");
       }
 
-      if (
-        selectedNote?.folderPath === folder.path ||
-        selectedNote?.folderPath.startsWith(`${folder.path}/`)
-      ) {
-        clearSelectedNote();
-      }
+      await removeNoteTabs(openNotePaths.filter((notePath) => notePath.startsWith(`${folder.path}/`)));
 
       await refreshWorkspace();
       setStatusMessage("Folder deleted");
@@ -1814,6 +1891,7 @@ export function App() {
     });
 
     if (result.ok) {
+      remapNoteTabs(note.path, result.data.path);
       await refreshWorkspace();
       if (shouldReopen) {
         await openNote(result.data.path);
@@ -1874,9 +1952,7 @@ export function App() {
     });
 
     if (result.ok) {
-      if (note.path === selectedNotePath) {
-        clearSelectedNote();
-      }
+      await removeNoteTabs([note.path]);
       await refreshWorkspace();
       setIsTrashExpanded(true);
       setStatusMessage("Note moved to trash");
@@ -2494,6 +2570,76 @@ export function App() {
         />
 
         <section className="editor-pane flex min-h-0 flex-col bg-white">
+          <div className="note-tab-bar">
+            <div className="note-tab-list" role="tablist" aria-label="Open notes">
+              {openNotePaths.map((notePath) => {
+                const isActive = notePath === selectedNotePath;
+                const name = noteNameFromPath(notePath);
+                return (
+                  <div key={notePath} className="note-tab" data-active={isActive} role="presentation">
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-label={name}
+                      id={isActive ? "active-note-tab" : undefined}
+                      aria-selected={isActive}
+                      aria-controls={isActive ? "note-tab-panel" : undefined}
+                      tabIndex={isActive || !selectedNotePath ? 0 : -1}
+                      className="note-tab-select"
+                      title={notePath}
+                      aria-disabled={isBusy}
+                      onClick={() => {
+                        if (!isBusy) {
+                          void openNote(notePath);
+                        }
+                      }}
+                      onKeyDown={async (event) => {
+                        if (isBusy) {
+                          return;
+                        }
+                        const index = openNotePaths.indexOf(notePath);
+                        const nextIndex = event.key === "ArrowRight" ? (index + 1) % openNotePaths.length
+                          : event.key === "ArrowLeft" ? (index - 1 + openNotePaths.length) % openNotePaths.length
+                            : event.key === "Home" ? 0
+                              : event.key === "End" ? openNotePaths.length - 1 : null;
+                        if (nextIndex !== null) {
+                          event.preventDefault();
+                          const tabs = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                          const nextTab = tabs?.[nextIndex];
+                          await openNote(openNotePaths[nextIndex]);
+                          nextTab?.focus();
+                        }
+                      }}
+                    >
+                      <FileText size={14} aria-hidden="true" />
+                      <span className="truncate">{name}</span>
+                      {isActive && isDirty ? <span className="note-tab-dirty" aria-label="Unsaved changes" /> : null}
+                    </button>
+                    <button
+                      type="button"
+                      className="note-tab-close"
+                      aria-label={`Close ${name} tab`}
+                      title={`Close ${name} tab`}
+                      disabled={isBusy}
+                      onClick={() => void closeNoteTab(notePath)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className="icon-button note-tab-add"
+              aria-label="Create new note"
+              title="Create new unnamed note"
+              disabled={!hasWorkspace || isBusy}
+              onClick={() => void createNote()}
+            >
+              <Plus size={18} />
+            </button>
+          </div>
           {/* The centered empty state replaces the old "Untitled note" header. */}
           <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
             <div className="app-editor-header-copy flex min-w-0 items-center gap-2">
@@ -2710,14 +2856,14 @@ export function App() {
 
           {/* Former empty-state copy: "Open or create a Markdown note to inspect its saved content here." */}
           {selectedNoteContent ? (
-            <article className="editor-scroll">
+            <article className="editor-scroll" role="tabpanel" id="note-tab-panel" aria-labelledby="active-note-tab">
               <MarkdownEditor
                 ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
                 workspacePath={workspace.path}
                 notePath={selectedNoteContent.path}
-                disabled={false}
+                disabled={isBusy}
                 lineWrap={settings.lineWrap}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
