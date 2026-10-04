@@ -28,6 +28,13 @@ async function createSettingsHarness() {
 
   await mkdir(path.dirname(outputPath), { recursive: true });
   await writeFile(outputPath, output, "utf8");
+  const accentSource = await readFile(new URL("src/shared/accent-colors.ts", root), "utf8");
+  const accentOutput = ts.transpileModule(accentSource, {
+    compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 }
+  }).outputText;
+  const accentPath = path.join(outputRoot, "src/shared/accent-colors.js");
+  await mkdir(path.dirname(accentPath), { recursive: true });
+  await writeFile(accentPath, accentOutput, "utf8");
 
   const userDataPath = path.join(outputRoot, "user-data");
   const electronStubPath = path.join(outputRoot, "node_modules", "electron", "index.js");
@@ -42,6 +49,9 @@ async function createSettingsHarness() {
     userDataPath,
     requireService() {
       return import(pathToFileURL(outputPath).href);
+    },
+    requireAccents() {
+      return import(pathToFileURL(accentPath).href);
     },
     async cleanup() {
       await rm(outputRoot, { recursive: true, force: true });
@@ -96,6 +106,7 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
       path.join(harness.userDataPath, "settings.json"),
       `${JSON.stringify({
         theme: "midnight",
+        accentColor: "rainbow",
         fontSize: 48,
         fontFamily: "comic-sans",
         autoSaveDelayMs: 100,
@@ -114,6 +125,7 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
 
     assert.deepEqual(normalized, {
       theme: "system",
+      accentColor: "forest",
       fontSize: 16,
       fontFamily: "system",
       autoSaveDelayMs: 750,
@@ -130,12 +142,15 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
     const updated = await updateSettings((settings) => ({
       ...settings,
       theme: "dark",
+      accentColor: "violet",
       fontSize: 20,
       lineWrap: false,
       outlineWidth: 360
     }));
 
     assert.equal(updated.theme, "dark");
+    assert.equal(updated.accentColor, "violet");
+    assert.equal((await readSettings()).accentColor, "violet");
     assert.equal(updated.fontSize, 20);
     assert.equal(updated.lineWrap, false);
     assert.equal(updated.outlineWidth, 360);
@@ -144,4 +159,48 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
   } finally {
     await harness.cleanup();
   }
+});
+
+test("legacy settings keep their appearance and gain the default accent", async () => {
+  const harness = await createSettingsHarness();
+  try {
+    await mkdir(harness.userDataPath, { recursive: true });
+    await writeFile(path.join(harness.userDataPath, "settings.json"), JSON.stringify({ theme: "dark", fontSize: 18, showOutline: false }));
+    const { readSettings } = await harness.requireService();
+    const settings = await readSettings();
+    assert.equal(settings.accentColor, "forest");
+    assert.equal(settings.theme, "dark");
+    assert.equal(settings.fontSize, 18);
+    assert.equal(settings.showOutline, false);
+  } finally { await harness.cleanup(); }
+});
+
+test("every accent persists and its text and solid buttons have readable contrast", async () => {
+  const harness = await createSettingsHarness();
+  const luminance = (rgb) => rgb.map((channel) => {
+    const value = channel / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  }).reduce((total, value, index) => total + value * [0.2126, 0.7152, 0.0722][index], 0);
+  const contrast = (first, second) => {
+    const [high, low] = [luminance(first), luminance(second)].sort((a, b) => b - a);
+    return (high + 0.05) / (low + 0.05);
+  };
+  try {
+    const { accentColors, isAccentColor } = await harness.requireAccents();
+    const { updateSettings, readSettings } = await harness.requireService();
+    assert.equal(new Set(accentColors.map((color) => color.id)).size, 8);
+    for (const color of accentColors) {
+      assert.ok(isAccentColor(color.id));
+      assert.ok(contrast(color.light, [255, 255, 255]) >= 4.5, `${color.name} light text contrast`);
+      assert.ok(contrast(color.dark, [21, 27, 23]) >= 4.5, `${color.name} dark text contrast`);
+      assert.ok(contrast(color.solid, [255, 255, 255]) >= 4.5, `${color.name} button contrast`);
+      const lightTint = color.light.map((channel) => Math.round(channel * 0.09 + 255 * 0.91));
+      const darkTint = color.dark.map((channel, index) => Math.round(channel * 0.1 + [21, 27, 23][index] * 0.9));
+      assert.ok(contrast(color.solid, lightTint) >= 4.5, `${color.name} text on light tinted surfaces`);
+      assert.ok(contrast(color.dark, darkTint) >= 4.5, `${color.name} text on dark tinted surfaces`);
+      await updateSettings((settings) => ({ ...settings, accentColor: color.id }));
+      assert.equal((await readSettings()).accentColor, color.id);
+    }
+    for (const invalid of [null, {}, 42, "BLUE", " blue ", "#000000", "rainbow"]) assert.equal(isAccentColor(invalid), false);
+  } finally { await harness.cleanup(); }
 });

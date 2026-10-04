@@ -154,7 +154,7 @@ test("minimap dragging remembers its width, adapts to a smaller window and reset
     await expect.poll(() => window.evaluate(() => innerWidth)).toBe(900);
     await expect.poll(async () => Number(await handle.getAttribute("aria-valuemax"))).toBeLessThan(320);
     await expect(handle).toHaveAttribute("aria-valuenow", (await handle.getAttribute("aria-valuemax"))!);
-    expect((await window.locator(".note-writing-scroll").boundingBox())!.width).toBeGreaterThanOrEqual(280);
+    await expect.poll(async () => (await window.locator(".note-writing-scroll").boundingBox())!.width).toBeGreaterThanOrEqual(280);
     const card = (await window.locator(".note-heading-minimap").boundingBox())!;
     const workspace = (await window.locator(".note-workspace").boundingBox())!;
     expect(card.x + card.width).toBeLessThan(workspace.x + workspace.width);

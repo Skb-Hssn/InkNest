@@ -2,6 +2,7 @@ import { app } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AppSettings } from "../../shared/ipc";
+import { defaultAccentColor, isAccentColor } from "../../shared/accent-colors";
 
 const settingsFileName = "settings.json";
 const maxRecentWorkspaces = 5;
@@ -9,6 +10,7 @@ let settingsUpdateQueue: Promise<unknown> = Promise.resolve();
 
 export const defaultSettings: AppSettings = {
   theme: "system",
+  accentColor: defaultAccentColor,
   fontSize: 16,
   fontFamily: "system",
   autoSaveDelayMs: 750,
@@ -85,6 +87,7 @@ function normalizeSettings(value: unknown): AppSettings {
 
   return {
     theme,
+    accentColor: isAccentColor(candidate.accentColor) ? candidate.accentColor : defaultAccentColor,
     fontSize,
     fontFamily,
     autoSaveDelayMs,

@@ -77,6 +77,7 @@ import type {
   WorkspaceFileModel,
   WorkspaceInfo
 } from "../../shared/ipc";
+import { accentColors, defaultAccentColor } from "../../shared/accent-colors";
 import {
   MarkdownEditor,
   type LinkDialogDetails,
@@ -101,6 +102,7 @@ const rootFolder: FolderSummary = {
 
 const initialSettings: AppSettings = {
   theme: "system",
+  accentColor: defaultAccentColor,
   fontSize: 16,
   fontFamily: "system",
   autoSaveDelayMs: 750,
@@ -389,6 +391,15 @@ export function App() {
   useEffect(() => {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
+
+  useEffect(() => {
+    const color = accentColors.find((accent) => accent.id === settings.accentColor) ?? accentColors[0];
+    const root = document.documentElement;
+    root.dataset.accent = color.id;
+    root.style.setProperty("--app-accent-light-rgb", color.light.join(" "));
+    root.style.setProperty("--app-accent-dark-rgb", color.dark.join(" "));
+    root.style.setProperty("--app-accent-solid-rgb", color.solid.join(" "));
+  }, [settings.accentColor]);
 
   useEffect(() => {
     let isMounted = true;
@@ -3162,6 +3173,22 @@ function SettingsPopover({ settings, onUpdate, onClose, className = "" }: Settin
           <option value="dark">Dark</option>
         </select>
       </label>
+
+      <fieldset className="settings-accent-field">
+        <legend>Accent color</legend>
+        <div className="settings-accent-grid">
+          {accentColors.map((color) => (
+            <label key={color.id} className="settings-accent-choice">
+              <input type="radio" name="accent-color" aria-label={color.name} value={color.id}
+                checked={settings.accentColor === color.id} onChange={() => onUpdate({ accentColor: color.id })} />
+              <span className="settings-accent-swatch" style={{ "--swatch-color": `rgb(${color.light.join(" ")})` } as CSSProperties}>
+                {settings.accentColor === color.id ? <Check size={14} aria-hidden="true" /> : null}
+              </span>
+              <span>{color.name}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
 
       <label className="settings-field">
         <span>Font size</span>

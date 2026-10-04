@@ -1,3 +1,5 @@
+import type { AccentColor } from "./accent-colors";
+
 export type IpcSuccess<T> = {
   ok: true;
   data: T;
@@ -108,6 +110,7 @@ export type WorkspaceChangeEvent = {
 
 export type AppSettings = {
   theme: "system" | "light" | "dark";
+  accentColor: AccentColor;
   fontSize: number;
   fontFamily: "system" | "serif" | "mono";
   autoSaveDelayMs: number;
@@ -125,6 +128,7 @@ export type SaveSettingsPayload = Partial<
   Pick<
     AppSettings,
     | "theme"
+    | "accentColor"
     | "fontSize"
     | "fontFamily"
     | "autoSaveDelayMs"

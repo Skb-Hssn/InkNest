@@ -30,8 +30,8 @@
 
 .inknest-block-handle:hover,
 .inknest-block-handle:focus-visible {
-  border-color: color-mix(in srgb, #4f8f68 45%, var(--app-border));
-  background: color-mix(in srgb, var(--app-surface-subtle) 78%, #4f8f68 22%);
+  border-color: color-mix(in srgb, var(--app-accent) 45%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-subtle) 78%, var(--app-accent) 22%);
   color: var(--app-text);
   outline: none;
 }
@@ -55,8 +55,8 @@
 
 .inknest-table-cell-handle:hover,
 .inknest-table-cell-handle:focus-visible {
-  border-color: color-mix(in srgb, #4f8f68 45%, var(--app-border));
-  background: color-mix(in srgb, var(--app-surface-subtle) 78%, #4f8f68 22%);
+  border-color: color-mix(in srgb, var(--app-accent) 45%, var(--app-border));
+  background: color-mix(in srgb, var(--app-surface-subtle) 78%, var(--app-accent) 22%);
   color: var(--app-text);
   outline: none;
 }
@@ -201,7 +201,7 @@
 .inknest-editor li[data-item-type="task"] > input {
   /* Center the native control against the compact first text line. */
   margin-top: 0.15rem;
-  accent-color: #345c49;
+  accent-color: var(--app-accent-solid);
 }
 
 .inknest-editor .inknest-list-item-content {
@@ -374,7 +374,7 @@
 }
 
 .inknest-editor a {
-  color: #2f6d4f;
+  color: var(--app-accent-text);
   text-decoration: underline;
   text-underline-offset: 0.15em;
 }
@@ -408,7 +408,7 @@
 }
 
 .inknest-editor .ProseMirror-selectednode {
-  outline: 2px solid #2f6d4f;
+  outline: 2px solid var(--app-accent-text);
   outline-offset: 2px;
 }
 
@@ -501,12 +501,12 @@
 .note-outline-resize:hover .note-outline-resize-grip,
 .note-outline-resize:focus-visible .note-outline-resize-grip,
 .note-outline-slot[data-resizing="true"] .note-outline-resize-grip {
-  color: #4f8f68;
-  border-color: #4f8f68;
+  color: var(--app-accent);
+  border-color: var(--app-accent);
   background: var(--app-surface-subtle);
 }
 .note-outline-resize:focus-visible { outline: none; }
-.note-outline-resize:focus-visible .note-outline-resize-grip { outline: 2px solid #4f8f68; outline-offset: 2px; }
+.note-outline-resize:focus-visible .note-outline-resize-grip { outline: 2px solid var(--app-accent); outline-offset: 2px; }
 .note-workspace:has(.note-outline-slot[data-resizing="true"]),
 .note-workspace:has(.note-outline-slot[data-resizing="true"]) * {
   cursor: col-resize;
@@ -565,9 +565,9 @@
 .note-outline-heading[data-level="1"] { color: var(--app-text); font-weight: 650; }
 .note-outline-heading:hover { background: var(--app-surface-subtle); color: var(--app-text); }
 .note-outline-heading[aria-current="location"] {
-  background: color-mix(in srgb, #4f8f68 13%, var(--app-surface));
+  background: color-mix(in srgb, var(--app-accent) 13%, var(--app-surface));
   color: var(--app-text);
-  box-shadow: inset 2px 0 #4f8f68;
+  box-shadow: inset 2px 0 var(--app-accent);
 }
 .note-outline-empty { padding: 0.5rem; color: var(--app-muted); line-height: 1.7; }
 .note-find-widget {
@@ -598,7 +598,7 @@
   background: var(--app-surface-subtle);
   padding-right: 0.15rem;
 }
-.note-find-input:focus-within { border-color: #4f8f68; box-shadow: 0 0 0 1px #4f8f68; }
+.note-find-input:focus-within { border-color: var(--app-accent); box-shadow: 0 0 0 1px var(--app-accent); }
 .note-find-input textarea {
   display: block;
   flex: 1;
@@ -633,7 +633,7 @@
   cursor: pointer;
 }
 .note-find-widget button:hover:not(:disabled) { background: var(--app-surface-subtle); color: var(--app-text); }
-.note-find-widget button[aria-pressed="true"] { border-color: #4f8f68; background: color-mix(in srgb, #4f8f68 18%, var(--app-surface)); color: var(--app-text); }
+.note-find-widget button[aria-pressed="true"] { border-color: var(--app-accent); background: color-mix(in srgb, var(--app-accent) 18%, var(--app-surface)); color: var(--app-text); }
 .note-find-word { text-decoration: underline; text-underline-offset: 3px; }
 .note-find-count { min-width: 52px; padding-inline: 0.25rem; white-space: nowrap; color: var(--app-muted); font-variant-numeric: tabular-nums; }
 .note-find-message { margin: 0.35rem 0 0; color: var(--app-muted); font-size: 0.7rem; }
@@ -644,7 +644,7 @@
 .note-search-zero { display: inline-block; width: 2px; height: 1em; vertical-align: text-bottom; }
 .note-outline-heading:focus-visible,
 .note-outline-close:focus-visible,
-.note-find-widget button:focus-visible { outline: 2px solid #4f8f68; outline-offset: 1px; }
+.note-find-widget button:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 1px; }
 @media (max-width: 950px) {
   .inknest-editor .editor { padding-inline: 1.25rem; }
   .note-find-row { flex-wrap: wrap; }

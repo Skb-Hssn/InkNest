@@ -5,6 +5,7 @@ import {
   updateSettings
 } from "../services/settings-store";
 import {
+  assertAccentColor,
   assertAutoSaveDelay,
   assertBoolean,
   assertFontFamily,
@@ -32,6 +33,10 @@ export function registerSettingsHandlers() {
 
       if (payload.theme !== undefined) {
         nextSettings.theme = assertTheme(payload.theme);
+      }
+
+      if (payload.accentColor !== undefined) {
+        nextSettings.accentColor = assertAccentColor(payload.accentColor);
       }
 
       if (payload.fontSize !== undefined) {
