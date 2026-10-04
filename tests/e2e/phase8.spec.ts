@@ -92,8 +92,9 @@ test("phase 8 edits formatted markdown content and saves it back to disk", async
     const saveButton = window.getByRole("button", { name: "Save", exact: true });
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("Existing body. Added from e2e.");
     const savedMarkdown = await readFile(notePath, "utf8");
     expect(savedMarkdown).toContain("# Phase 8 Note");
     expect(savedMarkdown).toContain("- First item");
@@ -148,7 +149,7 @@ test("phase 8 save channel persists markdown and rejects unsafe paths", async ({
       ok: true,
       data: {
         path: "Saved Through Preload.md",
-        markdown: "# Saved Through Preload\n\n"
+        markdown: ""
       }
     });
     expect(saved).toEqual({

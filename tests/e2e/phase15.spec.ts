@@ -48,6 +48,8 @@ test("phase 15 reloads clean external edits and protects local changes", async (
 
   try {
     const window = await app.firstWindow();
+    // Keep the local edit dirty until the competing external write arrives.
+    await window.evaluate(() => window.inknest.settings.save({ autoSaveDelayMs: 5000 }));
     const editor = await openWorkspaceNote(window, workspaceDir, "watched");
 
     await writeFile(notePath, "# Watched Note\n\nExternal body.\n", "utf8");
@@ -58,7 +60,7 @@ test("phase 15 reloads clean external edits and protects local changes", async (
     await editor.press("Control+End");
     await editor.press("Enter");
     await editor.pressSequentially("Local unsaved body.");
-    await expect(window.getByText("Editing", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
 
     await writeFile(notePath, "# Watched Note\n\nCompeting external body.\n", "utf8");
     const conflict = window.getByRole("alert");
@@ -91,14 +93,17 @@ test("phase 15 marks deleted notes and saves local content as a new note", async
     const conflict = window.getByRole("alert");
     await expect(conflict).toContainText("deleted outside InkNest");
     await conflict.getByRole("button", { name: "Save as new note" }).click();
-    const workspaceEntries = await readdir(workspaceDir);
-    const recoveredName = workspaceEntries.find((entry) =>
-      entry.startsWith("deleted Recovered")
-    );
-    expect(recoveredName).toBeTruthy();
-    expect(await readFile(path.join(workspaceDir, recoveredName!), "utf8")).toContain(
-      "Keep this body."
-    );
+    // Creation and writing the recovered content are separate asynchronous steps.
+    let recoveredName: string | undefined;
+    await expect.poll(async () => {
+      recoveredName = (await readdir(workspaceDir)).find((entry) =>
+        entry.startsWith("deleted Recovered")
+      );
+      return recoveredName;
+    }).toBeTruthy();
+    await expect.poll(() => readFile(path.join(workspaceDir, recoveredName!), "utf8"))
+      .toContain("Keep this body.");
+    await expect(conflict).not.toBeVisible();
   } finally {
     await app.close();
   }

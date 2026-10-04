@@ -88,7 +88,7 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     const saveButton = window.getByRole("button", { name: "Save", exact: true });
     await expect(saveButton).toBeEnabled();
     await saveButton.click();
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
     await expect
       .poll(() => readFile(notePath, "utf8"), { timeout: 4000 })

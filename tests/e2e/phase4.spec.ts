@@ -57,6 +57,10 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       ok: true,
       data: {
         theme: "system",
+        accentColor: "forest",
+        fullWidth: false,
+        showOutline: true,
+        outlineWidth: 232,
         fontSize: 16,
         fontFamily: "system",
         autoSaveDelayMs: 750,

@@ -30,6 +30,17 @@ scaffold and unit checks, production packaging/build validation, and the full
 Electron E2E suite. The acceptance criteria are documented in
 `RELEASE_CHECKLIST.md`.
 
+On Linux, run the same validation without visible desktop windows using Xvfb
+and Openbox (install the `xvfb` and `openbox` system packages first):
+
+```sh
+xvfb-run -a -s "-screen 0 1280x1024x24" sh -c 'openbox >/tmp/inknest-openbox.log 2>&1 & npm run release-check'
+```
+
+Openbox supplies window-manager behavior so maximize/restore tests exercise
+real window transitions. GitHub Actions uses this setup and uploads test
+traces and error contexts when validation fails.
+
 ## First Command
 
 Install dependencies, then run the lightweight scaffold check:

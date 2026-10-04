@@ -99,8 +99,9 @@ test("phase 9 toolbar formatting updates the editor and saved Markdown", async (
     await expect(editor.locator("h3")).toContainText("Toolbar text");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("### **Toolbar text**");
     const savedMarkdown = await readFile(notePath, "utf8");
     expect(savedMarkdown).toBe("### **Toolbar text**\n");
   } finally {
@@ -156,7 +157,8 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(table.locator("tr").first().locator("th, td")).toHaveCount(3);
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("const value = 1;");
     const savedMarkdown = await readFile(notePath, "utf8");
 
     expect(savedMarkdown).toContain(
@@ -211,7 +213,8 @@ test("phase 9 slash commands and link popover produce editable Markdown", async 
     await expect(link).toHaveAttribute("href", "https://example.com/edited");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("[Edited docs](https://example.com/edited)");
     const savedMarkdown = await readFile(notePath, "utf8");
 
     expect(savedMarkdown).toContain("- [ ] Task");

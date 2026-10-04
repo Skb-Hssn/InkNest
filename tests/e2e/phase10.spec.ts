@@ -59,7 +59,7 @@ test("phase 10 autosaves edits before the app closes", async ({}, testInfo) => {
     await expect
       .poll(() => readFile(notePath, "utf8"), { timeout: 4000 })
       .toContain("Saved by autosave.");
-    await expect(window.getByText("Saved", { exact: true }).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   } finally {
     await app.close();
   }
