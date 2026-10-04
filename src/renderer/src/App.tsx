@@ -185,6 +185,7 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
   { id: "table-add-column", label: "Add table column", icon: addColumnIcon, group: "table" },
   { id: "table-delete-column", label: "Delete table column", icon: deleteColumnIcon, group: "table" },
+  { id: "table-delete", label: "Delete table", icon: tableActionIcon(<TableProperties size={16} />, <Trash2 size={10} />), group: "table" },
   { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
   { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
   { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },

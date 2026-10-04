@@ -19,21 +19,13 @@ import {
   wrapInOrderedListCommand
 } from "@milkdown/kit/preset/commonmark";
 import {
-  addColAfterCommand,
-  addRowAfterCommand,
   insertTableCommand,
   strikethroughSchema,
   toggleStrikethroughCommand
 } from "@milkdown/kit/preset/gfm";
 import {
-  addColumnAfter,
-  addColumnBefore,
-  addRowAfter,
-  addRowBefore,
   CellSelection,
-  cellAround,
-  deleteColumn,
-  deleteRow
+  cellAround
 } from "@milkdown/kit/prose/tables";
 import type { Mark, Node } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
@@ -44,16 +36,11 @@ import type {
   MarkdownEditorCommand,
   MarkdownEditorCommandOptions
 } from "./types";
+import { runTableAction, type TableAction } from "./table-commands";
 
 export type DeletableBlockKind = "callout" | "table" | "code";
 
-export type TableCellAction =
-  | "delete-row"
-  | "delete-column"
-  | "add-row-before"
-  | "add-row-after"
-  | "add-column-before"
-  | "add-column-after";
+export type TableCellAction = TableAction;
 
 export type DeletableBlock = {
   kind: DeletableBlockKind;
@@ -133,19 +120,23 @@ export function runEditorCommand(
     }
 
     if (command === "table-add-row") {
-      return commands.call(addRowAfterCommand.key);
+      return runTableAction(view.state, view.dispatch, "add-row-after");
     }
 
     if (command === "table-delete-row") {
-      return deleteRow(view.state, view.dispatch);
+      return runTableAction(view.state, view.dispatch, "delete-row");
     }
 
     if (command === "table-add-column") {
-      return commands.call(addColAfterCommand.key);
+      return runTableAction(view.state, view.dispatch, "add-column-after");
     }
 
     if (command === "table-delete-column") {
-      return deleteColumn(view.state, view.dispatch);
+      return runTableAction(view.state, view.dispatch, "delete-column");
+    }
+
+    if (command === "table-delete") {
+      return runTableAction(view.state, view.dispatch, "delete-table");
     }
 
     if (command === "link") {
@@ -230,32 +221,14 @@ export function runTableCellAction(
       return false;
     }
 
-    // Table commands derive their target row/column from the current
-    // selection. Put the live editor into a cell selection first, then run the
-    // structural command against that same state.
-    view.dispatch(
-      view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos))
-    );
-    const dispatch = (transaction: Parameters<NonNullable<typeof view.dispatch>>[0]) => {
-      view.dispatch(transaction.scrollIntoView());
-    };
-
-    switch (action) {
-      case "delete-row":
-        return deleteRow(view.state, dispatch);
-      case "delete-column":
-        return deleteColumn(view.state, dispatch);
-      case "add-row-before":
-        return addRowBefore(view.state, dispatch);
-      case "add-row-after":
-        return addRowAfter(view.state, dispatch);
-      case "add-column-before":
-        return addColumnBefore(view.state, dispatch);
-      case "add-column-after":
-        return addColumnAfter(view.state, dispatch);
-      default:
-        return false;
-    }
+    // Use the live state after selection plugins have run. Applying a
+    // selection to a detached state can append a trailing paragraph and
+    // make the subsequent transaction incompatible with the live document.
+    const selection = CellSelection.create(view.state.doc, $cell.pos);
+    view.dispatch(view.state.tr.setSelection(selection));
+    const didRun = runTableAction(view.state, view.dispatch, action);
+    if (didRun) view.focus();
+    return didRun;
   });
 }
 

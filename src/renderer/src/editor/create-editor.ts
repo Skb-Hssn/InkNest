@@ -7,7 +7,7 @@ import {
   rootCtx
 } from "@milkdown/kit/core";
 import { commonmark } from "@milkdown/kit/preset/commonmark";
-import { gfm } from "@milkdown/kit/preset/gfm";
+import { gfm, tableSchema } from "@milkdown/kit/preset/gfm";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { history } from "@milkdown/kit/plugin/history";
 import { trailing } from "@milkdown/kit/plugin/trailing";
@@ -30,6 +30,7 @@ import {
   insertParagraphAfterCallout
 } from "./editor-controller";
 import type { MarkdownEditorProps } from "./types";
+import { moveTableCell } from "./table-commands";
 
 type CreateEditorOptions = Pick<
   MarkdownEditorProps,
@@ -53,6 +54,12 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
     .config((ctx) => {
       ctx.set(rootCtx, options.root);
       ctx.set(defaultValueCtx, options.body);
+      // GFM supports a header with no body rows. Requiring a body row makes
+      // deleting the final data row recreate it during schema repair.
+      ctx.update(tableSchema.key, (schema) => (schemaCtx) => ({
+        ...schema(schemaCtx),
+        content: "table_header_row table_row*"
+      }));
       ctx.update(remarkStringifyOptionsCtx, (previous) => ({
         ...previous,
         bullet: "-" as const
@@ -108,7 +115,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             !event.ctrlKey &&
             !event.metaKey &&
             !event.altKey &&
-            insertCodeIndent(view)
+            (moveTableCell(view.state, view.dispatch, event.shiftKey ? -1 : 1) || insertCodeIndent(view))
           ) {
             event.preventDefault();
             return true;

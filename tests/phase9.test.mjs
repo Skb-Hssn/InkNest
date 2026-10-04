@@ -52,8 +52,10 @@ test("phase 9 editor commands dispatch schema transactions", async () => {
     "toggleStrongCommand", "toggleEmphasisCommand", "toggleStrikethroughCommand",
     "toggleInlineCodeCommand", "wrapInBulletListCommand", "wrapInOrderedListCommand",
     "wrapInBlockquoteCommand", "createCodeBlockCommand", "insertTableCommand",
-    "addRowAfterCommand", "addColAfterCommand", "deleteRow(view.state, view.dispatch)",
-    "deleteColumn(view.state, view.dispatch)", "replaceSelectionWithLink",
+    'runTableAction(view.state, view.dispatch, "add-row-after")',
+    'runTableAction(view.state, view.dispatch, "add-column-after")',
+    'runTableAction(view.state, view.dispatch, "delete-row")',
+    'runTableAction(view.state, view.dispatch, "delete-column")', "replaceSelectionWithLink",
     "clearFormatting", "collectActiveEditorCommands", "getEditorMarkdown",
     "insertCodeIndent", "insertCodeLineBreak", "insertText(\"    \"",
     "const indentation = currentLine.match"

@@ -72,7 +72,7 @@ test("phase 8 shared contract exposes note save and current app phase", async ()
   assert.match(sharedPreload, /save:\s*\(payload: SaveNotePayload\)/);
   assert.match(preloadSource, /ipcChannels\.notes\.save/);
   assert.match(notesHandlerSource, /saveMarkdownNote/);
-  assert.match(notesHandlerSource, /assertString\(payload\.markdown, "markdown"\)/);
+  assert.match(notesHandlerSource, /typeof payload\.markdown !== "string"/);
   assert.match(appHandlerSource, /phase-9-toolbar-editing-commands/);
 });
 

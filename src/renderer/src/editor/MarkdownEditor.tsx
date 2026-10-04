@@ -41,6 +41,7 @@ type BlockActionState = {
 };
 
 type TableCellActionState = {
+  cell: HTMLElement;
   position: number;
   top: number;
   left: number;
@@ -49,6 +50,7 @@ type TableCellActionState = {
 };
 
 const tableCellActions: Array<{ action: TableCellAction; label: string }> = [
+  { action: "delete-table", label: "Delete table" },
   { action: "delete-row", label: "Delete row" },
   { action: "delete-column", label: "Delete column" },
   { action: "add-row-before", label: "Add row before" },
@@ -111,6 +113,10 @@ export const MarkdownEditor = forwardRef<
       return;
     }
 
+    // Keep an open menu attached to its original cell while the pointer
+    // crosses nearby cells on the way to the menu.
+    if (tableCellAction?.menuOpen) return;
+
     if (
       target.closest(
         ".inknest-block-handle, .inknest-block-menu, .inknest-table-cell-handle, .inknest-table-cell-menu"
@@ -148,6 +154,7 @@ export const MarkdownEditor = forwardRef<
         );
 
         return {
+          cell: cellElement,
           position,
           top: Math.max(0, cellRect.top - containerRect.top + 4),
           left,
@@ -250,13 +257,17 @@ export const MarkdownEditor = forwardRef<
   function runHoveredTableAction(action: TableCellAction) {
     const editor = editorRef.current;
     const currentAction = tableCellAction;
-    if (!editor || !currentAction) {
+    if (!editor || !currentAction || propsRef.current.disabled) {
       return;
     }
 
-    if (runTableCellAction(editor, currentAction.position, action)) {
-      setTableCellAction(null);
+    // Resolve the current DOM cell at execution time: typing/undo may have
+    // shifted document positions since the menu first appeared.
+    if (rootRef.current?.contains(currentAction.cell)) {
+      const position = editor.action((ctx) => ctx.get(editorViewCtx).posAtDOM(currentAction.cell, 0));
+      runTableCellAction(editor, position, action);
     }
+    setTableCellAction(null);
   }
 
   useImperativeHandle(ref, () => ({
@@ -450,6 +461,7 @@ export const MarkdownEditor = forwardRef<
             aria-haspopup="menu"
             aria-expanded={tableCellAction.menuOpen}
             title="Table cell actions"
+            disabled={props.disabled}
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => {
               event.stopPropagation();
@@ -473,6 +485,7 @@ export const MarkdownEditor = forwardRef<
                   type="button"
                   className="inknest-block-menu-item"
                   role="menuitem"
+                  disabled={props.disabled}
                   onMouseDown={(event) => event.preventDefault()}
                   onClick={(event) => {
                     event.stopPropagation();

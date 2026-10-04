@@ -23,6 +23,7 @@ export type MarkdownEditorCommand =
   | "code-block"
   | "divider"
   | "table"
+  | "table-delete"
   | "table-add-row"
   | "table-delete-row"
   | "table-add-column"
