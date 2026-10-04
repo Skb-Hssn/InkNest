@@ -49,6 +49,13 @@ export function registerSettingsHandlers() {
         nextSettings.lineWrap = assertBoolean(payload.lineWrap, "lineWrap");
       }
 
+      if (payload.fullWidth !== undefined) {
+        nextSettings.fullWidth = assertBoolean(payload.fullWidth, "fullWidth");
+      }
+      if (payload.showOutline !== undefined) {
+        nextSettings.showOutline = assertBoolean(payload.showOutline, "showOutline");
+      }
+
       if (payload.showWordCount !== undefined) {
         nextSettings.showWordCount = assertBoolean(
           payload.showWordCount,

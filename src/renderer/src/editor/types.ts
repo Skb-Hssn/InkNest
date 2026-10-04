@@ -66,6 +66,7 @@ export type MarkdownEditorHandle = {
   getLinkDetails: () => Omit<LinkDialogDetails, "position">;
   getMarkdown: () => string;
   focus: () => void;
+  openSearch: (mode: "find" | "replace") => void;
 };
 
 export type MarkdownEditorProps = {
@@ -74,6 +75,8 @@ export type MarkdownEditorProps = {
   notePath: string;
   disabled: boolean;
   lineWrap: boolean;
+  fullWidth: boolean;
+  showOutline: boolean;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
   onLinkDialogRequest: (details: LinkDialogDetails) => void;

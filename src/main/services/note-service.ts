@@ -88,8 +88,7 @@ export async function createMarkdownNote(
     title
   );
   const notePath = path.join(folder, fileName);
-  const noteTitle = sanitizeFileName(title);
-  const markdown = `# ${noteTitle}\n\n`;
+  const markdown = "";
 
   await writeFile(notePath, markdown, { encoding: "utf8", flag: "wx" });
 

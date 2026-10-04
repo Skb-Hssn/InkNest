@@ -825,7 +825,7 @@ input {
   }
 
   .editor-scroll {
-    @apply min-h-0 flex-1 overflow-y-auto px-6 py-5;
+    @apply min-h-0 flex-1 overflow-hidden;
   }
 
   button:disabled {
@@ -1442,4 +1442,9 @@ main[style] {
     background: #9b7126;
     color: #171108;
   }
+}
+
+.app-editor-header-actions .icon-button[aria-pressed="true"] {
+  color: var(--app-text);
+  background: color-mix(in srgb, #4f8f68 14%, var(--app-surface));
 }

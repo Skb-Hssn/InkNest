@@ -194,8 +194,10 @@ test("phase 6 note service performs create, rename, duplicate, move, trash, rest
 
     const created = await createMarkdownNote(workspaceRoot, ".", "Daily Notes");
     assert.equal(created.path, "Daily Notes.md");
-    assert.equal(created.markdown, "# Daily Notes\n\n");
+    assert.equal(created.markdown, "");
     assert.equal(existsSync(path.join(workspaceRoot, "Daily Notes.md")), true);
+    // Simulate writing content before testing the remaining CRUD operations.
+    await writeFile(path.join(workspaceRoot, created.path), "# Daily Notes\n\n", "utf8");
 
     const renamed = await renameMarkdownNote(
       workspaceRoot,

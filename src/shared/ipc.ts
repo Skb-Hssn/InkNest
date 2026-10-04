@@ -112,6 +112,8 @@ export type AppSettings = {
   fontFamily: "system" | "serif" | "mono";
   autoSaveDelayMs: number;
   lineWrap: boolean;
+  fullWidth: boolean;
+  showOutline: boolean;
   showWordCount: boolean;
   sidebarVisible: boolean;
   lastWorkspacePath: string | null;
@@ -126,6 +128,8 @@ export type SaveSettingsPayload = Partial<
     | "fontFamily"
     | "autoSaveDelayMs"
     | "lineWrap"
+    | "fullWidth"
+    | "showOutline"
     | "showWordCount"
     | "sidebarVisible"
   >

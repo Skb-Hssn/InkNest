@@ -20,7 +20,9 @@ test("package scripts run the phase 1 Electron/Vite scaffold", async () => {
   assert.match(packageJson.scripts.check, /node scripts\/check-scaffold\.mjs/);
   assert.match(packageJson.scripts.check, /npm test/);
   assert.match(packageJson.scripts.check, /tsc --noEmit/);
-  assert.equal(packageJson.scripts.build, "tsc --noEmit && electron-vite build");
+  assert.match(packageJson.scripts.build, /tsc --noEmit -p tsconfig.node.json/);
+  assert.match(packageJson.scripts.build, /tsc --noEmit -p tsconfig.web.json/);
+  assert.match(packageJson.scripts.build, /electron-vite build$/);
 });
 
 test("package dependencies include the selected phase 1 stack", async () => {

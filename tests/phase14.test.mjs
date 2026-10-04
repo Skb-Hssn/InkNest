@@ -117,6 +117,8 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
       fontFamily: "system",
       autoSaveDelayMs: 750,
       lineWrap: true,
+      fullWidth: false,
+      showOutline: true,
       showWordCount: false,
       sidebarVisible: true,
       lastWorkspacePath: null,

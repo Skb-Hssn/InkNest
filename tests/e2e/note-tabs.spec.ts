@@ -98,8 +98,8 @@ test("the tab bar plus creates unique unnamed notes, even after all tabs close",
     await expect(window.getByRole("tab")).toHaveCount(0);
     await plus.click();
     await expect(window.getByRole("tab", { name: "Untitled 3", exact: true })).toHaveAttribute("aria-selected", "true");
-    expect(await readFile(path.join(workspaceDir, "Untitled.md"), "utf8")).toContain("# Untitled");
-    expect(await readFile(path.join(workspaceDir, "Untitled 2.md"), "utf8")).toContain("# Untitled");
+    expect(await readFile(path.join(workspaceDir, "Untitled.md"), "utf8")).toBe("");
+    expect(await readFile(path.join(workspaceDir, "Untitled 2.md"), "utf8")).toBe("");
   } finally {
     await app.close();
   }

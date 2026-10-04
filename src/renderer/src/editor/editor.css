@@ -121,7 +121,6 @@
 }
 
 .inknest-editor-no-wrap .editor {
-  max-width: none;
   overflow-x: auto;
   overflow-wrap: normal;
   white-space: pre;
@@ -411,4 +410,152 @@
 .inknest-editor .ProseMirror-selectednode {
   outline: 2px solid #2f6d4f;
   outline-offset: 2px;
+}
+
+.note-workspace {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  min-width: 0;
+}
+.note-editor-column {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+.note-writing-scroll {
+  width: 100%;
+  overflow: auto;
+  padding: 1.25rem 1rem;
+  scrollbar-gutter: stable;
+}
+.inknest-editor-full-width .editor { max-width: none; }
+.note-heading-minimap {
+  display: flex;
+  width: 210px;
+  flex: 0 0 210px;
+  flex-direction: column;
+  min-height: 0;
+  border-left: 1px solid var(--app-border);
+  background: var(--app-surface);
+  padding: 1rem 0.5rem;
+  font-size: 0.75rem;
+}
+.note-outline-title {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.25rem 0.5rem 0.85rem;
+  color: var(--app-muted);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+.note-outline-count { margin-left: auto; font-size: 0.65rem; font-variant-numeric: tabular-nums; }
+.note-outline-scroll { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.note-outline-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.45rem;
+  width: 100%;
+  margin-block: 1px;
+  padding-block: 0.5rem;
+  padding-right: 0.5rem;
+  border: 0;
+  border-radius: 0.35rem;
+  background: transparent;
+  text-align: left;
+  color: var(--app-muted);
+  cursor: pointer;
+}
+.note-outline-heading > span:last-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.note-outline-level { flex-shrink: 0; color: var(--app-muted); font-family: ui-monospace, monospace; font-size: 0.6rem; opacity: 0.65; }
+.note-outline-heading[data-level="1"] { color: var(--app-text); font-weight: 650; }
+.note-outline-heading:hover { background: var(--app-surface-subtle); color: var(--app-text); }
+.note-outline-heading[aria-current="location"] {
+  background: color-mix(in srgb, #4f8f68 13%, var(--app-surface));
+  color: var(--app-text);
+  box-shadow: inset 2px 0 #4f8f68;
+}
+.note-outline-empty { padding: 0.5rem; color: var(--app-muted); line-height: 1.7; }
+.note-find-widget {
+  position: absolute;
+  z-index: 30;
+  top: 0.5rem;
+  right: 1.25rem;
+  display: flex;
+  width: min(560px, calc(100% - 2rem));
+  gap: 0.15rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.4rem;
+  background: var(--app-surface);
+  padding: 0.4rem;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 14%);
+  font-size: 0.75rem;
+}
+.note-find-fields { flex: 1; min-width: 0; }
+.note-find-row { display: flex; align-items: center; gap: 0.15rem; }
+.note-replace-row { margin-top: 0.35rem; }
+.note-find-input {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  border: 1px solid var(--app-border);
+  border-radius: 0.25rem;
+  background: var(--app-surface-subtle);
+  padding-right: 0.15rem;
+}
+.note-find-input:focus-within { border-color: #4f8f68; box-shadow: 0 0 0 1px #4f8f68; }
+.note-find-input textarea {
+  display: block;
+  flex: 1;
+  width: 0;
+  min-width: 35px;
+  height: 30px;
+  max-height: 90px;
+  border: 0;
+  outline: 0;
+  resize: none;
+  background: transparent;
+  color: var(--app-text);
+  padding: 0.35rem 0.5rem;
+  font: inherit;
+  line-height: 1.5;
+  white-space: pre;
+  overflow: auto;
+}
+.note-find-widget button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 25px;
+  height: 27px;
+  border: 1px solid transparent;
+  border-radius: 0.2rem;
+  background: transparent;
+  color: var(--app-muted);
+  font-family: ui-monospace, monospace;
+  font-size: 0.75rem;
+  cursor: pointer;
+}
+.note-find-widget button:hover:not(:disabled) { background: var(--app-surface-subtle); color: var(--app-text); }
+.note-find-widget button[aria-pressed="true"] { border-color: #4f8f68; background: color-mix(in srgb, #4f8f68 18%, var(--app-surface)); color: var(--app-text); }
+.note-find-word { text-decoration: underline; text-underline-offset: 3px; }
+.note-find-count { min-width: 52px; padding-inline: 0.25rem; white-space: nowrap; color: var(--app-muted); font-variant-numeric: tabular-nums; }
+.note-find-message { margin: 0.35rem 0 0; color: var(--app-muted); font-size: 0.7rem; }
+.note-find-error { color: #c85050; }
+.note-find-input-error { border-color: #c85050; }
+.note-search-match { background: color-mix(in srgb, #e6b854 35%, transparent); border-radius: 2px; box-shadow: inset 0 -1px #c99c37; }
+.note-search-current { background: color-mix(in srgb, #f29d38 55%, transparent); outline: 1px solid #d18e29; }
+.note-search-zero { display: inline-block; width: 2px; height: 1em; vertical-align: text-bottom; }
+.note-outline-heading:focus-visible,
+.note-find-widget button:focus-visible { outline: 2px solid #4f8f68; outline-offset: 1px; }
+@media (max-width: 950px) {
+  .note-heading-minimap { width: 155px; flex-basis: 155px; }
+  .inknest-editor .editor { padding-inline: 1.25rem; }
+  .note-find-row { flex-wrap: wrap; }
+  .note-find-input { flex-basis: 100%; }
 }

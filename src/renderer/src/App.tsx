@@ -41,6 +41,8 @@ import {
   List,
   ListChecks,
   ListOrdered,
+  ListTree,
+  Replace,
   Maximize2,
   MoreHorizontal,
   Minus,
@@ -103,6 +105,8 @@ const initialSettings: AppSettings = {
   fontFamily: "system",
   autoSaveDelayMs: 750,
   lineWrap: true,
+  fullWidth: false,
+  showOutline: true,
   showWordCount: true,
   sidebarVisible: true,
   lastWorkspacePath: null,
@@ -1482,6 +1486,13 @@ export function App() {
         target instanceof HTMLTextAreaElement ||
         (target instanceof HTMLElement && target.isContentEditable);
 
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+          ["f", "h"].includes(event.key.toLowerCase()) && editorHandleRef.current && !isSettingsOpen && !isCommandPaletteOpen) {
+        event.preventDefault();
+        editorHandleRef.current.openSearch(event.key.toLowerCase() === "h" ? "replace" : "find");
+        return;
+      }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
         setIsCommandPaletteOpen(true);
@@ -2658,6 +2669,15 @@ export function App() {
             </div>
             {selectedNoteContent ? (
               <div className="app-editor-header-actions flex items-center gap-2">
+                <button type="button" className="icon-button" aria-label="Find in note" title="Find in note (Ctrl+F)"
+                  aria-keyshortcuts="Control+F" onClick={() => editorHandleRef.current?.openSearch("find")}><Search size={17} /></button>
+                <button type="button" className="icon-button" aria-label="Find and replace" title="Find and replace (Ctrl+H)"
+                  aria-keyshortcuts="Control+H" onClick={() => editorHandleRef.current?.openSearch("replace")}><Replace size={17} /></button>
+                <button type="button" className="icon-button" aria-label="Full width" aria-pressed={settings.fullWidth}
+                  title={settings.fullWidth ? "Use readable width" : "Use full width"}
+                  onClick={() => void updateAppSettings({ fullWidth: !settings.fullWidth })}>{settings.fullWidth ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button>
+                <button type="button" className="icon-button" aria-label="Show heading minimap" aria-pressed={settings.showOutline}
+                  title="Toggle heading minimap" onClick={() => void updateAppSettings({ showOutline: !settings.showOutline })}><ListTree size={17} /></button>
                 <button
                   type="button"
                   className="secondary-button"
@@ -2864,6 +2884,8 @@ export function App() {
                 notePath={selectedNoteContent.path}
                 disabled={isBusy}
                 lineWrap={settings.lineWrap}
+                fullWidth={settings.fullWidth}
+                showOutline={settings.showOutline}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
                   setEditorMarkdown(nextMarkdown);
@@ -3189,6 +3211,14 @@ function SettingsPopover({ settings, onUpdate, onClose, className = "" }: Settin
           onChange={(event) => onUpdate({ lineWrap: event.target.checked })}
         />
         <span>Wrap editor lines</span>
+      </label>
+      <label className="settings-checkbox">
+        <input type="checkbox" checked={settings.fullWidth} onChange={(event) => onUpdate({ fullWidth: event.target.checked })} />
+        <span>Full width notes</span>
+      </label>
+      <label className="settings-checkbox">
+        <input type="checkbox" checked={settings.showOutline} onChange={(event) => onUpdate({ showOutline: event.target.checked })} />
+        <span>Show heading minimap</span>
       </label>
       <label className="settings-checkbox">
         <input

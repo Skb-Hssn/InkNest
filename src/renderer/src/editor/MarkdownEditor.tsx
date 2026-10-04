@@ -9,6 +9,11 @@ import {
 import { CirclePlus, Grip, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Editor } from "@milkdown/kit/core";
 import { editorViewCtx } from "@milkdown/kit/core";
+import { TextSelection } from "@milkdown/kit/prose/state";
+import { FindReplaceBar } from "./FindReplaceBar";
+import { HeadingMinimap, collectNoteHeadings, type NoteHeading } from "./HeadingMinimap";
+import { emptySearch, noteSearchKey, updateNoteSearch, selectNoteMatch, replaceNoteMatches,
+  type NoteSearchState, type SearchOptions, type SearchScope } from "./search-plugin";
 import { replaceAll } from "@milkdown/kit/utils";
 import "@milkdown/kit/prose/view/style/prosemirror.css";
 import "@milkdown/kit/prose/tables/style/tables.css";
@@ -76,6 +81,22 @@ export const MarkdownEditor = forwardRef<
   const editorRef = useRef<Editor | null>(null);
   const [blockAction, setBlockAction] = useState<BlockActionState | null>(null);
   const [tableCellAction, setTableCellAction] = useState<TableCellActionState | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+  const [headings, setHeadings] = useState<NoteHeading[]>([]);
+  const [activeHeading, setActiveHeading] = useState<number | null>(null);
+  const [editorReady, setEditorReady] = useState(false);
+  const [findOpen, setFindOpen] = useState(false);
+  const [replaceOpen, setReplaceOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [replacement, setReplacement] = useState("");
+  const [searchOptions, setSearchOptions] = useState<SearchOptions>(emptySearch.options);
+  const [preserveCase, setPreserveCase] = useState(false);
+  const [selectionOnly, setSelectionOnly] = useState(false);
+  const searchSelectionRef = useRef<SearchScope | null>(null);
+  const pendingNavigationRef = useRef<number | null>(null);
+  const [search, setSearch] = useState<NoteSearchState>(emptySearch);
+  const [findFocusToken, setFindFocusToken] = useState(0);
+  const [replaceMessage, setReplaceMessage] = useState("");
   const propsRef = useRef(props);
   const envelopeRef = useRef<MarkdownDocumentEnvelope>(
     splitMarkdownDocument(props.markdown)
@@ -104,6 +125,156 @@ export const MarkdownEditor = forwardRef<
     document.addEventListener("pointerdown", handleOutsidePointerDown);
     return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
   }, [blockAction?.menuOpen, tableCellAction?.menuOpen]);
+
+  function refreshHeadings(editor: Editor) {
+    const next = editor.action((ctx) => collectNoteHeadings(ctx.get(editorViewCtx).state.doc));
+    setHeadings((previous) => previous.length === next.length && previous.every((heading, index) =>
+      heading.position === next[index].position && heading.text === next[index].text && heading.level === next[index].level
+    ) ? previous : next);
+  }
+
+  function openSearch(mode: "find" | "replace", seedSelection = true) {
+    const editor = editorRef.current;
+    if (!editor) return;
+    if (!findOpen && seedSelection) {
+      editor.action((ctx) => {
+        const { state } = ctx.get(editorViewCtx);
+        const { from, to, empty } = state.selection;
+        searchSelectionRef.current = empty ? null : { from, to };
+        setSelectionOnly(false);
+        const selected = state.doc.textBetween(from, to, "\n");
+        if (selected && selected.length < 1000) setQuery(selected);
+      });
+    }
+    setFindOpen(true);
+    setReplaceOpen(mode === "replace");
+    setReplaceMessage("");
+    setFindFocusToken((token) => token + 1);
+  }
+  function closeSearch() {
+    setFindOpen(false);
+    setReplaceMessage("");
+    editorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      updateNoteSearch(view, { query: "", scope: null });
+      view.focus();
+    });
+  }
+  function navigateMatch(direction: number) {
+    editorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const current = noteSearchKey.getState(view.state)!;
+      if (!current.matches.length) return;
+      const active = current.matches[current.activeIndex];
+      const selection = view.state.selection;
+      let index = (current.activeIndex + direction + current.matches.length) % current.matches.length;
+      if (!active || selection.from !== active.from || selection.to !== active.to) {
+        index = direction > 0 ? current.matches.findIndex((match) => match.from >= selection.to)
+          : current.matches.length - 1 - [...current.matches].reverse().findIndex((match) => match.to <= selection.from);
+        if (index < 0 || index >= current.matches.length) index = direction > 0 ? 0 : current.matches.length - 1;
+      }
+      selectNoteMatch(view, index);
+    });
+    setReplaceMessage("");
+  }
+  function replaceMatches(all: boolean) {
+    if (propsRef.current.disabled) return;
+    editorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      const count = replaceNoteMatches(view, replacement, all, preserveCase);
+      setReplaceMessage(count ? `Replaced ${count} ${count === 1 ? "match" : "matches"}` : "No matches to replace");
+      const current = noteSearchKey.getState(view.state)!;
+      if (current.matches.length) selectNoteMatch(view, current.activeIndex);
+    });
+  }
+  function navigateHeading(heading: NoteHeading) {
+    editorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(heading.position + 1)))
+        .setMeta("addToHistory", false));
+      view.focus();
+      const element = view.nodeDOM(heading.position);
+      const scroller = scrollRef.current;
+      if (element instanceof HTMLElement && scroller) {
+        scroller.scrollTop += element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 24;
+      }
+      setActiveHeading(heading.position);
+    });
+  }
+
+  useEffect(() => {
+    if (!editorReady) return;
+    editorRef.current?.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      updateNoteSearch(view, {
+        query: findOpen ? query : "", options: searchOptions,
+        scope: findOpen && selectionOnly ? searchSelectionRef.current : null,
+        anchor: view.state.selection.from
+      });
+      const current = noteSearchKey.getState(view.state)!;
+      if (findOpen && current.matches.length) {
+        if (pendingNavigationRef.current !== null) navigateMatch(pendingNavigationRef.current);
+        else selectNoteMatch(view, current.activeIndex);
+      }
+      pendingNavigationRef.current = null;
+    });
+    setReplaceMessage("");
+  }, [editorReady, findOpen, query, searchOptions, selectionOnly]);
+
+  useEffect(() => {
+    const handleKey = (event: KeyboardEvent) => {
+      if (event.key === "F3" && query) {
+        event.preventDefault();
+        if (!findOpen) {
+          pendingNavigationRef.current = event.shiftKey ? -1 : 1;
+          openSearch("find", false);
+        } else navigateMatch(event.shiftKey ? -1 : 1);
+      } else if (event.key === "Escape" && findOpen &&
+        event.target instanceof HTMLElement && containerRef.current?.contains(event.target)) {
+        event.preventDefault();
+        closeSearch();
+      }
+    };
+    window.addEventListener("keydown", handleKey);
+    return () => window.removeEventListener("keydown", handleKey);
+  }, [findOpen, query]);
+
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    if (!scroller || !editorReady) return;
+    let frame = 0;
+    const update = () => {
+      const editor = editorRef.current;
+      if (!editor) return;
+      const top = scroller.getBoundingClientRect().top + 80;
+      let position = headings[0]?.position ?? null;
+      editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        for (const heading of headings) {
+          const node = view.nodeDOM(heading.position);
+          if (node instanceof HTMLElement && node.getBoundingClientRect().top <= top) position = heading.position;
+          else break;
+        }
+      });
+      if (scroller.scrollHeight > scroller.clientHeight + 3 &&
+          scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 3) {
+        position = headings.at(-1)?.position ?? position;
+      }
+      setActiveHeading(position);
+    };
+    const schedule = () => {
+      cancelAnimationFrame(frame);
+      frame = requestAnimationFrame(update);
+    };
+    schedule();
+    scroller.addEventListener("scroll", schedule, { passive: true });
+    window.addEventListener("resize", schedule);
+    return () => {
+      cancelAnimationFrame(frame);
+      scroller.removeEventListener("scroll", schedule);
+      window.removeEventListener("resize", schedule);
+    };
+  }, [editorReady, headings, props.fullWidth, props.showOutline, props.lineWrap]);
 
   function handleEditorMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
     const root = rootRef.current;
@@ -271,6 +442,7 @@ export const MarkdownEditor = forwardRef<
   }
 
   useImperativeHandle(ref, () => ({
+    openSearch,
     runCommand(command, options) {
       const editor = editorRef.current;
       if (!editor) {
@@ -332,6 +504,13 @@ export const MarkdownEditor = forwardRef<
       },
       onSelectionFormatChange(commands) {
         propsRef.current.onSelectionFormatChange(commands);
+        if (!disposed) refreshHeadings(editor);
+      },
+      onSearchChange(next) {
+        if (!disposed) {
+          setSearch(next);
+          if (next.scope) searchSelectionRef.current = next.scope;
+        }
       },
       onLinkDialogRequest(details) {
         propsRef.current.onLinkDialogRequest(details);
@@ -350,6 +529,8 @@ export const MarkdownEditor = forwardRef<
       }
 
       editorRef.current = editor;
+      setEditorReady(true);
+      refreshHeadings(editor);
       setEditorEditable(editor, !propsRef.current.disabled);
       propsRef.current.onSelectionFormatChange(collectActiveEditorCommands(editor));
     });
@@ -396,9 +577,19 @@ export const MarkdownEditor = forwardRef<
   }, [props.markdown]);
 
   return (
+    <div className={`note-workspace${props.showOutline ? " note-workspace-with-outline" : ""}`}>
+      <div className="note-editor-column">
+        {findOpen ? <FindReplaceBar query={query} replacement={replacement} replaceOpen={replaceOpen}
+          options={searchOptions} preserveCase={preserveCase} selectionOnly={selectionOnly}
+          hasSelection={Boolean(searchSelectionRef.current)} search={search} focusToken={findFocusToken}
+          disabled={props.disabled} message={replaceMessage} onQuery={setQuery} onReplacement={setReplacement}
+          onToggleReplace={() => setReplaceOpen((open) => !open)} onOptions={setSearchOptions}
+          onPreserveCase={() => setPreserveCase((enabled) => !enabled)} onSelectionOnly={() => setSelectionOnly((enabled) => !enabled)}
+          onNavigate={navigateMatch} onReplace={replaceMatches} onClose={closeSearch} /> : null}
+        <div ref={scrollRef} className="note-writing-scroll">
     <div
       ref={containerRef}
-      className={`inknest-editor ${props.lineWrap ? "" : "inknest-editor-no-wrap"}`}
+      className={`inknest-editor ${props.lineWrap ? "" : "inknest-editor-no-wrap"} ${props.fullWidth ? "inknest-editor-full-width" : ""}`}
       data-placeholder="Start writing..."
       onMouseMove={handleEditorMouseMove}
       onMouseLeave={() => {
@@ -500,6 +691,10 @@ export const MarkdownEditor = forwardRef<
           ) : null}
         </>
       ) : null}
+    </div>
+        </div>
+      </div>
+      {props.showOutline ? <HeadingMinimap headings={headings} activePosition={activeHeading} onNavigate={navigateHeading} /> : null}
     </div>
   );
 });

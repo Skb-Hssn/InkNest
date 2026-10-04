@@ -33,6 +33,7 @@ import {
 } from "./editor-controller";
 import type { MarkdownEditorProps } from "./types";
 import { moveTableCell } from "./table-commands";
+import { createNoteSearchPlugin, type NoteSearchState } from "./search-plugin";
 import { runFormattingAction, type FormattingAction } from "./formatting-commands";
 
 type CreateEditorOptions = Pick<
@@ -48,6 +49,7 @@ type CreateEditorOptions = Pick<
   body: string;
   disabled: boolean;
   onBodyChange: (body: string) => void;
+  onSearchChange: (state: NoteSearchState) => void;
 };
 
 export function createMarkdownEditor(options: CreateEditorOptions) {
@@ -77,7 +79,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           "aria-multiline": "true",
           spellcheck: "true"
         },
-        handleTextInput(view, from, to, text) {
+        handleTextInput(view, from, to, text, defaultInsert) {
           const marks = view.state.storedMarks;
           if (marks?.some((mark) => mark.type.name === "inlineCode")) {
             // Explicitly enabled code remains enabled while typing. Moving the
@@ -85,7 +87,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             view.dispatch(view.state.tr.insertText(text, from, to).ensureMarks(marks));
             return true;
           }
-          return previous.handleTextInput?.(view, from, to, text) ?? false;
+          return previous.handleTextInput?.(view, from, to, text, defaultInsert) ?? false;
         },
         handleKeyDown(view, event) {
           // Browser caret movement (Home/End and Shift+Arrow) may precede
@@ -260,6 +262,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
         options.onSelectionFormatChange(collectActiveEditorCommands(editor));
       }
     }))
+    .use(createNoteSearchPlugin(options.onSearchChange))
     .use(calloutPlugin)
     .use(codeHighlightPlugin)
     .use(slashCommandPlugin)
