@@ -4,7 +4,11 @@ New notes have an empty body and are saved as empty files. Their initial filenam
 
 The **Full width** button above the editor switches between the normal reading width and the available writing area. **Show heading minimap** toggles the outline on the right. Both preferences persist across restarts and are also available in Settings.
 
-The outline lists headings H1–H6 with indentation, follows the current section as the note scrolls, and updates when headings change. Its list scrolls independently. Click a heading to move to it.
+The outline floats in a rounded card on the right, with an independently scrollable list of headings H1–H6. It follows the current section as the note scrolls and updates when headings change. Click a heading to move to it. Use the card's close button or **Show heading minimap** to hide it; opening and closing animate smoothly and respect reduced-motion preferences.
+
+Drag anywhere along the card's left edge, including the corners, or use the visible grip to resize it. Its width is remembered across notes and restarts, and it adapts to smaller windows. Double-click the resize handle to reset the width. With the handle focused, Left/Right arrows widen/narrow the card; hold Shift for larger steps, or use Home/End for the smallest/largest width. Escape cancels an active drag.
+
+Scrollbars throughout the app use slim, rounded thumbs with hover feedback and colors that follow the selected theme.
 
 ## Find and replace
 
@@ -34,5 +38,5 @@ Invalid regular expressions show an error and disable replacement. Zero-length m
 ## Verification
 
 - `tests/note-search.test.mjs`: 42 cases for matching, Unicode word boundaries, scopes, regex captures, zero-length matches, formatting, table structure, live updates, and undo/redo.
-- `tests/e2e/note-tools.spec.ts`: 13 Electron UI cases covering empty files, persistent layout preferences, heading navigation, keyboard controls, search options, replacement, saving/reopening, and note switching.
+- `tests/e2e/note-tools.spec.ts`: 18 Electron UI cases covering empty files, persistent layout preferences, heading navigation, floating-card animations, edge/corner resizing and rendered widths, reduced motion, themed scrollbars, keyboard controls, search options, replacement, saving/reopening, and note switching.
 - Existing tab, table-operation, and text-formatting suites provide editor regression coverage.

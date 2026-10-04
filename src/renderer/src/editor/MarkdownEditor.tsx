@@ -267,10 +267,13 @@ export const MarkdownEditor = forwardRef<
       frame = requestAnimationFrame(update);
     };
     schedule();
+    const resizeObserver = new ResizeObserver(schedule);
+    resizeObserver.observe(scroller);
     scroller.addEventListener("scroll", schedule, { passive: true });
     window.addEventListener("resize", schedule);
     return () => {
       cancelAnimationFrame(frame);
+      resizeObserver.disconnect();
       scroller.removeEventListener("scroll", schedule);
       window.removeEventListener("resize", schedule);
     };
@@ -694,7 +697,12 @@ export const MarkdownEditor = forwardRef<
     </div>
         </div>
       </div>
-      {props.showOutline ? <HeadingMinimap headings={headings} activePosition={activeHeading} onNavigate={navigateHeading} /> : null}
+      <HeadingMinimap headings={headings} activePosition={activeHeading} onNavigate={navigateHeading}
+        visible={props.showOutline} preferredWidth={props.outlineWidth} onWidthChange={props.onOutlineWidthChange}
+        onClose={() => {
+          props.onOutlineClose();
+          editorRef.current?.action((ctx) => ctx.get(editorViewCtx).focus());
+        }} />
     </div>
   );
 });

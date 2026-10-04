@@ -100,6 +100,7 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
         fontFamily: "comic-sans",
         autoSaveDelayMs: 100,
         lineWrap: "yes",
+        outlineWidth: 999,
         showWordCount: false,
         sidebarVisible: true,
         lastWorkspacePath: "",
@@ -119,6 +120,7 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
       lineWrap: true,
       fullWidth: false,
       showOutline: true,
+      outlineWidth: 232,
       showWordCount: false,
       sidebarVisible: true,
       lastWorkspacePath: null,
@@ -129,12 +131,15 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
       ...settings,
       theme: "dark",
       fontSize: 20,
-      lineWrap: false
+      lineWrap: false,
+      outlineWidth: 360
     }));
 
     assert.equal(updated.theme, "dark");
     assert.equal(updated.fontSize, 20);
     assert.equal(updated.lineWrap, false);
+    assert.equal(updated.outlineWidth, 360);
+    assert.equal((await readSettings()).outlineWidth, 360);
     assert.equal(JSON.parse(await readFile(path.join(harness.userDataPath, "settings.json"))).fontFamily, "system");
   } finally {
     await harness.cleanup();

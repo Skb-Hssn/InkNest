@@ -75,6 +75,13 @@ export function assertBoolean(value: unknown, fieldName: string) {
   return value;
 }
 
+export function assertOutlineWidth(value: unknown) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 180 || value > 420) {
+    throw invalidPayload("outlineWidth must be an integer between 180 and 420.");
+  }
+  return value;
+}
+
 export function assertWorkspacePath(
   candidatePath: string,
   activeWorkspace: ActiveWorkspaceState

@@ -114,6 +114,7 @@ export type AppSettings = {
   lineWrap: boolean;
   fullWidth: boolean;
   showOutline: boolean;
+  outlineWidth: number;
   showWordCount: boolean;
   sidebarVisible: boolean;
   lastWorkspacePath: string | null;
@@ -130,6 +131,7 @@ export type SaveSettingsPayload = Partial<
     | "lineWrap"
     | "fullWidth"
     | "showOutline"
+    | "outlineWidth"
     | "showWordCount"
     | "sidebarVisible"
   >

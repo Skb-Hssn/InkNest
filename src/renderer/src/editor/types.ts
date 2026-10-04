@@ -77,6 +77,9 @@ export type MarkdownEditorProps = {
   lineWrap: boolean;
   fullWidth: boolean;
   showOutline: boolean;
+  outlineWidth: number;
+  onOutlineWidthChange: (width: number) => void;
+  onOutlineClose: () => void;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
   onLinkDialogRequest: (details: LinkDialogDetails) => void;

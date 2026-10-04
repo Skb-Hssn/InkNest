@@ -107,6 +107,7 @@ const initialSettings: AppSettings = {
   lineWrap: true,
   fullWidth: false,
   showOutline: true,
+  outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
   lastWorkspacePath: null,
@@ -2886,6 +2887,9 @@ export function App() {
                 lineWrap={settings.lineWrap}
                 fullWidth={settings.fullWidth}
                 showOutline={settings.showOutline}
+                outlineWidth={settings.outlineWidth}
+                onOutlineWidthChange={(width) => void updateAppSettings({ outlineWidth: width })}
+                onOutlineClose={() => void updateAppSettings({ showOutline: false })}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
                   setEditorMarkdown(nextMarkdown);

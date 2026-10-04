@@ -15,6 +15,7 @@ export const defaultSettings: AppSettings = {
   lineWrap: true,
   fullWidth: false,
   showOutline: true,
+  outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
   lastWorkspacePath: null,
@@ -90,6 +91,8 @@ function normalizeSettings(value: unknown): AppSettings {
     lineWrap,
     fullWidth: typeof candidate.fullWidth === "boolean" ? candidate.fullWidth : defaultSettings.fullWidth,
     showOutline: typeof candidate.showOutline === "boolean" ? candidate.showOutline : defaultSettings.showOutline,
+    outlineWidth: typeof candidate.outlineWidth === "number" && Number.isInteger(candidate.outlineWidth) &&
+      candidate.outlineWidth >= 180 && candidate.outlineWidth <= 420 ? candidate.outlineWidth : defaultSettings.outlineWidth,
     showWordCount,
     sidebarVisible,
     lastWorkspacePath,

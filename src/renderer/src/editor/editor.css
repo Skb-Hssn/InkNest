@@ -413,10 +413,12 @@
 }
 
 .note-workspace {
+  position: relative;
   display: flex;
   height: 100%;
   min-height: 0;
   min-width: 0;
+  overflow: hidden;
 }
 .note-editor-column {
   position: relative;
@@ -432,28 +434,117 @@
   scrollbar-gutter: stable;
 }
 .inknest-editor-full-width .editor { max-width: none; }
+.note-outline-slot {
+  flex: 0 0 auto;
+  width: calc(var(--note-outline-width) + 32px);
+  transition: width 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.note-outline-slot[data-open="false"] { width: 0; }
+.note-outline-slot[data-resizing="true"] { transition: none; }
 .note-heading-minimap {
+  position: absolute;
+  z-index: 15;
+  top: 1rem;
+  right: 1rem;
   display: flex;
-  width: 210px;
-  flex: 0 0 210px;
+  width: var(--note-outline-width);
+  max-height: min(520px, calc(100% - 2rem));
   flex-direction: column;
   min-height: 0;
-  border-left: 1px solid var(--app-border);
-  background: var(--app-surface);
-  padding: 1rem 0.5rem;
+  border: 1px solid color-mix(in srgb, var(--app-border) 80%, transparent);
+  border-radius: 14px;
+  background: color-mix(in srgb, var(--app-surface) 96%, transparent);
+  backdrop-filter: blur(16px);
+  padding: 0.45rem;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 8%), 0 2px 6px rgb(0 0 0 / 4%);
   font-size: 0.75rem;
+  opacity: 1;
+  transform: translateX(0) scale(1);
+  transform-origin: top right;
+  visibility: visible;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s;
+}
+.note-outline-slot[data-open="false"] .note-heading-minimap {
+  opacity: 0;
+  transform: translateX(18px) scale(0.97);
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 180ms ease, transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1), visibility 0s 220ms;
+}
+.note-outline-resize {
+  position: absolute;
+  z-index: 1;
+  inset: 0 auto 0 -9px;
+  width: 20px;
+  border-radius: 8px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.note-outline-resize-grip {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 32px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: var(--app-surface);
+  box-shadow: 0 2px 5px rgb(0 0 0 / 8%);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  transition: color 150ms ease, border-color 150ms ease, background 150ms ease;
+}
+.note-outline-resize:hover .note-outline-resize-grip,
+.note-outline-resize:focus-visible .note-outline-resize-grip,
+.note-outline-slot[data-resizing="true"] .note-outline-resize-grip {
+  color: #4f8f68;
+  border-color: #4f8f68;
+  background: var(--app-surface-subtle);
+}
+.note-outline-resize:focus-visible { outline: none; }
+.note-outline-resize:focus-visible .note-outline-resize-grip { outline: 2px solid #4f8f68; outline-offset: 2px; }
+.note-workspace:has(.note-outline-slot[data-resizing="true"]),
+.note-workspace:has(.note-outline-slot[data-resizing="true"]) * {
+  cursor: col-resize;
+  user-select: none;
 }
 .note-outline-title {
   display: flex;
   align-items: center;
   gap: 0.45rem;
-  padding: 0.25rem 0.5rem 0.85rem;
+  flex-shrink: 0;
+  padding: 0.35rem 0.4rem 0.6rem;
+  margin-bottom: 0.25rem;
+  border-bottom: 1px solid color-mix(in srgb, var(--app-border) 70%, transparent);
   color: var(--app-muted);
   font-weight: 600;
-  letter-spacing: 0.04em;
 }
-.note-outline-count { margin-left: auto; font-size: 0.65rem; font-variant-numeric: tabular-nums; }
-.note-outline-scroll { min-height: 0; overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; }
+.note-outline-count {
+  margin-left: auto;
+  padding: 0.1rem 0.4rem;
+  border-radius: 6px;
+  background: var(--app-surface-subtle);
+  font-size: 0.65rem;
+  font-variant-numeric: tabular-nums;
+}
+.note-outline-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--app-muted);
+  background: transparent;
+  cursor: pointer;
+}
+.note-outline-close:hover { color: var(--app-text); background: var(--app-surface-subtle); }
+.note-outline-scroll { min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 0.1rem 0.1rem 0.2rem; }
 .note-outline-heading {
   display: flex;
   align-items: baseline;
@@ -463,7 +554,7 @@
   padding-block: 0.5rem;
   padding-right: 0.5rem;
   border: 0;
-  border-radius: 0.35rem;
+  border-radius: 7px;
   background: transparent;
   text-align: left;
   color: var(--app-muted);
@@ -552,10 +643,16 @@
 .note-search-current { background: color-mix(in srgb, #f29d38 55%, transparent); outline: 1px solid #d18e29; }
 .note-search-zero { display: inline-block; width: 2px; height: 1em; vertical-align: text-bottom; }
 .note-outline-heading:focus-visible,
+.note-outline-close:focus-visible,
 .note-find-widget button:focus-visible { outline: 2px solid #4f8f68; outline-offset: 1px; }
 @media (max-width: 950px) {
-  .note-heading-minimap { width: 155px; flex-basis: 155px; }
   .inknest-editor .editor { padding-inline: 1.25rem; }
   .note-find-row { flex-wrap: wrap; }
   .note-find-input { flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .note-outline-slot,
+  .note-heading-minimap,
+  .note-outline-slot[data-open="false"] .note-heading-minimap,
+  .note-outline-resize-grip { transition: none; }
 }

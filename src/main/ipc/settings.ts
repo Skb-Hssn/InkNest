@@ -9,6 +9,7 @@ import {
   assertBoolean,
   assertFontFamily,
   assertFontSize,
+  assertOutlineWidth,
   assertPlainObject,
   assertTheme
 } from "./validation";
@@ -54,6 +55,9 @@ export function registerSettingsHandlers() {
       }
       if (payload.showOutline !== undefined) {
         nextSettings.showOutline = assertBoolean(payload.showOutline, "showOutline");
+      }
+      if (payload.outlineWidth !== undefined) {
+        nextSettings.outlineWidth = assertOutlineWidth(payload.outlineWidth);
       }
 
       if (payload.showWordCount !== undefined) {

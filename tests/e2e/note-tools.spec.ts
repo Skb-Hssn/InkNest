@@ -102,6 +102,175 @@ test("heading minimap shows hierarchy, scrolls independently and follows edits a
   } finally { await app.close(); }
 });
 
+test("minimap is a floating card with animated opening, closing and a close button", async ({}, info) => {
+  const { app, window, editor } = await launch(info);
+  try {
+    const card = window.locator(".note-heading-minimap");
+    const slot = window.locator(".note-outline-slot");
+    const column = window.locator(".note-editor-column");
+    await expect(card).toHaveCSS("position", "absolute");
+    await expect(card).toHaveCSS("border-radius", "14px");
+    expect(await card.evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe("none");
+    expect((await card.boundingBox())!.height).toBeLessThan((await window.locator(".note-workspace").boundingBox())!.height - 32);
+    const initialWidth = (await column.boundingBox())!.width;
+    const toggle = window.getByRole("button", { name: "Show heading minimap", exact: true });
+    await toggle.click();
+    await expect(slot).toHaveAttribute("data-open", "false");
+    expect(await card.evaluate((node) => node.getAnimations().length)).toBeGreaterThan(0);
+    await expect(window.getByRole("complementary", { name: "Heading minimap" })).toHaveCount(0);
+    await expect(card).toHaveCount(1);
+    await expect(card).toHaveCSS("visibility", "hidden");
+    await expect(card).toHaveCSS("opacity", "0");
+    await expect.poll(async () => (await column.boundingBox())!.width).toBeGreaterThan(initialWidth + 200);
+    await toggle.click();
+    await expect(slot).toHaveAttribute("data-open", "true");
+    await expect(card).toHaveCSS("opacity", "1");
+    await expect.poll(async () => (await column.boundingBox())!.width).toBe(initialWidth);
+    await window.getByRole("button", { name: "Close heading minimap" }).click();
+    await expect(slot).toHaveAttribute("data-open", "false");
+    await expect(editor).toBeFocused();
+  } finally { await app.close(); }
+});
+
+test("minimap dragging remembers its width, adapts to a smaller window and resets", async ({}, info) => {
+  const { app, window } = await launch(info);
+  try {
+    const handle = window.getByRole("separator", { name: "Resize heading minimap" });
+    await expect(handle).toHaveAttribute("aria-valuenow", "232");
+    const box = (await handle.boundingBox())!;
+    await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await window.mouse.down();
+    await expect(window.locator(".note-outline-slot")).toHaveAttribute("data-resizing", "true");
+    await window.mouse.move(box.x + box.width / 2 - 88, box.y + box.height / 2, { steps: 8 });
+    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+    expect(await window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({ ok: true, data: { outlineWidth: 232 } });
+    await window.mouse.up();
+    await expect(window.locator(".note-outline-slot")).toHaveAttribute("data-resizing", "false");
+    await expect.poll(() => window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({ ok: true, data: { outlineWidth: 320 } });
+    await window.reload();
+    await window.locator(".note-open-area").filter({ hasText: "Notes" }).click();
+    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 900, height: 700 }));
+    await expect.poll(() => window.evaluate(() => innerWidth)).toBe(900);
+    await expect.poll(async () => Number(await handle.getAttribute("aria-valuemax"))).toBeLessThan(320);
+    await expect(handle).toHaveAttribute("aria-valuenow", (await handle.getAttribute("aria-valuemax"))!);
+    expect((await window.locator(".note-writing-scroll").boundingBox())!.width).toBeGreaterThanOrEqual(280);
+    const card = (await window.locator(".note-heading-minimap").boundingBox())!;
+    const workspace = (await window.locator(".note-workspace").boundingBox())!;
+    expect(card.x + card.width).toBeLessThan(workspace.x + workspace.width);
+    // At the minimum window size the file explorer hides, freeing writing space.
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 760, height: 700 }));
+    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+    await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 1280, height: 820 }));
+    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+    await handle.dblclick();
+    await expect(handle).toHaveAttribute("aria-valuenow", "232");
+    await expect.poll(() => window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({ ok: true, data: { outlineWidth: 232 } });
+  } finally { await app.close(); }
+});
+
+test("minimap keyboard resize has bounds and a cancelled drag keeps its saved width", async ({}, info) => {
+  const { app, window } = await launch(info);
+  try {
+    const handle = window.getByRole("separator", { name: "Resize heading minimap" });
+    await handle.press("ArrowLeft");
+    await expect(handle).toHaveAttribute("aria-valuenow", "248");
+    await handle.press("Shift+ArrowRight");
+    await expect(handle).toHaveAttribute("aria-valuenow", "208");
+    await handle.press("Home");
+    await expect(handle).toHaveAttribute("aria-valuenow", "180");
+    await handle.press("ArrowRight");
+    await expect(handle).toHaveAttribute("aria-valuenow", "180");
+    await handle.press("End");
+    await expect(handle).toHaveAttribute("aria-valuenow", "420");
+    await handle.press("ArrowLeft");
+    await expect(handle).toHaveAttribute("aria-valuenow", "420");
+    await expect.poll(() => window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({ ok: true, data: { outlineWidth: 420 } });
+    const box = (await handle.boundingBox())!;
+    await window.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await window.mouse.down();
+    await window.mouse.move(box.x + box.width / 2 + 90, box.y + box.height / 2);
+    await expect(handle).toHaveAttribute("aria-valuenow", "330");
+    await window.keyboard.press("Escape");
+    await window.mouse.up();
+    await expect(handle).toHaveAttribute("aria-valuenow", "420");
+    for (const value of ["300", 179, 421, 200.5, null]) {
+      const response = await window.evaluate((value) => window.inknest.settings.save({ outlineWidth: value } as any), value);
+      expect(response.ok).toBe(false);
+    }
+    expect(await window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({ ok: true, data: { outlineWidth: 420 } });
+  } finally { await app.close(); }
+});
+
+test("dragging the minimap's visible left edge changes its rendered width at both corners", async ({}, info) => {
+  const { app, window, editor, notePath } = await launch(info);
+  try {
+    const before = await readFile(notePath, "utf8");
+    const card = window.getByRole("complementary", { name: "Heading minimap" });
+    const handle = window.getByRole("separator", { name: "Resize heading minimap" });
+    for (const edge of ["bottom", "top", "middle"] as const) {
+      const box = (await card.boundingBox())!;
+      const x = box.x + 1;
+      const y = edge === "top" ? box.y + 6 : edge === "bottom" ? box.y + box.height - 6 : box.y + box.height / 2;
+      await window.mouse.move(x, y);
+      await window.mouse.down();
+      await expect(window.locator(".note-outline-slot")).toHaveAttribute("data-resizing", "true");
+      await window.mouse.move(x - 32, y + 2, { steps: 6 });
+      await expect.poll(async () => (await card.boundingBox())!.width).toBeCloseTo(box.width + 32, 0);
+      await window.mouse.up();
+      await expect(window.locator(".note-outline-slot")).toHaveAttribute("data-resizing", "false");
+      await expect.poll(() => window.evaluate(async () => (await window.inknest.settings.get()))).toMatchObject({
+        ok: true, data: { outlineWidth: Math.round(box.width + 32) }
+      });
+    }
+    const resizedWidth = (await card.boundingBox())!.width;
+    await window.getByRole("button", { name: "Show heading minimap", exact: true }).click();
+    await expect(card).toHaveCount(0);
+    await window.getByRole("button", { name: "Show heading minimap", exact: true }).click();
+    await expect(window.locator(".note-heading-minimap")).toHaveCSS("opacity", "1");
+    await expect.poll(async () => (await card.boundingBox())!.width).toBeCloseTo(resizedWidth, 0);
+    await expect(editor).toContainText("Alpha alpha ALPHA alphabet.");
+    expect(await readFile(notePath, "utf8")).toBe(before);
+    await window.reload();
+    await window.locator(".note-open-area").filter({ hasText: "Notes" }).click();
+    await expect.poll(async () => (await card.boundingBox())!.width).toBeCloseTo(resizedWidth, 0);
+    await expect(handle).toHaveAttribute("aria-valuenow", String(Math.round(resizedWidth)));
+  } finally { await app.close(); }
+});
+
+test("minimap respects reduced motion and custom scrollbars follow both themes", async ({}, info) => {
+  const markdown = Array.from({ length: 45 }, (_, i) => `## Section ${i + 1}\n\n${"Content. ".repeat(15)}\n`).join("\n");
+  const { app, window } = await launch(info, markdown);
+  try {
+    await window.emulateMedia({ reducedMotion: "reduce" });
+    const card = window.locator(".note-heading-minimap");
+    await expect(card).toHaveCSS("transition-duration", "0s");
+    await window.getByRole("button", { name: "Show heading minimap", exact: true }).click();
+    await expect(card).toHaveCSS("visibility", "hidden");
+    await window.getByRole("button", { name: "Show heading minimap", exact: true }).click();
+    await expect(card).toHaveCSS("opacity", "1");
+    const scrollbar = (selector: string) => window.locator(selector).evaluate((node) => {
+      const thumb = getComputedStyle(node, "::-webkit-scrollbar-thumb");
+      return { radius: thumb.borderRadius, color: thumb.backgroundColor, clip: thumb.backgroundClip,
+        width: getComputedStyle(node, "::-webkit-scrollbar").width, standard: getComputedStyle(node).scrollbarWidth };
+    });
+    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await window.getByLabel("Theme", { exact: true }).selectOption("light");
+    await expect(window.locator("html")).toHaveAttribute("data-theme", "light");
+    await window.getByRole("button", { name: "Close settings" }).click();
+    const light = await scrollbar(".note-outline-scroll");
+    expect(light).toMatchObject({ radius: "999px", width: "8px", clip: "padding-box", standard: "auto" });
+    expect((await scrollbar(".note-writing-scroll")).width).toBe("10px");
+    await window.screenshot({ path: info.outputPath("floating-minimap-light.png") });
+    await window.getByRole("button", { name: "Settings", exact: true }).click();
+    await window.getByLabel("Theme", { exact: true }).selectOption("dark");
+    await expect(window.locator("html")).toHaveAttribute("data-theme", "dark");
+    await window.getByRole("button", { name: "Close settings" }).click();
+    expect((await scrollbar(".note-outline-scroll")).color).not.toBe(light.color);
+    await window.screenshot({ path: info.outputPath("floating-minimap-dark.png") });
+  } finally { await app.close(); }
+});
+
 test("Ctrl+F opens find, highlights results, navigates and closes without editing", async ({}, info) => {
   const { app, window, editor, notePath } = await launch(info);
   try {
