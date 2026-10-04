@@ -46,9 +46,15 @@ export const codeBlockView = $view(
       const language = String(node.attrs.language ?? "");
       dom.dataset.language = language;
       contentDOM.className = language ? `language-${language}` : "";
-      languageSelect.value = codeBlockLanguages.some(([value]) => value === language)
-        ? language
-        : "";
+      languageSelect.querySelector("option[data-custom-language]")?.remove();
+      if (language && !codeBlockLanguages.some(([value]) => value === language)) {
+        const option = document.createElement("option");
+        option.dataset.customLanguage = "true";
+        option.value = language;
+        option.textContent = language;
+        languageSelect.append(option);
+      }
+      languageSelect.value = language;
     }
 
     languageSelect.addEventListener("change", () => {

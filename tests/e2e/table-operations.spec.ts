@@ -252,10 +252,10 @@ test("Backspace selects the table at its start and Delete removes it with undo",
   const { app, editor } = await launchTable(testInfo);
   try {
     const before = await tableSnapshot(editor);
-    await editor.locator("th").first().click();
+    await editor.locator("th p").first().click();
     await editor.press("Home");
     await editor.press("Backspace");
-    await expect(editor.locator("table")).toHaveCount(1);
+    await expect(editor.locator("table")).toHaveClass(/ProseMirror-selectednode/);
     await editor.press("Delete");
     await expect(editor.locator("table")).toHaveCount(0);
     await editor.press("Control+z");

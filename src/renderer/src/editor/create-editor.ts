@@ -11,6 +11,7 @@ import { gfm, tableSchema } from "@milkdown/kit/preset/gfm";
 import { clipboard } from "@milkdown/kit/plugin/clipboard";
 import { history } from "@milkdown/kit/plugin/history";
 import { trailing } from "@milkdown/kit/plugin/trailing";
+import { splitListItem } from "@milkdown/kit/prose/schema-list";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import {
   calloutPlugin,
@@ -27,10 +28,12 @@ import {
   handleDeletableBlockKey,
   insertCodeIndent,
   insertCodeLineBreak,
-  insertParagraphAfterCallout
+  insertParagraphAfterCallout,
+  syncEditorDOMSelection
 } from "./editor-controller";
 import type { MarkdownEditorProps } from "./types";
 import { moveTableCell } from "./table-commands";
+import { runFormattingAction, type FormattingAction } from "./formatting-commands";
 
 type CreateEditorOptions = Pick<
   MarkdownEditorProps,
@@ -74,7 +77,32 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           "aria-multiline": "true",
           spellcheck: "true"
         },
+        handleTextInput(view, from, to, text) {
+          const marks = view.state.storedMarks;
+          if (marks?.some((mark) => mark.type.name === "inlineCode")) {
+            // Explicitly enabled code remains enabled while typing. Moving the
+            // caret clears stored marks, preserving the normal closed boundary.
+            view.dispatch(view.state.tr.insertText(text, from, to).ensureMarks(marks));
+            return true;
+          }
+          return previous.handleTextInput?.(view, from, to, text) ?? false;
+        },
         handleKeyDown(view, event) {
+          // Browser caret movement (Home/End and Shift+Arrow) may precede
+          // ProseMirror's asynchronous selectionchange event.
+          syncEditorDOMSelection(view);
+          if (event.ctrlKey || event.metaKey) {
+            const key = event.key.toLowerCase();
+            const shortcuts: Record<string, FormattingAction> = event.altKey
+              ? { x: "strikethrough", c: "code-block", "7": "ordered-list", "8": "unordered-list" }
+              : event.shiftKey ? { x: "strikethrough", b: "blockquote" }
+              : { b: "bold", i: "italic", e: "inline-code", "\\": "clear-format" };
+            const action = event.altKey && /^[1-6]$/.test(key) ? "heading" : shortcuts[key];
+            if (action && runFormattingAction(view.state, view.dispatch, action, { level: Number(key) })) {
+              event.preventDefault();
+              return true;
+            }
+          }
           if (
             (event.key === "Backspace" || event.key === "Delete") &&
             !event.ctrlKey &&
@@ -99,6 +127,16 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             return true;
           }
 
+          if (event.key === "Enter" && !event.ctrlKey && !event.metaKey && !event.altKey && !event.shiftKey) {
+            const { $from } = view.state.selection;
+            const item = $from.depth > 1 ? $from.node($from.depth - 1) : null;
+            if (item?.type.name === "list_item" && item.attrs.checked !== null &&
+                splitListItem(item.type, { ...item.attrs, checked: false })(view.state, view.dispatch)) {
+              event.preventDefault();
+              return true;
+            }
+          }
+
           if (
             event.key === "Enter" &&
             !event.ctrlKey &&
@@ -115,7 +153,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             !event.ctrlKey &&
             !event.metaKey &&
             !event.altKey &&
-            (moveTableCell(view.state, view.dispatch, event.shiftKey ? -1 : 1) || insertCodeIndent(view))
+            (moveTableCell(view.state, view.dispatch, event.shiftKey ? -1 : 1) || insertCodeIndent(view, event.shiftKey))
           ) {
             event.preventDefault();
             return true;

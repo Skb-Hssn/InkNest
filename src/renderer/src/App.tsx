@@ -1593,12 +1593,6 @@ export function App() {
       return;
     }
 
-    if (command.id === "code-block") {
-      editorHandleRef.current?.runCommand("code-block");
-      setStatusMessage("Inserted code block");
-      return;
-    }
-
     const options: MarkdownEditorCommandOptions = {};
 
     if (command.id === "image") {
@@ -1628,8 +1622,8 @@ export function App() {
       options.equation = equation;
     }
 
-    editorHandleRef.current?.runCommand(command.id, options);
-    setStatusMessage(`Applied ${command.label}`);
+    const didRun = editorHandleRef.current?.runCommand(command.id, options);
+    setStatusMessage(didRun ? `Applied ${command.label}` : `Cannot apply ${command.label} to this selection`);
   }
 
   function openLinkDialog(details: LinkDialogDetails) {
@@ -1659,10 +1653,14 @@ export function App() {
       return;
     }
 
-    editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
+    const didRun = editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
       label: text,
       url
     });
+    if (!didRun) {
+      setLinkDialog({ ...linkDialog, error: "Select text in a paragraph or heading to add a link." });
+      return;
+    }
     setStatusMessage(linkDialog.isEditing ? "Updated link" : "Inserted link");
     setLinkDialog(null);
   }

@@ -48,15 +48,12 @@ test("phase 9 renderer exposes the toolbar through a narrow editor handle", asyn
 test("phase 9 editor commands dispatch schema transactions", async () => {
   const source = await readText("src/renderer/src/editor/editor-controller.ts");
   assertIncludesAll(source, [
-    "runEditorCommand", "commandsCtx", "editorViewCtx", "wrapInHeadingCommand",
-    "toggleStrongCommand", "toggleEmphasisCommand", "toggleStrikethroughCommand",
-    "toggleInlineCodeCommand", "wrapInBulletListCommand", "wrapInOrderedListCommand",
-    "wrapInBlockquoteCommand", "createCodeBlockCommand", "insertTableCommand",
+    "runEditorCommand", "commandsCtx", "editorViewCtx", "runFormattingAction", "insertTableCommand",
     'runTableAction(view.state, view.dispatch, "add-row-after")',
     'runTableAction(view.state, view.dispatch, "add-column-after")',
     'runTableAction(view.state, view.dispatch, "delete-row")',
     'runTableAction(view.state, view.dispatch, "delete-column")', "replaceSelectionWithLink",
-    "clearFormatting", "collectActiveEditorCommands", "getEditorMarkdown",
+    "clear-format", "collectActiveEditorCommands", "getEditorMarkdown",
     "insertCodeIndent", "insertCodeLineBreak", "insertText(\"    \"",
     "const indentation = currentLine.match"
   ]);

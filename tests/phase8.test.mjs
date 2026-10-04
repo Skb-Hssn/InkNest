@@ -152,8 +152,8 @@ test("phase 8 renderer exposes a transactional modular Markdown editor", async (
     "createDocumentObserverPlugin"
   ]);
   assertIncludesAll(controllerSource, [
-    "toggleStrongCommand",
-    "wrapInBulletListCommand",
+    "runFormattingAction",
+    "collectActiveEditorCommands",
     "insertTableCommand"
   ]);
   assertIncludesAll(stylesSource, [
