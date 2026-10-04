@@ -5,6 +5,7 @@ InkNest renders LaTeX math with KaTeX. The renderer, styles, and fonts are bundl
 ## Writing and editing
 
 - Inline: type `$E = mc^2$`, or use **Inline math** in the toolbar. Closing the fence renders the equation.
+- Paste complete equations to render automatically. Supported clipboard forms include `$…$`, `$$…$$`, `\(…\)`, `\[…\]`, standalone LaTeX expressions such as `\frac{a}{b}`, and rendered browser equations containing a MathML TeX annotation. Rich-text paste preserves surrounding bold text and links. Display equations pasted into paragraph-only contexts such as table cells render inline to preserve the table structure.
 - Display: type `$$` on an otherwise empty paragraph and press Enter, use **Display math**, or type `/math` and press Enter. The source field accepts multiple lines.
 - Click a rendered equation to edit its LaTeX. Changes preview and autosave as you type. **Done**, Escape, or Ctrl/Cmd+Enter returns to the note; Enter also finishes inline editing. Escape keeps changes.
 - In display source, Enter adds a line and Tab inserts two spaces. Ctrl/Cmd+Z undoes source edits; Ctrl/Cmd+Shift+Z or Ctrl/Cmd+Y redoes them. **Delete equation** removes the entire equation and supports undo.
@@ -43,7 +44,7 @@ Automated coverage: `tests/math.test.mjs` and `tests/e2e/math.spec.ts`.
 | Adjacent equations | Touching inline atoms serialize as separate equations | Pass |
 | Empty equations | Inline/display placeholders survive save, reopen, and subsequent editing | Pass |
 | Invalid equations | Missing braces, unknown commands, recursive macros; source retained and correctable | Pass |
-| Clipboard | Plain Markdown paste; rendered content copy/paste preserves editable source | Pass |
+| Clipboard | Plain Markdown and rich HTML paste; display fences split across paragraphs or line breaks; rendered content copy/paste preserves editable source | Pass |
 | Literal text | Escaped currency, incomplete inline fences, inline code and fenced code remain literal | Pass |
 | Nested content | Headings, lists, task lists, callouts, links, table headers and cells | Pass |
 | Incompatible selections | Cross-block insertion, code contexts, display math inside a table, mixed prose/equation selection | Pass |
@@ -53,6 +54,9 @@ Automated coverage: `tests/math.test.mjs` and `tests/e2e/math.spec.ts`.
 | Untrusted content | HTML-like source, unsafe links/images, recursive macros, isolated macro definitions | Pass |
 
 ## Bugs found and fixed
+
+- Rich clipboard HTML split display fences into separate paragraphs or hard breaks, leaving equations as plain text. Paste now combines complete fences while retaining surrounding formatting and protecting code.
+- An incomplete display fence could create an empty equation during rich paste. Conversion now requires a closing fence.
 
 - Display insertion selected a nearby paragraph instead of the new equation, so its source editor did not open.
 - Updating an inline atom moved the selection and closed its source controls.

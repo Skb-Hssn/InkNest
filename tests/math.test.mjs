@@ -4,7 +4,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
 import test from "node:test";
 import ts from "typescript";
-import { Schema } from "@milkdown/kit/prose/model";
+import { Schema, Fragment, Slice } from "@milkdown/kit/prose/model";
 import { EditorState, TextSelection, NodeSelection } from "@milkdown/kit/prose/state";
 import { history, undo, redo } from "@milkdown/kit/prose/history";
 import { ParserState, SerializerState } from "@milkdown/kit/transformer";
@@ -13,12 +13,13 @@ import remarkMath from "remark-math";
 import katex from "katex";
 
 const temp = await mkdtemp(path.join(fileURLToPath(new URL("../node_modules/", import.meta.url)), ".math-tests-"));
-for (const [name, relative] of [["math", "extensions/math-plugin.ts"], ["formatting", "formatting-commands.ts"]]) {
+for (const [name, relative] of [["math", "extensions/math-plugin.ts"], ["formatting", "formatting-commands.ts"], ["paste", "extensions/math-paste.ts"]]) {
   const source = await readFile(new URL(`../src/renderer/src/editor/${relative}`, import.meta.url), "utf8");
-  await writeFile(path.join(temp, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
+  await writeFile(path.join(temp, `${name}.mjs`), ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replaceAll('"./math-plugin"', '"./math.mjs"'));
 }
 const { mathNodeSchema, mathRenderOptions, canInsertMath, insertMath, hasOpenMathFence } = await import(pathToFileURL(path.join(temp, "math.mjs")));
 const { runFormattingAction } = await import(pathToFileURL(path.join(temp, "formatting.mjs")));
+const { findPastedMath, normalizeMathPaste, transformMathSlice } = await import(pathToFileURL(path.join(temp, "paste.mjs")));
 await rm(temp, { recursive: true });
 const container = (name, content, group) => ({ content, group,
   parseMarkdown: { match: (node) => node.type === (name === "doc" ? "root" : name), runner: (state, node, type) => { state.openNode(type).next(node.children).closeNode(); } },
@@ -28,6 +29,7 @@ const schema = new Schema({ nodes: {
   doc: { content: "block+", parseMarkdown: { match: (node) => node.type === "root", runner: (state, node, type) => state.injectRoot(node, type) }, toMarkdown: { match: (node) => node.type.name === "doc", runner: (state, node) => state.openNode("root").next(node.content) } },
   paragraph: container("paragraph", "inline*", "block"),
   text: { group: "inline", parseMarkdown: { match: (node) => node.type === "text", runner: (state, node) => state.addText(node.value) }, toMarkdown: { match: (node) => node.isText, runner: (state, node) => state.addNode("text", undefined, node.text) } },
+  hardbreak: { inline: true, group: "inline", parseMarkdown: { match: (node) => node.type === "break", runner: (state, _node, type) => state.addNode(type) }, toMarkdown: { match: (node) => node.type.name === "hardbreak", runner: (state) => state.addNode("break") } },
   math_inline: mathNodeSchema(false), math_block: mathNodeSchema(true),
   code_block: { content: "text*", group: "block", marks: "", code: true },
   table_cell: { content: "paragraph", group: "block" },
@@ -144,3 +146,90 @@ test("inline code over math cannot serialize away the equation", () => {
 for (const [text, open] of [["$x", true], ["$\\text{**bold**}", true], ["$$x", true], ["$x$", false], ["\\$5", false], ["$a$ $b", true], ["$$a$$", false], ["", false], ["Price 5", false], ["\\\\$x", true]]) {
   test(`unfinished math fence detection: ${text}`, () => assert.equal(hasOpenMathFence(text), open));
 }
+
+for (const [text, value, display] of [
+  ["before $x^2$ after", "x^2", false], ["before \\(x^2\\) after", "x^2", false],
+  ["\\[\\frac{a}{b}\\]", "\\frac{a}{b}", true], ["$$x^2$$", "x^2", true],
+  ["$$\nx^2\n$$", "x^2", true], ["\\sqrt{x}", "\\sqrt{x}", true],
+  ["\\(\\unknown{x}\\)", "\\unknown{x}", false]
+]) {
+  test(`math paste detects and normalizes ${text}`, () => {
+    const spans = findPastedMath(text, processor);
+    assert.equal(spans.length, 1); assert.equal(spans[0].value, value); assert.equal(spans[0].display, display);
+    const restored = parse(normalizeMathPaste(text, processor));
+    const equations = [];
+    restored.descendants((node) => { if (node.type.name.startsWith("math_")) equations.push(node); });
+    assert.equal(equations.length, 1); assert.equal(equations[0].attrs.value, value);
+    assert.equal(equations[0].type.name, display ? "math_block" : "math_inline");
+  });
+}
+for (const text of ["`\\(x\\)`", "```latex\n\\[x\\]\n```", "\\\\(x\\\\)", "Price \\$5", "\\(unfinished", "\\[unfinished", "C:\\folder\\file", "x = y", "\\frac{1}{"]) {
+  test(`math paste leaves literal or ambiguous content alone: ${text}`, () => {
+    assert.deepEqual(findPastedMath(text, processor), []);
+    assert.equal(normalizeMathPaste(text, processor), text);
+  });
+}
+test("rich paste preserves marks and converts bracketed math", () => {
+  const paragraph = schema.nodes.paragraph.create(null, [schema.text("Bold \\(x\\)", [schema.marks.strong.create()]), schema.text(" after")]);
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.equal(slice.content.firstChild.child(1).attrs.value, "x");
+  assert.equal(slice.content.firstChild.child(1).marks[0].type.name, "strong");
+  assert.equal(slice.content.firstChild.child(0).text, "Bold ");
+  assert.equal(slice.content.firstChild.child(2).text, " after");
+});
+test("rich paste keeps code marked text literal", () => {
+  const paragraph = schema.nodes.paragraph.create(null, schema.text("$x$ \\(y\\)", [schema.marks.inlineCode.create()]));
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.ok(slice.content.firstChild.eq(paragraph));
+});
+test("rich paste creates display blocks with compatible slice boundaries", () => {
+  const paragraph = p("$$x$$");
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.equal(slice.content.firstChild.type.name, "math_block");
+  assert.equal(slice.openStart, 0); assert.equal(slice.openEnd, 0);
+});
+test("rich paste splits display equations from surrounding marked prose", () => {
+  const paragraph = schema.nodes.paragraph.create(null, [schema.text("Before", [schema.marks.strong.create()]), schema.text("\\[x^2\\]after")]);
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.equal(slice.content.childCount, 3);
+  assert.equal(slice.content.child(0).textContent, "Before");
+  assert.equal(slice.content.child(0).firstChild.marks[0].type.name, "strong");
+  assert.equal(slice.content.child(1).type.name, "math_block");
+  assert.equal(slice.content.child(2).textContent, "after");
+});
+test("rich paste does not inherit a mark from adjacent prose", () => {
+  const paragraph = schema.nodes.paragraph.create(null, [schema.text("Before", [schema.marks.strong.create()]), schema.text("$x$")]);
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.equal(slice.content.firstChild.lastChild.attrs.value, "x");
+  assert.deepEqual(slice.content.firstChild.lastChild.marks, []);
+});
+
+for (const fence of ["$$", "$$$", "\\["]) {
+  test(`rich paste joins display fences across paragraphs: ${fence}`, () => {
+    const close = fence === "\\[" ? "\\]" : fence;
+    const nodes = [p("These bounds assume"), p(fence), p("1\\le a_i\\le n,"), p(close), p("After")];
+    const slice = transformMathSlice(new Slice(Fragment.from(nodes), 1, 1), processor);
+    assert.equal(slice.content.childCount, 3);
+    assert.equal(slice.content.child(0).textContent, "These bounds assume");
+    assert.equal(slice.content.child(1).type.name, "math_block");
+    assert.equal(slice.content.child(1).attrs.value, "1\\le a_i\\le n,");
+    assert.equal(slice.content.child(2).textContent, "After");
+  });
+}
+test("rich paste reads display fences separated by hard breaks", () => {
+  const paragraph = schema.nodes.paragraph.create(null, [schema.text("$$"), schema.nodes.hardbreak.create(), schema.text("1\\le a_i\\le n,"), schema.nodes.hardbreak.create(), schema.text("$$")]);
+  const slice = transformMathSlice(new Slice(Fragment.from(paragraph), 1, 1), processor);
+  assert.equal(slice.content.firstChild.type.name, "math_block");
+  assert.equal(slice.content.firstChild.attrs.value, "1\\le a_i\\le n,");
+});
+test("rich paste leaves unclosed fences and code paragraphs untouched", () => {
+  for (const nodes of [[p("$$"), p("x")], [p("$$"), schema.nodes.code_block.create(null, schema.text("x")), p("$$")], [p("$$"), schema.nodes.paragraph.create(null, schema.text("x", [schema.marks.inlineCode.create()])), p("$$")]]) {
+    const content = Fragment.from(nodes);
+    assert.ok(transformMathSlice(new Slice(content, 1, 1), processor).content.eq(content));
+  }
+});
+test("rich paste converts multiple fenced equations independently", () => {
+  const nodes = [p("$$"), p("a"), p("$$"), p("Between"), p("$$"), p("b"), p("$$")];
+  const slice = transformMathSlice(new Slice(Fragment.from(nodes), 1, 1), processor);
+  assert.deepEqual(Array.from({ length: slice.content.childCount }, (_, i) => slice.content.child(i).attrs.value ?? slice.content.child(i).textContent), ["a", "Between", "b"]);
+});

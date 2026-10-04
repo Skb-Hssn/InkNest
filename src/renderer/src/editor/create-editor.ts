@@ -36,6 +36,7 @@ import { moveTableCell } from "./table-commands";
 import { createNoteSearchPlugin, type NoteSearchState } from "./search-plugin";
 import { runFormattingAction, type FormattingAction } from "./formatting-commands";
 import { handleMathKey, mathPlugins, preserveMathSource } from "./extensions/math-plugin";
+import { handleMathPaste, mathPastePlugin, transformMathHTML } from "./extensions/math-paste";
 import "katex/dist/katex.min.css";
 
 type CreateEditorOptions = Pick<
@@ -202,7 +203,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           );
 
           if (!imageItem) {
-            return false;
+            return handleMathPaste(ctx, view, event);
           }
 
           const file = imageItem.getAsFile();
@@ -219,6 +220,9 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             });
           });
           return true;
+        },
+        transformPastedHTML(html, view) {
+          return transformMathHTML(previous.transformPastedHTML?.(html, view) ?? html);
         },
         handleDOMEvents: {
           ...previous.handleDOMEvents,
@@ -270,6 +274,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
     .use(commonmark)
     .use(gfm)
     .use(mathPlugins)
+    .use(mathPastePlugin)
     .use(history)
     .use(clipboard)
     .use(trailing)

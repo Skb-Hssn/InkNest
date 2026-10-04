@@ -26,11 +26,12 @@ async function reopen(window: Page) {
   await window.locator(".note-open-area").filter({ hasText: "Other" }).click();
   await window.getByRole("tab", { name: "Math", exact: true }).click();
 }
-async function paste(window: Page, text: string) {
-  await window.evaluate((text) => {
+async function paste(window: Page, text: string, html = "") {
+  await window.evaluate(({ text, html }) => {
     const data = new DataTransfer(); data.setData("text/plain", text);
+    if (html) data.setData("text/html", html);
     document.querySelector('[aria-label="Visual Markdown editor"]')!.dispatchEvent(new ClipboardEvent("paste", { clipboardData: data, bubbles: true, cancelable: true }));
-  }, text);
+  }, { text, html });
 }
 
 test("saved inline and display math render with local fonts, MathML, and unchanged source", async ({}, info) => {
@@ -340,3 +341,107 @@ test("display insertion inside a table cannot destroy its cells", async ({}, inf
     await expect(editor.locator("td").last()).toHaveText("Data");
   } finally { await app.close(); }
 });
+
+for (const [syntax, source, display] of [
+  ["\\(\\frac{a}{b}\\)", "\\frac{a}{b}", false],
+  ["\\[\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}\\]", "\\begin{aligned}\na &= b \\\\\nc &= d\n\\end{aligned}", true],
+  ["$$E = mc^2$$", "E = mc^2", true],
+  ["\\sqrt{x^2+y^2}", "\\sqrt{x^2+y^2}", true]
+] as const) {
+  test(`paste automatically renders ${syntax.slice(0, 25)}, saves and supports undo`, async ({}, info) => {
+    const { app, window, editor, notePath } = await launch(info, "");
+    try {
+      await editor.click(); await paste(window, syntax);
+      await expect(editor.locator(display ? ".inknest-math-block" : ".inknest-math-inline")).toHaveAttribute("data-math-source", source);
+      await expect(editor.locator(".katex")).toHaveCount(1);
+      await editor.press("Control+z"); await expect(editor.locator(".inknest-math")).toHaveCount(0);
+      await editor.press("Control+Shift+z"); await expect(editor.locator(".katex")).toHaveCount(1);
+      await expect.poll(() => readFile(notePath, "utf8")).toContain(source);
+      await reopen(window); await expect(editor.locator(".katex")).toHaveCount(1);
+    } finally { await app.close(); }
+  });
+}
+
+test("rich HTML paste formats math while preserving surrounding bold and links", async ({}, info) => {
+  const { app, window, editor, notePath } = await launch(info, "");
+  try {
+    await editor.click();
+    await paste(window, "Bold $x^2$ and \\(y^2\\). Linked $z$", '<p><strong>Bold $x^2$</strong> and \\(y^2\\).</p><p><a href="https://example.com">Linked $z$</a></p>');
+    await expect(editor.locator(".katex")).toHaveCount(3);
+    await expect(editor.locator("strong .inknest-math")).toHaveCount(1);
+    await expect(editor.locator('a[href="https://example.com"] .inknest-math')).toHaveCount(1);
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("$y^2$");
+    await reopen(window); await expect(editor.locator(".katex")).toHaveCount(3);
+    await expect(editor.locator("strong .inknest-math")).toHaveCount(1);
+  } finally { await app.close(); }
+});
+
+test("pasting rendered browser equations recovers their original LaTeX without duplicate text", async ({}, info) => {
+  const { app, window, editor, notePath } = await launch(info, "");
+  try {
+    await editor.click();
+    await paste(window, "a over b; c squared", '<p>Before <span class="katex"><span class="katex-mathml"><math><semantics><mfrac><mi>a</mi><mi>b</mi></mfrac><annotation encoding="application/x-tex">\\frac{a}{b}</annotation></semantics></math></span><span class="katex-html">DUPLICATE</span></span> after</p><span class="katex-display"><span class="katex"><math display="block"><semantics><msup><mi>c</mi><mn>2</mn></msup><annotation encoding="application/x-tex">c^2</annotation></semantics></math></span></span>');
+    await expect(editor.locator(".katex")).toHaveCount(2);
+    await expect(editor.locator(".inknest-math-inline")).toHaveAttribute("data-math-source", "\\frac{a}{b}");
+    await expect(editor.locator(".inknest-math-block")).toHaveAttribute("data-math-source", "c^2");
+    await expect(editor).not.toContainText("DUPLICATE");
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("$\\frac{a}{b}$");
+    await reopen(window); await expect(editor.locator(".katex")).toHaveCount(2);
+  } finally { await app.close(); }
+});
+
+test("pasted math preserves literal code, escaped dollars, incomplete delimiters and paths", async ({}, info) => {
+  const { app, window, editor } = await launch(info, "");
+  try {
+    await editor.click();
+    await paste(window, '`\\(x\\)`\n\n```latex\n\\[x\\]\n$$x$$\n```\n\nPrice \\$5. Unclosed \\(x.\n\nC:\\folder\\file');
+    await expect(editor.locator(".inknest-math")).toHaveCount(0);
+    await expect(editor.locator("pre code")).toContainText("$$x$$");
+    await reopen(window); await expect(editor.locator(".inknest-math")).toHaveCount(0);
+    await editor.press("Control+End"); await editor.press("Enter");
+    await window.getByRole("button", { name: "Code", exact: true }).click();
+    await paste(window, "$x$", "<span>$x$</span>");
+    await expect(editor.locator(".inknest-math")).toHaveCount(0);
+    await expect(editor.locator("code").last()).toHaveText("$x$");
+  } finally { await app.close(); }
+});
+
+test("rich paste separates display math from surrounding prose and preserves table cells", async ({}, info) => {
+  const { app, window, editor } = await launch(info, "");
+  try {
+    await editor.click();
+    await paste(window, "Before \\[x^2\\] after", "<p><strong>Before</strong> \\[x^2\\] <em>after</em></p><table><tr><th>Header</th></tr><tr><td>\\[y^2\\]</td></tr></table>");
+    await expect(editor.locator(".inknest-math-block")).toHaveAttribute("data-math-source", "x^2");
+    await expect(editor.locator("td .inknest-math-inline")).toHaveAttribute("data-math-source", "y^2");
+    await expect(editor.locator("strong")).toHaveText("Before");
+    await expect(editor.locator("em")).toHaveText("after");
+    await reopen(window);
+    await expect(editor.locator(".katex")).toHaveCount(2);
+    await expect(editor.locator("table tr")).toHaveCount(2);
+  } finally { await app.close(); }
+});
+
+for (const [label, html] of [
+  ["paragraphs", "<p><strong>These bounds assume</strong></p><p>$$</p><p>1\\le a_i\\le n,</p><p>$$</p>"],
+  ["line breaks", "<p><strong>These bounds assume</strong><br><br>$$<br>1\\le a_i\\le n,<br>$$</p>"],
+  ["plain text", ""]
+]) {
+  test(`pasted display math split across ${label} renders and survives reopening`, async ({}, info) => {
+    const { app, window, editor } = await launch(info, "");
+    try {
+      await editor.click();
+      await paste(window, "These bounds assume\n\n$$\n1\\le a_i\\le n,\n$$", html);
+      await expect(editor.locator(".inknest-math-block")).toHaveCount(1);
+      await expect(editor.locator(".inknest-math-block")).toHaveAttribute("data-math-source", "1\\le a_i\\le n,");
+      await expect(editor.locator(".katex")).toHaveCount(1);
+      if (html) await expect(editor.locator("strong")).toHaveText("These bounds assume");
+      await window.keyboard.press("Control+z");
+      await expect(editor.locator(".katex")).toHaveCount(0);
+      await window.keyboard.press("Control+Shift+z");
+      await expect(editor.locator(".katex")).toHaveCount(1);
+      await reopen(window);
+      await expect(editor.locator(".inknest-math-block")).toHaveAttribute("data-math-source", "1\\le a_i\\le n,");
+      await expect(editor).toContainText("These bounds assume");
+    } finally { await app.close(); }
+  });
+}
