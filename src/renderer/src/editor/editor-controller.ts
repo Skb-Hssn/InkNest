@@ -25,7 +25,16 @@ import {
   strikethroughSchema,
   toggleStrikethroughCommand
 } from "@milkdown/kit/preset/gfm";
-import { deleteColumn, deleteRow } from "@milkdown/kit/prose/tables";
+import {
+  addColumnAfter,
+  addColumnBefore,
+  addRowAfter,
+  addRowBefore,
+  CellSelection,
+  cellAround,
+  deleteColumn,
+  deleteRow
+} from "@milkdown/kit/prose/tables";
 import type { Mark, Node } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
@@ -37,6 +46,14 @@ import type {
 } from "./types";
 
 export type DeletableBlockKind = "callout" | "table" | "code";
+
+export type TableCellAction =
+  | "delete-row"
+  | "delete-column"
+  | "add-row-before"
+  | "add-row-after"
+  | "add-column-before"
+  | "add-column-after";
 
 export type DeletableBlock = {
   kind: DeletableBlockKind;
@@ -184,6 +201,61 @@ export function runEditorCommand(
     }
 
     return false;
+  });
+}
+
+function tableCellAtPosition(view: EditorView, position: number) {
+  const { state } = view;
+  const boundedPosition = Math.max(0, Math.min(position, state.doc.content.size));
+  const $position = state.doc.resolve(boundedPosition);
+  const nodeAfter = $position.nodeAfter;
+
+  if (nodeAfter?.type.name === "table_cell" || nodeAfter?.type.name === "table_header") {
+    return $position;
+  }
+
+  return cellAround($position);
+}
+
+/** Run a structural table action against the cell that owns a DOM position. */
+export function runTableCellAction(
+  editor: Editor,
+  position: number,
+  action: TableCellAction
+) {
+  return editor.action((ctx) => {
+    const view = ctx.get(editorViewCtx);
+    const $cell = tableCellAtPosition(view, position);
+    if (!$cell) {
+      return false;
+    }
+
+    // Table commands derive their target row/column from the current
+    // selection. Put the live editor into a cell selection first, then run the
+    // structural command against that same state.
+    view.dispatch(
+      view.state.tr.setSelection(CellSelection.create(view.state.doc, $cell.pos))
+    );
+    const dispatch = (transaction: Parameters<NonNullable<typeof view.dispatch>>[0]) => {
+      view.dispatch(transaction.scrollIntoView());
+    };
+
+    switch (action) {
+      case "delete-row":
+        return deleteRow(view.state, dispatch);
+      case "delete-column":
+        return deleteColumn(view.state, dispatch);
+      case "add-row-before":
+        return addRowBefore(view.state, dispatch);
+      case "add-row-after":
+        return addRowAfter(view.state, dispatch);
+      case "add-column-before":
+        return addColumnBefore(view.state, dispatch);
+      case "add-column-after":
+        return addColumnAfter(view.state, dispatch);
+      default:
+        return false;
+    }
   });
 }
 

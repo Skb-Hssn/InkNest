@@ -6,7 +6,7 @@ import {
   useState,
   type MouseEvent as ReactMouseEvent
 } from "react";
-import { Grip, Trash2 } from "lucide-react";
+import { CirclePlus, Grip, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Editor } from "@milkdown/kit/core";
 import { editorViewCtx } from "@milkdown/kit/core";
 import { replaceAll } from "@milkdown/kit/utils";
@@ -20,7 +20,9 @@ import {
   getDeletableBlockAtPosition,
   getEditorLinkDetails,
   getEditorMarkdown,
-  runEditorCommand
+  runEditorCommand,
+  runTableCellAction,
+  type TableCellAction
 } from "./editor-controller";
 import {
   joinMarkdownDocument,
@@ -38,6 +40,23 @@ type BlockActionState = {
   menuOpen: boolean;
 };
 
+type TableCellActionState = {
+  position: number;
+  top: number;
+  left: number;
+  menuLeft: number;
+  menuOpen: boolean;
+};
+
+const tableCellActions: Array<{ action: TableCellAction; label: string }> = [
+  { action: "delete-row", label: "Delete row" },
+  { action: "delete-column", label: "Delete column" },
+  { action: "add-row-before", label: "Add row before" },
+  { action: "add-row-after", label: "Add row after" },
+  { action: "add-column-before", label: "Add column before" },
+  { action: "add-column-after", label: "Add column after" }
+];
+
 function blockActionLabel(kind: DeletableBlockKind) {
   return kind === "callout"
     ? "callout"
@@ -54,6 +73,7 @@ export const MarkdownEditor = forwardRef<
   const rootRef = useRef<HTMLDivElement | null>(null);
   const editorRef = useRef<Editor | null>(null);
   const [blockAction, setBlockAction] = useState<BlockActionState | null>(null);
+  const [tableCellAction, setTableCellAction] = useState<TableCellActionState | null>(null);
   const propsRef = useRef(props);
   const envelopeRef = useRef<MarkdownDocumentEnvelope>(
     splitMarkdownDocument(props.markdown)
@@ -66,7 +86,7 @@ export const MarkdownEditor = forwardRef<
   latestMarkdownRef.current = props.markdown;
 
   useEffect(() => {
-    if (!blockAction?.menuOpen) {
+    if (!blockAction?.menuOpen && !tableCellAction?.menuOpen) {
       return;
     }
 
@@ -75,12 +95,13 @@ export const MarkdownEditor = forwardRef<
       if (target instanceof Node && containerRef.current?.contains(target)) {
         return;
       }
-      setBlockAction((current) => (current ? { ...current, menuOpen: false } : current));
+      setBlockAction(null);
+      setTableCellAction(null);
     };
 
     document.addEventListener("pointerdown", handleOutsidePointerDown);
     return () => document.removeEventListener("pointerdown", handleOutsidePointerDown);
-  }, [blockAction?.menuOpen]);
+  }, [blockAction?.menuOpen, tableCellAction?.menuOpen]);
 
   function handleEditorMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
     const root = rootRef.current;
@@ -90,12 +111,78 @@ export const MarkdownEditor = forwardRef<
       return;
     }
 
-    if (target.closest(".inknest-block-handle, .inknest-block-menu")) {
+    if (
+      target.closest(
+        ".inknest-block-handle, .inknest-block-menu, .inknest-table-cell-handle, .inknest-table-cell-menu"
+      )
+    ) {
       return;
     }
 
+    const cellElement = target.closest("td, th");
+    if (cellElement instanceof HTMLElement && root.contains(cellElement)) {
+      setBlockAction(null);
+
+      const editor = editorRef.current;
+      if (!editor) {
+        setTableCellAction(null);
+        return;
+      }
+
+      const nextAction = editor.action((ctx) => {
+        const view = ctx.get(editorViewCtx);
+        let position: number;
+        try {
+          position = view.posAtDOM(cellElement, 0);
+        } catch {
+          return null;
+        }
+
+        const containerRect = container.getBoundingClientRect();
+        const cellRect = cellElement.getBoundingClientRect();
+        const left = Math.max(4, cellRect.right - containerRect.left - 28);
+        const menuWidth = 210;
+        const menuLeft = Math.min(
+          left + 28,
+          Math.max(4, container.clientWidth - menuWidth - 4)
+        );
+
+        return {
+          position,
+          top: Math.max(0, cellRect.top - containerRect.top + 4),
+          left,
+          menuLeft,
+          menuOpen: false
+        } satisfies TableCellActionState;
+      });
+
+      setTableCellAction((current) => {
+        if (
+          current &&
+          nextAction &&
+          current.position === nextAction.position &&
+          current.top === nextAction.top &&
+          current.left === nextAction.left &&
+          current.menuLeft === nextAction.menuLeft
+        ) {
+          return current.menuOpen ? current : nextAction;
+        }
+        return nextAction;
+      });
+      return;
+    }
+
+    setTableCellAction(null);
+
     const blockElement = target.closest("blockquote, table, pre");
     if (!(blockElement instanceof HTMLElement) || !root.contains(blockElement)) {
+      setBlockAction(null);
+      return;
+    }
+
+    // Tables expose actions on each cell, so do not show the generic block
+    // handle when the pointer is over table chrome or whitespace.
+    if (blockElement.tagName === "TABLE") {
       setBlockAction(null);
       return;
     }
@@ -157,6 +244,18 @@ export const MarkdownEditor = forwardRef<
     );
     if (didDelete) {
       setBlockAction(null);
+    }
+  }
+
+  function runHoveredTableAction(action: TableCellAction) {
+    const editor = editorRef.current;
+    const currentAction = tableCellAction;
+    if (!editor || !currentAction) {
+      return;
+    }
+
+    if (runTableCellAction(editor, currentAction.position, action)) {
+      setTableCellAction(null);
     }
   }
 
@@ -291,7 +390,10 @@ export const MarkdownEditor = forwardRef<
       className={`inknest-editor ${props.lineWrap ? "" : "inknest-editor-no-wrap"}`}
       data-placeholder="Start writing..."
       onMouseMove={handleEditorMouseMove}
-      onMouseLeave={() => setBlockAction(null)}
+      onMouseLeave={() => {
+        setBlockAction(null);
+        setTableCellAction(null);
+      }}
     >
       <div ref={rootRef} className="inknest-editor-root" />
       {blockAction ? (
@@ -334,6 +436,53 @@ export const MarkdownEditor = forwardRef<
                 <Trash2 size={14} />
                 <span>Delete {blockActionLabel(blockAction.kind)}</span>
               </button>
+            </div>
+          ) : null}
+        </>
+      ) : null}
+      {tableCellAction ? (
+        <>
+          <button
+            type="button"
+            className="inknest-table-cell-handle"
+            style={{ top: tableCellAction.top, left: tableCellAction.left }}
+            aria-label="Table cell actions"
+            aria-haspopup="menu"
+            aria-expanded={tableCellAction.menuOpen}
+            title="Table cell actions"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => {
+              event.stopPropagation();
+              setTableCellAction((current) =>
+                current ? { ...current, menuOpen: !current.menuOpen } : current
+              );
+            }}
+          >
+            <MoreHorizontal size={15} />
+          </button>
+          {tableCellAction.menuOpen ? (
+            <div
+              className="inknest-table-cell-menu"
+              style={{ top: tableCellAction.top + 28, left: tableCellAction.menuLeft }}
+              role="menu"
+              aria-label="Table cell actions"
+            >
+              {tableCellActions.map(({ action, label }) => (
+                <button
+                  key={action}
+                  type="button"
+                  className="inknest-block-menu-item"
+                  role="menuitem"
+                  onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    runHoveredTableAction(action);
+                  }}
+                >
+                  {action.startsWith("delete") ? <Trash2 size={14} /> : <CirclePlus size={14} />}
+                  <span>{label}</span>
+                </button>
+              ))}
             </div>
           ) : null}
         </>
