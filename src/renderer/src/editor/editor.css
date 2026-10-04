@@ -1,3 +1,35 @@
+/* Math stays inline in prose; display equations scroll within the note width. */
+.inknest-math { position: relative; border-radius: 6px; }
+.inknest-math-inline { display: inline-block; max-width: 100%; vertical-align: baseline; }
+.inknest-math-block { display: block; margin: 1.25rem 0; padding: 0.5rem; }
+.inknest-math-preview { display: inline-block; max-width: 100%; cursor: pointer; vertical-align: middle; }
+.inknest-math-inline > .inknest-math-preview { overflow-x: auto; padding: 2px; }
+.inknest-math-block > .inknest-math-preview { display: block; overflow-x: auto; padding: 0.25rem; }
+.inknest-math .katex-display { margin: 0.5rem 0; }
+.inknest-math .katex { color: inherit; }
+.inknest-math-preview:focus-visible { outline: 2px solid var(--app-accent); outline-offset: 3px; }
+.inknest-math[data-editing="true"] { background: var(--app-surface-subtle); }
+.inknest-math-controls {
+  display: block; min-width: min(18rem, 100%); width: 100%; padding: 0.6rem;
+  border: 1px solid var(--app-border); border-radius: 8px;
+  background: var(--app-surface); color: var(--app-text);
+  font: 0.8rem/1.5 var(--app-font-family, sans-serif); text-align: left;
+}
+.inknest-math-controls[hidden] { display: none; }
+.inknest-math-label { display: block; margin-bottom: 0.4rem; color: var(--app-muted); }
+.inknest-math-source {
+  display: block; width: 100%; min-width: min(16rem, 100%); resize: vertical;
+  margin-bottom: 0.5rem; padding: 0.5rem; border: 1px solid var(--app-border);
+  border-radius: 5px; outline-color: var(--app-accent); background: var(--app-bg);
+  color: var(--app-text); font: 0.85rem/1.6 ui-monospace, monospace; white-space: pre;
+}
+.inknest-math-controls button { padding: 0.2rem 0.6rem; border-radius: 4px; margin-right: 0.4rem; }
+.inknest-math-controls button:first-of-type { background: var(--app-accent-solid); color: white; }
+.inknest-math-controls button:hover { outline: 1px solid var(--app-accent); }
+.inknest-math-error { display: block; max-width: 40rem; white-space: normal; overflow-wrap: anywhere; font: 0.75rem/1.5 sans-serif; color: var(--app-muted); }
+.inknest-math-error:empty { display: none; }
+.inknest-math[data-invalid="true"] > .inknest-math-preview { white-space: pre-wrap; overflow-wrap: anywhere; font-family: ui-monospace, monospace; }
+
 .inknest-editor {
   position: relative;
   min-height: 100%;

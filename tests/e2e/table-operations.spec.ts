@@ -235,6 +235,9 @@ test("inserting tables with the toolbar and slash command, and commands outside 
 test("saving empty or whitespace-only notes succeeds and invalid content is rejected", async ({}, testInfo) => {
   const { app, window, notePath } = await launchTable(testInfo);
   try {
+    // This exercises IPC validation directly. Close the editor first so its
+    // buffered snapshot cannot race these writes during the close/save handshake.
+    await window.getByRole("button", { name: "Close Table tab", exact: true }).click();
     for (const markdown of ["", " \n\t"]) {
       const result = await window.evaluate((text) => window.inknest.notes.save({ path: "Table.md", markdown: text }), markdown);
       expect(result.ok).toBe(true);

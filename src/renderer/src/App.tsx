@@ -56,6 +56,8 @@ import {
   Settings,
   SquarePen,
   Strikethrough,
+  Sigma,
+  Radical,
   TableColumnsSplit,
   TableProperties,
   TableRowsSplit,
@@ -187,6 +189,8 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
   { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
   { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
+  { id: "inline-math", label: "Inline math", icon: <Radical size={16} />, group: "insert" },
+  { id: "block-math", label: "Display math", icon: <Sigma size={16} />, group: "insert" },
   { id: "table", label: "Insert table", icon: <TableProperties size={16} />, group: "table" },
   { id: "table-add-row", label: "Add table row", icon: addRowIcon, group: "table" },
   { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
@@ -1633,16 +1637,6 @@ export function App() {
       options.src = result.data.assetPath;
       options.previewSrc = result.data.displaySrc;
       options.alt = fileNameFromPath(result.data.path);
-    }
-
-    if (command.id === "math-edit") {
-      const equation = window.prompt("LaTeX math", "x^2 + y^2 = z^2");
-
-      if (!equation) {
-        return;
-      }
-
-      options.equation = equation;
     }
 
     const didRun = editorHandleRef.current?.runCommand(command.id, options);

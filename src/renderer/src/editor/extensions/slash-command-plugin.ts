@@ -11,11 +11,13 @@ import { Plugin } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
 import { $prose } from "@milkdown/kit/utils";
 import { focusCalloutBody } from "./callout-plugin";
+import { canInsertMath, insertMath } from "./math-plugin";
 
 const slashCommands = new Set([
   "/heading",
   "/table",
   "/code",
+  "/math",
   "/todo",
   "/note",
   "/warning",
@@ -48,8 +50,11 @@ export function runSlashCommand(ctx: Ctx, view: EditorView, event: KeyboardEvent
     return false;
   }
 
+  if (command === "/math" && !canInsertMath(view.state, true)) return false;
   view.dispatch(view.state.tr.delete($from.start(), $from.pos));
   const commands = ctx.get(commandsCtx);
+
+  if (command === "/math") return insertMath(view, true);
 
   if (command === "/heading") {
     commands.call(wrapInHeadingCommand.key, 1);

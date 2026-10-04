@@ -22,7 +22,8 @@ import { closeHistory } from "@milkdown/kit/prose/history";
 import type { Mark, Node } from "@milkdown/kit/prose/model";
 import { NodeSelection, TextSelection, type EditorState } from "@milkdown/kit/prose/state";
 import type { EditorView } from "@milkdown/kit/prose/view";
-import { getMarkdown, insert } from "@milkdown/kit/utils";
+import { getMarkdown } from "@milkdown/kit/utils";
+import { insertMath, openSelectedMath } from "./extensions/math-plugin";
 import { calloutPattern } from "./extensions/callout-plugin";
 import type {
   MarkdownEditorCommand,
@@ -138,18 +139,15 @@ export function runEditorCommand(
     }
 
     if (command === "inline-math") {
-      insert(`$${options.equation?.trim() || "x = y"}$`, true)(ctx);
-      return true;
+      return insertMath(view, false, options.equation);
     }
 
     if (command === "block-math") {
-      insert(`$$\n${options.equation?.trim() || "x = y"}\n$$`)(ctx);
-      return true;
+      return insertMath(view, true, options.equation);
     }
 
     if (command === "math-edit") {
-      insert(`$${options.equation?.trim() || "x = y"}$`, true)(ctx);
-      return true;
+      return openSelectedMath(view);
     }
 
     return false;

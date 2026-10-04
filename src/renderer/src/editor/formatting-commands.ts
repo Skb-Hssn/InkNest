@@ -64,6 +64,17 @@ export function runFormattingAction(
   action: FormattingAction,
   options: { level?: number; language?: string } = {}
 ) {
+  if (action === "code-block" || action === "inline-code") {
+    let hasMath = false;
+    const from = action === "code-block" ? state.selection.$from.start() : state.selection.from;
+    const to = action === "code-block" ? Math.min(state.doc.content.size, state.selection.$to.end()) : state.selection.to;
+    state.doc.nodesBetween(from, to, (node) => {
+      if (node.type.name.startsWith("math_")) hasMath = true;
+    });
+    // ProseMirror's setBlockType drops inline atoms when converting to text-only
+    // code. Keep equations intact rather than silently discarding their source.
+    if (hasMath) return false;
+  }
   // A plugin-free working state avoids running appendTransaction (for example
   // trailing paragraphs) on a detached document. Plugins run once on dispatch.
   let current = EditorState.create({

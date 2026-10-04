@@ -1,6 +1,6 @@
 # Text formatting operation audit
 
-This audit covers all exposed text-formatting controls, their keyboard shortcuts, Markdown input rules, and formatting slash commands. Images and table structure are separate features; table cells are included as a formatting context. Mathematical command identifiers have no exposed toolbar control or installed math schema and are outside this audit.
+This audit covers text-formatting controls, their keyboard shortcuts, Markdown input rules, and formatting slash commands. Images and table structure are separate features; table cells are included as a formatting context. Equation controls and their interactions with formatting are covered in [the math audit](math-audit.md).
 
 ## Operations and edge cases
 

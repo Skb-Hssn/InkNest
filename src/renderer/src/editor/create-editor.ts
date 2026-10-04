@@ -35,6 +35,8 @@ import type { MarkdownEditorProps } from "./types";
 import { moveTableCell } from "./table-commands";
 import { createNoteSearchPlugin, type NoteSearchState } from "./search-plugin";
 import { runFormattingAction, type FormattingAction } from "./formatting-commands";
+import { handleMathKey, mathPlugins, preserveMathSource } from "./extensions/math-plugin";
+import "katex/dist/katex.min.css";
 
 type CreateEditorOptions = Pick<
   MarkdownEditorProps,
@@ -67,7 +69,16 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
       }));
       ctx.update(remarkStringifyOptionsCtx, (previous) => ({
         ...previous,
-        bullet: "-" as const
+        bullet: "-" as const,
+        handlers: {
+          ...previous.handlers,
+          text(node, parent, state, info) {
+            // Milkdown's trailing-space shortcut skips escaping literal dollars.
+            // Once math is enabled that can change prose into an equation.
+            if (node.value.includes("$")) return state.safe(node.value, { ...info, encode: [] });
+            return previous.handlers?.text?.(node, parent, state, info) ?? state.safe(node.value, info);
+          }
+        }
       }));
       ctx.update(editorViewOptionsCtx, (previous) => ({
         ...previous,
@@ -80,6 +91,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           spellcheck: "true"
         },
         handleTextInput(view, from, to, text, defaultInsert) {
+          if (preserveMathSource(view, from, to, text)) return true;
           const marks = view.state.storedMarks;
           if (marks?.some((mark) => mark.type.name === "inlineCode")) {
             // Explicitly enabled code remains enabled while typing. Moving the
@@ -93,6 +105,10 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           // Browser caret movement (Home/End and Shift+Arrow) may precede
           // ProseMirror's asynchronous selectionchange event.
           syncEditorDOMSelection(view);
+          if (handleMathKey(view, event)) {
+            event.preventDefault();
+            return true;
+          }
           if (event.ctrlKey || event.metaKey) {
             const key = event.key.toLowerCase();
             const shortcuts: Record<string, FormattingAction> = event.altKey
@@ -253,6 +269,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
     })
     .use(commonmark)
     .use(gfm)
+    .use(mathPlugins)
     .use(history)
     .use(clipboard)
     .use(trailing)
