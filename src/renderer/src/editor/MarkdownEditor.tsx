@@ -9,6 +9,7 @@ import {
 import { CirclePlus, Grip, MoreHorizontal, Trash2 } from "lucide-react";
 import type { Editor } from "@milkdown/kit/core";
 import { editorViewCtx } from "@milkdown/kit/core";
+import { focusEditorAtEnd } from "./dom-selection";
 import { TextSelection } from "@milkdown/kit/prose/state";
 import { FindReplaceBar } from "./FindReplaceBar";
 import { HeadingMinimap, collectNoteHeadings, type NoteHeading } from "./HeadingMinimap";
@@ -278,6 +279,27 @@ export const MarkdownEditor = forwardRef<
       window.removeEventListener("resize", schedule);
     };
   }, [editorReady, headings, props.fullWidth, props.showOutline, props.lineWrap]);
+
+  function handleBlankCanvasMouseDown(event: ReactMouseEvent<HTMLDivElement>) {
+    const target = event.target;
+    const editor = editorRef.current;
+    if (event.button !== 0 || event.shiftKey || event.ctrlKey || event.metaKey || event.altKey ||
+        !editorReady || propsRef.current.disabled || !editor || !(target instanceof Element)) return;
+    if (target.closest("button, a, input, textarea, select, [role='separator'], .note-find-widget, .note-heading-minimap, .inknest-block-menu, .inknest-table-cell-menu")) return;
+    const scroll = scrollRef.current;
+    if (target === scroll) {
+      const rect = scroll.getBoundingClientRect();
+      if (event.clientX >= rect.left + scroll.clientLeft + scroll.clientWidth ||
+          event.clientY >= rect.top + scroll.clientTop + scroll.clientHeight) return;
+    }
+    const focused = editor.action((ctx) => {
+      const view = ctx.get(editorViewCtx);
+      // Text and embedded content retain native click/caret behavior.
+      if (view.dom.contains(target)) return false;
+      return focusEditorAtEnd(view);
+    });
+    if (focused) event.preventDefault();
+  }
 
   function handleEditorMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
     const root = rootRef.current;
@@ -580,7 +602,7 @@ export const MarkdownEditor = forwardRef<
   }, [props.markdown]);
 
   return (
-    <div className={`note-workspace${props.showOutline ? " note-workspace-with-outline" : ""}`}>
+    <div className={`note-workspace${props.showOutline ? " note-workspace-with-outline" : ""}`} onMouseDown={handleBlankCanvasMouseDown}>
       <div className="note-editor-column">
         {findOpen ? <FindReplaceBar query={query} replacement={replacement} replaceOpen={replaceOpen}
           options={searchOptions} preserveCase={preserveCase} selectionOnly={selectionOnly}

@@ -8,18 +8,20 @@ import { Schema } from "@milkdown/kit/prose/model";
 import { AllSelection, EditorState, NodeSelection, TextSelection } from "@milkdown/kit/prose/state";
 
 const temp = await mkdtemp(path.join(fileURLToPath(new URL("../node_modules/", import.meta.url)), ".selection-tests-"));
-let syncEditorDOMSelection;
+let syncEditorDOMSelection, focusEditorAtEnd;
 try {
   const source = await readFile(new URL("../src/renderer/src/editor/dom-selection.ts", import.meta.url), "utf8");
   await writeFile(path.join(temp, "selection.mjs"), ts.transpileModule(source, {
     compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 }
   }).outputText);
-  ({ syncEditorDOMSelection } = await import(pathToFileURL(path.join(temp, "selection.mjs"))));
+  ({ syncEditorDOMSelection, focusEditorAtEnd } = await import(pathToFileURL(path.join(temp, "selection.mjs"))));
 } finally { await rm(temp, { recursive: true }); }
 
 const schema = new Schema({ nodes: {
-  doc: { content: "paragraph+" }, paragraph: { content: "inline*" }, text: { group: "inline" },
-  equation: { inline: true, group: "inline", atom: true }
+  doc: { content: "block+" }, paragraph: { content: "inline*", group: "block" }, text: { group: "inline" },
+  equation: { inline: true, group: "inline", atom: true },
+  math_block: { group: "block", atom: true },
+  code_block: { group: "block", content: "text*", code: true }
 } });
 const doc = schema.nodes.doc.create(null, [
   schema.nodes.paragraph.create(null, [schema.text("Before "), schema.nodes.equation.create(), schema.text(" after")]),
@@ -30,7 +32,8 @@ function makeView(selection, options = {}) {
   const anchorNode = {}, focusNode = anchorNode;
   const native = { anchorNode, focusNode, anchorOffset: end, focusOffset: end, isCollapsed: true, ...options.native };
   const view = {
-    composing: options.composing ?? false,
+    composing: options.composing ?? false, editable: options.editable ?? true, focused: 0,
+    focus() { view.focused++; },
     state: EditorState.create({ doc, selection }), dispatched: 0,
     dom: { ownerDocument: { getSelection: () => options.missing ? null : native }, contains: () => !options.outside },
     posAtDOM: (_node, offset) => offset,
@@ -75,5 +78,35 @@ for (const options of [{ composing: true }, { outside: true }, { missing: true }
 test("an already synchronized caret does not dispatch a redundant transaction", () => {
   const view = makeView(TextSelection.create(doc, end));
   syncEditorDOMSelection(view);
+  assert.equal(view.dispatched, 0);
+});
+
+test("blank canvas focus leaves an empty note's document unchanged", () => {
+  const empty = schema.nodes.doc.create(null, schema.nodes.paragraph.create());
+  const view = makeView(TextSelection.create(doc, 1));
+  view.state = EditorState.create({ doc: empty });
+  assert.equal(focusEditorAtEnd(view), true);
+  assert.ok(view.state.doc.eq(empty));
+  assert.equal(view.state.selection.from, 1);
+  assert.equal(view.focused, 1);
+});
+for (const name of ["math_block", "code_block"]) {
+  test(`blank canvas focus adds an insertion point after ${name} without deleting it`, () => {
+    const block = schema.nodes[name].create(null, name === "code_block" ? schema.text("keep me") : null);
+    const original = schema.nodes.doc.create(null, block);
+    const view = makeView(TextSelection.create(doc, 1));
+    view.state = EditorState.create({ doc: original });
+    focusEditorAtEnd(view);
+    assert.ok(view.state.doc.firstChild.eq(block));
+    assert.equal(view.state.doc.lastChild.type.name, "paragraph");
+    assert.ok(view.state.selection instanceof TextSelection);
+    assert.equal(view.state.selection.empty, true);
+    assert.equal(view.focused, 1);
+  });
+}
+test("blank canvas focus does not focus or change a read-only note", () => {
+  const view = makeView(new AllSelection(doc), { editable: false });
+  assert.equal(focusEditorAtEnd(view), false);
+  assert.equal(view.focused, 0);
   assert.equal(view.dispatched, 0);
 });

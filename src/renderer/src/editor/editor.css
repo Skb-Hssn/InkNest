@@ -739,3 +739,4 @@
 .inknest-editor blockquote.inknest-callout[data-callout="warning"] { border-color: color-mix(in srgb, #d6a146 45%, var(--app-border)); border-left-color: #d6a146; background: color-mix(in srgb, #d6a146 9%, var(--app-surface)); }
 .inknest-editor blockquote.inknest-callout[data-callout="info"] { border-color: color-mix(in srgb, #53949c 40%, var(--app-border)); border-left-color: #53949c; background: color-mix(in srgb, #53949c 9%, var(--app-surface)); }
 .inknest-editor-full-width .editor { max-width: none; }
+.note-writing-scroll { cursor: text; }

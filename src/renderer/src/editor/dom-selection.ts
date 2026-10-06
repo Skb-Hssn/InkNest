@@ -18,3 +18,17 @@ export function syncEditorDOMSelection(view: EditorView) {
   if (!selection.eq(view.state.selection)) view.dispatch(view.state.tr.setSelection(selection));
 }
 
+/** Give blank canvas clicks an insertion point without replacing a final atom. */
+export function focusEditorAtEnd(view: EditorView) {
+  if (!view.editable || view.composing) return false;
+  const { doc, schema } = view.state;
+  const tr = view.state.tr;
+  if (doc.lastChild?.type !== schema.nodes.paragraph) {
+    const paragraph = schema.nodes.paragraph;
+    if (!paragraph || !doc.canReplaceWith(doc.childCount, doc.childCount, paragraph)) return false;
+    tr.insert(doc.content.size, paragraph.createAndFill()!);
+  }
+  view.dispatch(tr.setSelection(TextSelection.atEnd(tr.doc)).scrollIntoView());
+  view.focus();
+  return true;
+}

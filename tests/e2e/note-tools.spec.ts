@@ -60,6 +60,28 @@ test("new notes are empty on disk and in the editor, including after reopening",
   } finally { await app.close(); }
 });
 
+test("clicking blank space in a new note focuses insertion and saves typing", async ({}, info) => {
+  const { app, window, editor, workspace } = await launch(info);
+  try {
+    for (const [index, area] of [".note-writing-scroll", ".note-outline-slot"].entries()) {
+      await window.getByRole("button", { name: "Create new note", exact: true }).click();
+      await expect(editor).toHaveAttribute("contenteditable", "true");
+      const file = path.join(workspace, index ? "Untitled 2.md" : "Untitled.md");
+      const box = (await window.locator(area).boundingBox())!;
+      // Click far below the paragraph and outside the editable text column.
+      await window.mouse.click(box.x + 6, box.y + box.height - 24);
+      await expect(editor).toBeFocused();
+      expect(await readFile(file, "utf8")).toBe("");
+      await window.keyboard.type("Written from blank space.");
+      await expect(editor).toHaveText("Written from blank space.");
+      await expect.poll(() => readFile(file, "utf8")).toContain("Written from blank space.");
+      await window.getByRole("tab", { name: "Notes", exact: true }).click();
+      await window.getByRole("tab", { name: index ? "Untitled 2" : "Untitled", exact: true }).click();
+      await expect(editor).toHaveText("Written from blank space.");
+    }
+  } finally { await app.close(); }
+});
+
 test("full width and minimap toggles persist and update layout", async ({}, info) => {
   const { app, window, editor } = await launch(info);
   try {
