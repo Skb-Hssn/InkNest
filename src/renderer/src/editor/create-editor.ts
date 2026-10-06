@@ -198,6 +198,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           );
         },
         handlePaste(view, event) {
+          syncEditorDOMSelection(view);
           const imageItem = Array.from(event.clipboardData?.items ?? []).find(
             (item) => item.kind === "file" && item.type.startsWith("image/")
           );

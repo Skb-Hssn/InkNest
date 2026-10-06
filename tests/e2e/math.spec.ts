@@ -249,12 +249,56 @@ test("untrusted LaTeX cannot create links, images or HTML and does not affect ot
 test("copying and pasting a rendered equation preserves editable LaTeX", async ({}, info) => {
   const { app, window, editor, notePath } = await launch(info, "Before $\\sqrt{x}$ after\n\nDestination\n");
   try {
+    // A previous test's clipboard must never satisfy the copy assertion.
+    await app.evaluate(({ clipboard }) => clipboard.clear());
+    await editor.locator("p").first().click();
+    await editor.press("Control+Home"); await editor.press("Control+a");
+    await expect.poll(() => editor.evaluate(() => window.getSelection()?.toString() ?? ""))
+      .toContain("Destination");
+    await editor.press("Control+c");
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+      .toContain("$\\sqrt{x}$");
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readHTML()))
+      .toContain('data-math-source="\\sqrt{x}"');
+    await info.attach("equation-clipboard", {
+      body: JSON.stringify(await app.evaluate(({ clipboard }) => ({ text: clipboard.readText(), html: clipboard.readHTML() }))),
+      contentType: "application/json"
+    });
+
+    // Preserve the real keyboard navigation that triggered the CI failure.
+    // Native document navigation and selectionchange can arrive separately.
+    const destination = editor.locator("p").filter({ hasText: "Destination" });
+    await editor.press("Control+End");
+    await expect.poll(() => destination.evaluate((element) => {
+      const selection = window.getSelection();
+      return selection?.isCollapsed && element.contains(selection.anchorNode);
+    })).toBe(true);
+    await editor.press("Enter");
+    await expect(editor.locator("p").last()).toBeEmpty();
+    await expect(editor.locator(".katex")).toHaveCount(1);
+    await expect(editor).toBeFocused();
+    await editor.press("Control+v");
+    await expect(editor.locator(".katex")).toHaveCount(2);
+    await expect(editor.locator(".inknest-math")).toHaveCount(2);
+    await editor.getByRole("button", { name: "Edit inline equation" }).last().click();
+    await expect(editor.getByRole("textbox", { name: "Inline equation source" })).toHaveValue("\\sqrt{x}");
+    await editor.getByRole("button", { name: "Done", exact: true }).click();
+    await expect.poll(() => readFile(notePath, "utf8")).toMatch(/\$\\sqrt\{x\}\$[\s\S]*\$\\sqrt\{x\}\$/);
+    await reopen(window);
+    await expect(editor.locator(".katex")).toHaveCount(2);
+  } finally { await app.close(); }
+});
+
+test("select-all copy followed by immediate keyboard navigation and paste retains both equations", async ({}, info) => {
+  const { app, window, editor, notePath } = await launch(info, "Before $\\sqrt{x}$ after\n\nDestination\n");
+  try {
+    await app.evaluate(({ clipboard }) => clipboard.clear());
     await editor.click(); await editor.press("Control+Home"); await editor.press("Control+a");
     await editor.press("Control+c");
-    const copied = await app.evaluate(({ clipboard }) => clipboard.readText());
-    expect(copied).toContain("$\\sqrt{x}$");
-    await editor.press("Control+End"); await editor.press("Enter");
-    await editor.press("Control+v");
+    await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toContain("$\\sqrt{x}$");
+    // No selection waits between navigation and edits: commands must reconcile
+    // native caret movement even if selectionchange has not arrived yet.
+    await editor.press("Control+End"); await editor.press("Enter"); await editor.press("Control+v");
     await expect(editor.locator(".katex")).toHaveCount(2);
     await expect.poll(() => readFile(notePath, "utf8")).toMatch(/\$\\sqrt\{x\}\$[\s\S]*\$\\sqrt\{x\}\$/);
     await reopen(window);

@@ -43,17 +43,7 @@ export type DeletableBlock = {
   node: Node;
 };
 
-/** Read native caret movement before keyboard commands consume the selection. */
-export function syncEditorDOMSelection(view: EditorView) {
-  if (view.composing || !(view.state.selection instanceof TextSelection)) return;
-  const native = view.dom.ownerDocument.getSelection();
-  if (!native?.anchorNode || !native.focusNode ||
-      !view.dom.contains(native.anchorNode) || !view.dom.contains(native.focusNode)) return;
-  const anchor = view.posAtDOM(native.anchorNode, native.anchorOffset);
-  const head = view.posAtDOM(native.focusNode, native.focusOffset);
-  const selection = TextSelection.between(view.state.doc.resolve(anchor), view.state.doc.resolve(head));
-  if (!selection.eq(view.state.selection)) view.dispatch(view.state.tr.setSelection(selection));
-}
+export { syncEditorDOMSelection } from "./dom-selection";
 
 export function runEditorCommand(
   editor: Editor,
