@@ -2751,7 +2751,7 @@ export function App() {
                 {toolbarPlaceholders.filter((command) => toolbarMenu.kind === "headings" ? command.group === "headings" :
                   ["inline-code", "clear-format", "inline-math", "divider", "callout-warning", "callout-info", "callout-success", "table-add-row", "table-delete-row", "table-add-column", "table-delete-column", "table-delete"].includes(command.id)).map((command) =>
                   <button key={command.id} type="button" aria-label={command.label} disabled={isBusy}
-                    className={`toolbar-button ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
+                    className={`toolbar-button ${command.id.startsWith("table-delete") ? "danger" : ""} ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
                     onMouseDown={(event) => event.preventDefault()} onClick={(event) => { runToolbarCommand(command, event); setToolbarMenu(null); }}>
                     {command.icon}<span>{command.label}</span>
                   </button>)}

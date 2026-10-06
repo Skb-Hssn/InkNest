@@ -630,7 +630,7 @@ export const MarkdownEditor = forwardRef<
             >
               <button
                 type="button"
-                className="inknest-block-menu-item"
+                className="inknest-block-menu-item danger"
                 role="menuitem"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) => {
@@ -677,7 +677,7 @@ export const MarkdownEditor = forwardRef<
                 <button
                   key={action}
                   type="button"
-                  className="inknest-block-menu-item"
+                  className={`inknest-block-menu-item${action.startsWith("delete") ? " danger" : ""}`}
                   role="menuitem"
                   disabled={props.disabled}
                   onMouseDown={(event) => event.preventDefault()}

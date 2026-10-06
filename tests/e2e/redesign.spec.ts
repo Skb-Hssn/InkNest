@@ -50,7 +50,7 @@ test("reference layout renders both themes and inline find/replace without overl
       await window.reload();
       await expect(editor.locator("h1")).toHaveText("Ideas worth keeping");
       await expect(window.getByRole("complementary", { name: "Heading minimap" })).toContainText("On this page");
-      await expect(editor.locator("h1")).toHaveCSS("font-family", /Georgia/);
+      await expect(editor.locator("h1")).toHaveCSS("font-family", await editor.locator("p").first().evaluate((element) => getComputedStyle(element).fontFamily));
       const sidebar = (await window.locator(".workspace-sidebar").boundingBox())!;
       expect(sidebar.width).toBeGreaterThanOrEqual(210); expect(sidebar.width).toBeLessThanOrEqual(240);
       await expect(window.locator(".sidebar-ribbon")).toHaveCount(0);

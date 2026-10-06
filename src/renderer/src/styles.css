@@ -1665,3 +1665,22 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--app-accen
 .reading-width-switch[data-enabled="true"]::after { transform: translateX(11px); }
 .reading-width-switch[data-enabled="false"]::after { transform: translateX(0); }
 .reading-width-switch[data-enabled="false"] { background: var(--app-muted); }
+
+/* Semantic menu feedback stays distinct from the selected accent theme. */
+:root { --app-menu-safe: #246a48; --app-menu-danger: #b42318; }
+:root[data-theme="dark"] { --app-menu-safe: #85c89e; --app-menu-danger: #f29a93; }
+@media (prefers-color-scheme: dark) {
+  :root[data-theme="system"] { --app-menu-safe: #85c89e; --app-menu-danger: #f29a93; }
+}
+:is(.inknest-block-menu-item, .context-menu-item, .action-menu-item, .toolbar-command-menu .toolbar-button):not(:disabled):is(:hover, :focus-visible) {
+  color: var(--app-menu-safe);
+  background: color-mix(in srgb, var(--app-menu-safe) 13%, var(--app-surface));
+  outline: 1px solid color-mix(in srgb, var(--app-menu-safe) 35%, transparent);
+  outline-offset: -1px;
+  box-shadow: none;
+}
+:is(.inknest-block-menu-item, .context-menu-item, .action-menu-item, .toolbar-command-menu .toolbar-button).danger:not(:disabled):is(:hover, :focus-visible) {
+  color: var(--app-menu-danger);
+  background: color-mix(in srgb, var(--app-menu-danger) 13%, var(--app-surface));
+  outline-color: color-mix(in srgb, var(--app-menu-danger) 35%, transparent);
+}

@@ -130,13 +130,6 @@
   text-align: left;
 }
 
-.inknest-block-menu-item:hover,
-.inknest-block-menu-item:focus-visible {
-  background: color-mix(in srgb, #fee4e2 65%, var(--app-surface));
-  color: #b42318;
-  border-color: color-mix(in srgb, #b42318 40%, var(--app-border));
-  outline: none;
-}
 
 .inknest-editor .milkdown,
 .inknest-editor .editor {
@@ -695,7 +688,7 @@
 .inknest-editor { line-height: 1.55; }
 .inknest-editor .editor { max-width: 760px; padding: 30px 40px 64px; }
 .inknest-editor h1, .inknest-editor h2, .inknest-editor h3, .inknest-editor h4, .inknest-editor h5, .inknest-editor h6 {
-  font-family: Georgia, "Times New Roman", serif; letter-spacing: -.015em; font-weight: 700;
+  font-family: inherit; letter-spacing: -.015em; font-weight: 700;
 }
 .inknest-editor h1 { font-size: 2em; line-height: 1.2; margin-bottom: 10px; }
 .inknest-editor h2 { font-size: 1.375em; line-height: 1.3; margin: 20px 0 7px; }
