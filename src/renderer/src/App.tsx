@@ -82,7 +82,8 @@ import type {
   SearchResult,
   TagSummary,
   WorkspaceFileModel,
-  WorkspaceInfo
+  WorkspaceInfo,
+  SaveWorkspaceSessionPayload
 } from "../../shared/ipc";
 import { accentColors, defaultAccentColor } from "../../shared/accent-colors";
 import {
@@ -336,6 +337,7 @@ export function App() {
   >(() => new Set());
   const saveTimerRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const pendingNoteSaveRef = useRef<{ path: string; markdown: string } | null>(null);
   const saveQueuedRef = useRef(false);
   const editorMarkdownRef = useRef(editorMarkdown);
   const lastSavedMarkdownRef = useRef(lastSavedMarkdown);
@@ -346,6 +348,54 @@ export function App() {
   const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
   const sidebarResizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
   const noteNavigationRef = useRef(false);
+  const [sessionReadyWorkspace, setSessionReadyWorkspace] = useState<string | null>(null);
+  const sessionSnapshotRef = useRef<SaveWorkspaceSessionPayload | null>(null);
+  const sessionSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+
+  if (sessionReadyWorkspace !== workspace.path) sessionSnapshotRef.current = null;
+  else if (workspace.path) sessionSnapshotRef.current = {
+    workspacePath: workspace.path, openNotePaths,
+    activeNotePath: selectedNotePath && openNotePaths.includes(selectedNotePath) ? selectedNotePath : openNotePaths[0] ?? null
+  };
+
+  function persistSession(snapshot = sessionSnapshotRef.current): Promise<boolean> {
+    if (!snapshot) return sessionSaveQueueRef.current;
+    const save = sessionSaveQueueRef.current.then(async () => {
+      const result = await window.inknest.workspace.saveSession(snapshot);
+      if (!result.ok) { setWorkspaceError(`Could not preserve the open note tabs: ${result.error.message}`); return false; }
+      setWorkspaceError((error) => error?.startsWith("Could not preserve the open note tabs") ? null : error);
+      return true;
+    }).catch(() => { setWorkspaceError("Could not preserve the open note tabs."); return false; });
+    sessionSaveQueueRef.current = save;
+    return save;
+  }
+
+  useEffect(() => {
+    if (workspace.path && sessionReadyWorkspace === workspace.path) void persistSession();
+  }, [workspace.path, sessionReadyWorkspace, openNotePaths, selectedNotePath]);
+
+  async function restoreWorkspaceSession(info: WorkspaceInfo, current = () => true) {
+    const model = await refreshWorkspace();
+    if (!current() || !model || model.workspace.path !== info.path) return;
+    const saved = await window.inknest.workspace.getSession();
+    if (!current()) return;
+    if (!saved.ok) setWorkspaceError(saved.error.message);
+    const session = saved.ok ? saved.data : null;
+    const existing = new Set(model.notes.map((note) => note.path));
+    const paths = (session?.openNotePaths ?? info.initialNotePaths ?? []).filter((notePath) => existing.has(notePath));
+    const results = await Promise.all(paths.map((notePath) => window.inknest.notes.read(notePath)));
+    if (!current()) return;
+    const restored = results.filter((result): result is { ok: true; data: NoteContent } => result.ok).map((result) => result.data);
+    setOpenNotePaths(restored.map((note) => note.path));
+    const active = restored.find((note) => note.path === session?.activeNotePath) ?? restored[0];
+    if (active) {
+      const folder = active.path.includes("/") ? active.path.slice(0, active.path.lastIndexOf("/")) : ".";
+      setSelectedFolderPath(folder);
+      setExpandedFolderPaths(new Set([".", ...getAncestorFolderPaths(folder), folder, ...(info.initialNotePaths ? ["Notes", "Projects"] : [])]));
+      applyNoteContent(active);
+    }
+    setSessionReadyWorkspace(info.path);
+  }
 
   useEffect(() => {
     document.getElementById("active-note-tab")?.scrollIntoView({ block: "nearest", inline: "nearest" });
@@ -388,18 +438,9 @@ export function App() {
         setWorkspace(result.data);
 
         if (result.data.status === "ready") {
-          await refreshWorkspace();
-          if (result.data.initialNotePaths && isMounted) {
-            const loaded = await Promise.all(result.data.initialNotePaths.map((notePath) => window.inknest.notes.read(notePath)));
-            if (!isMounted) return;
-            const notes = loaded.filter((note): note is { ok: true; data: NoteContent } => note.ok);
-            if (notes.length) {
-              setOpenNotePaths(notes.map((note) => note.data.path));
-              setSelectedFolderPath("Notes");
-              setExpandedFolderPaths(new Set([".", "Notes", "Projects"]));
-              applyNoteContent(notes[0].data);
-            }
-          }
+          setIsBusy(true);
+          try { await restoreWorkspaceSession(result.data, () => isMounted); }
+          finally { if (isMounted) setIsBusy(false); }
         }
       } else {
         setWorkspaceError(result.error.message);
@@ -839,11 +880,25 @@ export function App() {
       ? change.changedPaths.includes(openNotePath)
       : false;
     syncEditorMarkdownSnapshot();
-    const hasLocalChanges =
-      editorMarkdownRef.current !== lastSavedMarkdownRef.current;
-
     if (openNotePath && (noteWasDeleted || noteWasChanged)) {
-      if (noteWasDeleted || hasLocalChanges) {
+      let ownSaveNotification = false;
+      if (noteWasChanged && !noteWasDeleted) {
+        const disk = await window.inknest.notes.read(openNotePath);
+        if (selectedNoteContentRef.current?.path !== openNotePath ||
+            (sessionSnapshotRef.current && sessionSnapshotRef.current.workspacePath !== change.workspacePath)) return;
+        const pending = pendingNoteSaveRef.current;
+        ownSaveNotification = disk.ok && (disk.data.markdown === lastSavedMarkdownRef.current ||
+          (pending?.path === openNotePath && disk.data.markdown === pending.markdown));
+      }
+      // A watcher can observe our atomic save before its IPC response arrives.
+      // Matching saved content is not a competing external edit.
+      if (ownSaveNotification) {
+        await refreshWorkspace();
+        return;
+      }
+      syncEditorMarkdownSnapshot();
+      const hasLocalChangesNow = editorMarkdownRef.current !== lastSavedMarkdownRef.current;
+      if (noteWasDeleted || hasLocalChangesNow) {
         setExternalNoteChange({
           kind: noteWasDeleted ? "deleted" : "changed",
           path: openNotePath
@@ -1102,7 +1157,7 @@ export function App() {
   }
 
   async function chooseWorkspace() {
-    if (!(await flushCurrentNote())) {
+    if (!(await flushCurrentNote()) || !(await persistSession())) {
       return;
     }
 
@@ -1112,6 +1167,12 @@ export function App() {
     const result = await window.inknest.workspace.choose();
 
     if (result.ok) {
+      if (result.data.path === workspace.path) {
+        if (result.data.status === "ready") await refreshWorkspace();
+        setIsBusy(false);
+        return;
+      }
+      setSessionReadyWorkspace(null);
       setWorkspace(result.data);
       setSearchQuery("");
       setSelectedTag("");
@@ -1120,7 +1181,7 @@ export function App() {
       setExpandedFolderPaths(new Set(["."]));
       setOpenNotePaths([]);
       if (result.data.status === "ready") {
-        await refreshWorkspace();
+        await restoreWorkspaceSession(result.data);
       }
     } else {
       setWorkspaceError(result.error.message);
@@ -1130,7 +1191,7 @@ export function App() {
   }
 
   async function reopenWorkspace(workspacePath: string) {
-    if (!(await flushCurrentNote())) {
+    if (!(await flushCurrentNote()) || !(await persistSession())) {
       return;
     }
 
@@ -1140,6 +1201,12 @@ export function App() {
     const result = await window.inknest.workspace.select(workspacePath);
 
     if (result.ok) {
+      if (result.data.path === workspace.path) {
+        if (result.data.status === "ready") await refreshWorkspace();
+        setIsBusy(false);
+        return;
+      }
+      setSessionReadyWorkspace(null);
       setWorkspace(result.data);
       setSearchQuery("");
       setSelectedTag("");
@@ -1147,7 +1214,7 @@ export function App() {
       setSelectedFolderPath(".");
       setExpandedFolderPaths(new Set(["."]));
       setOpenNotePaths([]);
-      await refreshWorkspace();
+      await restoreWorkspaceSession(result.data);
     } else {
       setWorkspaceError(result.error.message);
     }
@@ -1320,6 +1387,8 @@ export function App() {
     }
 
     const requestPath = note.path;
+    const pendingSave = { path: requestPath, markdown: markdownToSave.trim() ? markdownToSave : "" };
+    pendingNoteSaveRef.current = pendingSave;
     updateSaveState("saving");
     updateSaveError(null);
     setStatusMessage("Saving");
@@ -1391,6 +1460,7 @@ export function App() {
         saveInFlightRef.current = null;
       }
 
+      if (pendingNoteSaveRef.current === pendingSave) pendingNoteSaveRef.current = null;
       setIsSaving(false);
 
       if (saveQueuedRef.current) {
@@ -1615,8 +1685,9 @@ export function App() {
         try {
           const didFlush = await flushCurrentNote();
           await flushPendingSettings();
+          const didSaveSession = await persistSession();
 
-          if (didFlush) {
+          if (didFlush && didSaveSession) {
             window.inknest.app.closeReady();
             return;
           }

@@ -63,6 +63,8 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "settings:save",
     "workspace:choose",
     "workspace:get-active",
+    "workspace:get-session",
+    "workspace:save-session",
     "workspace:scan",
     "workspace:select"
   ].sort());

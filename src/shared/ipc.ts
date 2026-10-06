@@ -28,6 +28,13 @@ export type AppWindowState = {
   isMaximized: boolean;
 };
 
+export type WorkspaceSession = {
+  openNotePaths: string[];
+  activeNotePath: string | null;
+};
+
+export type SaveWorkspaceSessionPayload = WorkspaceSession & { workspacePath: string };
+
 export type WorkspaceStatus =
   | "none"
   | "ready"
@@ -299,6 +306,8 @@ export const ipcChannels = {
     choose: "workspace:choose",
     select: "workspace:select",
     scan: "workspace:scan",
+    getSession: "workspace:get-session",
+    saveSession: "workspace:save-session",
     changed: workspaceChangedChannel
   },
   notes: {

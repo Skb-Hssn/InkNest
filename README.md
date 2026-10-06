@@ -98,3 +98,11 @@ The compact formatting toolbar keeps heading levels and additional commands in
 menus. `Ctrl+F` opens Find and `Ctrl+H` opens Find and Replace beneath the toolbar.
 The heading panel can be resized from its left edge or bottom-right corner;
 keyboard arrows resize it, and Escape cancels an active drag.
+
+
+InkNest restores the open note tabs, their order, and the active note when it
+reopens. Each workspace has its own session, stored in `workspace-sessions.json`
+inside the app-data folder beside `settings.json`. Closed tabs stay closed;
+missing files are skipped, and the first surviving tab becomes active if the
+previously active file is unavailable. Pending note edits and the latest tab
+session are saved before the window closes.

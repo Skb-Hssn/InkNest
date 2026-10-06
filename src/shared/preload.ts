@@ -1,5 +1,7 @@
 import type {
   AppInfo,
+  WorkspaceSession,
+  SaveWorkspaceSessionPayload,
   AppWindowState,
   AppSettings,
   CreateFolderPayload,
@@ -55,6 +57,8 @@ export type InkNestApi = {
     choose: () => Promise<IpcResult<WorkspaceInfo>>;
     select: (path: string) => Promise<IpcResult<WorkspaceInfo>>;
     scan: () => Promise<IpcResult<WorkspaceFileModel>>;
+    getSession: () => Promise<IpcResult<WorkspaceSession | null>>;
+    saveSession: (payload: SaveWorkspaceSessionPayload) => Promise<IpcResult<WorkspaceSession>>;
     onChanged: (listener: (event: WorkspaceChangeEvent) => void) => () => void;
   };
   notes: {

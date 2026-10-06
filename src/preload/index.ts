@@ -43,6 +43,8 @@ const inknestApi: InkNestApi = {
     choose: () => ipcRenderer.invoke(ipcChannels.workspace.choose),
     select: (path) => ipcRenderer.invoke(ipcChannels.workspace.select, { path }),
     scan: () => ipcRenderer.invoke(ipcChannels.workspace.scan),
+    getSession: () => ipcRenderer.invoke(ipcChannels.workspace.getSession),
+    saveSession: (payload) => ipcRenderer.invoke(ipcChannels.workspace.saveSession, payload),
     onChanged: (listener) => {
       const handler = (_event: unknown, change: Parameters<typeof listener>[0]) =>
         listener(change);
