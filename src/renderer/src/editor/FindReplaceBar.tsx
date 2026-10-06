@@ -77,8 +77,8 @@ export function FindReplaceBar(props: Props) {
                 onChange={(event) => props.onReplacement(event.target.value)} />
               <button type="button" aria-label="Preserve case" title="Preserve case (Alt+P)" aria-pressed={props.preserveCase} onClick={props.onPreserveCase}>AB</button>
             </div>
-            <button type="button" aria-label="Replace" title="Replace current match (Enter)" disabled={!canReplace} onMouseDown={(event) => event.preventDefault()} onClick={() => props.onReplace(false)}><Replace size={17} /></button>
-            <button type="button" aria-label="Replace all" title="Replace all matches" disabled={!canReplace || props.search.limited} onMouseDown={(event) => event.preventDefault()} onClick={() => props.onReplace(true)}><ReplaceAll size={17} /></button>
+            <button type="button" aria-label="Replace" title="Replace current match (Enter)" disabled={!canReplace} onMouseDown={(event) => event.preventDefault()} onClick={() => props.onReplace(false)}><span>Replace</span></button>
+            <button type="button" aria-label="Replace all" title="Replace all matches" disabled={!canReplace || props.search.limited} onMouseDown={(event) => event.preventDefault()} onClick={() => props.onReplace(true)}><span>Replace All</span></button>
           </div>
         ) : null}
         {props.search.error || props.search.limited || props.message ? (

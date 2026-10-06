@@ -20,7 +20,7 @@ visible until the user chooses to reload, keep, or save a new copy. Invalid
 frontmatter does not prevent the Markdown note from being opened.
 
 The interface also provides visible keyboard focus states, accessible labels
-for icon controls, a command palette on `Ctrl+K`, `/` search focusing, and a
+for icon controls, note search on `Ctrl+K`, a command palette on `Ctrl+Shift+K`, `/` search focusing, and a
 status bar with the active file path, editor mode, save state, word count, and
 character count. The three-column desktop layout contracts cleanly at narrow
 window sizes without relying on overlapping text.
@@ -85,3 +85,16 @@ Filesystem access should stay in main-process services and be exposed only throu
 - Deleted notes move to app-level trash inside workspace metadata.
 - Raw HTML should be sanitized or disabled before rendering Markdown.
 - Search starts with an in-memory index.
+
+
+On first launch, InkNest creates a local example workspace under its app-data
+folder (`workspaces/Personal`) and opens the sample note, reading list, and an
+empty unnamed note. A separate `workspaces/Research` folder is available in
+Recent workspaces. Sample content is created only when no settings file exists;
+subsequent launches preserve edits, deleted notes, and the chosen workspace.
+Existing installations retain their own workspaces and settings.
+
+The compact formatting toolbar keeps heading levels and additional commands in
+menus. `Ctrl+F` opens Find and `Ctrl+H` opens Find and Replace beneath the toolbar.
+The heading panel can be resized from its left edge or bottom-right corner;
+keyboard arrows resize it, and Escape cancels an active drag.

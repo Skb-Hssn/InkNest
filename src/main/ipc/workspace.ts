@@ -1,3 +1,4 @@
+import { exampleNotePaths, getExampleWorkspacePath, prepareFirstLaunchWorkspace } from "../services/example-workspace";
 import { dialog } from "electron";
 import path from "node:path";
 import { ipcChannels, type WorkspaceFileModel, type WorkspaceInfo } from "../../shared/ipc";
@@ -27,12 +28,8 @@ export function registerWorkspaceHandlers(
     const settings = await readSettings();
 
     if (activeWorkspace.path) {
-      return createWorkspaceInfo(
-        activeWorkspace.path,
-        settings,
-        "ready",
-        "Workspace is ready."
-      );
+      const info = createWorkspaceInfo(activeWorkspace.path, settings, "ready", "Workspace is ready.");
+      return activeWorkspace.path === getExampleWorkspacePath() ? { ...info, initialNotePaths: exampleNotePaths } : info;
     }
 
     return createWorkspaceInfo(
@@ -92,6 +89,7 @@ export function registerWorkspaceHandlers(
 }
 
 export async function restoreLastWorkspace(activeWorkspace: ActiveWorkspaceState) {
+  await prepareFirstLaunchWorkspace();
   const settings = await readSettings();
 
   if (!settings.lastWorkspacePath) {

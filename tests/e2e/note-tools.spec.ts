@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type Page, type Locator, type TestInfo } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect, type Page, type Locator, type TestInfo } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 let errors: string[] = [];
@@ -109,7 +110,7 @@ test("minimap is a floating card with animated opening, closing and a close butt
     const slot = window.locator(".note-outline-slot");
     const column = window.locator(".note-editor-column");
     await expect(card).toHaveCSS("position", "absolute");
-    await expect(card).toHaveCSS("border-radius", "14px");
+    await expect(card).toHaveCSS("border-radius", "7px");
     expect(await card.evaluate((node) => getComputedStyle(node).boxShadow)).not.toBe("none");
     expect((await card.boundingBox())!.height).toBeLessThan((await window.locator(".note-workspace").boundingBox())!.height - 32);
     const initialWidth = (await column.boundingBox())!.width;
@@ -152,15 +153,19 @@ test("minimap dragging remembers its width, adapts to a smaller window and reset
     await expect(handle).toHaveAttribute("aria-valuenow", "320");
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 900, height: 700 }));
     await expect.poll(() => window.evaluate(() => innerWidth)).toBe(900);
-    await expect.poll(async () => Number(await handle.getAttribute("aria-valuemax"))).toBeLessThan(320);
-    await expect(handle).toHaveAttribute("aria-valuenow", (await handle.getAttribute("aria-valuemax"))!);
+    const available = (await window.locator(".note-workspace").boundingBox())!.width;
+    await expect.poll(async () => Number(await handle.getAttribute("aria-valuemax"))).toBeLessThanOrEqual(available - 300);
+    await expect(handle).toHaveAttribute("aria-valuenow", String(Math.min(320, Number(await handle.getAttribute("aria-valuemax")))));
     await expect.poll(async () => (await window.locator(".note-writing-scroll").boundingBox())!.width).toBeGreaterThanOrEqual(280);
     const card = (await window.locator(".note-heading-minimap").boundingBox())!;
     const workspace = (await window.locator(".note-workspace").boundingBox())!;
     expect(card.x + card.width).toBeLessThan(workspace.x + workspace.width);
-    // At the minimum window size the file explorer hides, freeing writing space.
+    // The compact sidebar remains usable; the panel shrinks to protect writing space.
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 760, height: 700 }));
-    await expect(handle).toHaveAttribute("aria-valuenow", "320");
+    await expect.poll(async () => Number(await handle.getAttribute("aria-valuemax"))).toBeLessThan(320);
+    await expect(handle).toHaveAttribute("aria-valuenow", (await handle.getAttribute("aria-valuemax"))!);
+    await expect(window.locator(".workspace-sidebar")).toBeVisible();
+    await expect.poll(async () => (await window.locator(".note-writing-scroll").boundingBox())!.width).toBeGreaterThanOrEqual(280);
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 1280, height: 820 }));
     await expect(handle).toHaveAttribute("aria-valuenow", "320");
     await handle.dblclick();
@@ -346,7 +351,7 @@ test("Ctrl+H replaces one/all with formatting preserved, undo/redo and saved con
 test("regex capture replacement, preserve case, and empty replacement", async ({}, info) => {
   const { app, window, editor } = await launch(info, "alpha Alpha ALPHA\n\nItem-12 Item-34\n");
   try {
-    await window.getByRole("button", { name: "Find and replace", exact: true }).click();
+    await window.getByRole("button", { name: "Find in note", exact: true }).click();
     await queryInput(window).fill("alpha");
     await panel(window).getByRole("textbox", { name: "Replace with" }).fill("beta");
     await panel(window).getByRole("button", { name: "Preserve case" }).click();
@@ -420,7 +425,7 @@ test("F3 navigation reopens the query and follows the editor caret", async ({}, 
 test("find stays live while editing and keyboard buttons retain their actions", async ({}, info) => {
   const { app, window, editor } = await launch(info);
   try {
-    await window.getByRole("button", { name: "Find in note", exact: true }).click();
+    await editor.press("Control+f");
     await queryInput(window).fill("alpha");
     await panel(window).getByRole("button", { name: "Toggle replace" }).focus();
     await panel(window).getByRole("button", { name: "Toggle replace" }).press("Enter");
@@ -438,7 +443,7 @@ test("find stays live while editing and keyboard buttons retain their actions", 
 test("replacing code, links, table cells and callout text preserves their structure", async ({}, info) => {
   const { app, window, editor, notePath } = await launch(info, "> [!NOTE] Alpha\n\n[Alpha](https://example.com) and `Alpha`\n\n```js\nAlpha\n```\n\n| Alpha | Header |\n| --- | --- |\n| Alpha | Cell |\n");
   try {
-    await window.getByRole("button", { name: "Find and replace" }).click();
+    await window.getByRole("button", { name: "Find in note" }).click();
     await queryInput(window).fill("Alpha");
     await expect(editor.locator(".note-search-match")).toHaveCount(6);
     await panel(window).getByRole("textbox", { name: "Replace with" }).fill("Beta");
@@ -464,7 +469,7 @@ test("zero-width regex replacements terminate and invalid settings are rejected"
       const response = await window.evaluate((key) => window.inknest.settings.save({ [key]: "wrong" } as any), key);
       expect(response.ok).toBe(false);
     }
-    await window.getByRole("button", { name: "Find and replace" }).click();
+    await window.getByRole("button", { name: "Find in note" }).click();
     await panel(window).getByRole("button", { name: "Use regular expression" }).click();
     await queryInput(window).fill("^");
     await expect(panel(window).getByRole("status").first()).toHaveText("1 of 2");

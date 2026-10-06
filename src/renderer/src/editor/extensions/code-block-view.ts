@@ -30,7 +30,9 @@ export const codeBlockView = $view(
     languageSelect.setAttribute("aria-label", "Code block language");
     copyButton.className = "code-copy-button";
     copyButton.type = "button";
-    copyButton.textContent = "Copy";
+    copyButton.setAttribute("aria-label", "Copy");
+    copyButton.title = "Copy code";
+    copyButton.innerHTML = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V4H4v12h4"/></svg>';
 
     for (const [value, label] of codeBlockLanguages) {
       const option = document.createElement("option");

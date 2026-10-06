@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 
 const electronLaunchArgs = [
   ".",
@@ -37,7 +38,7 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(window.getByRole("button", { name: "Maximize window" })).toBeVisible();
     await expect(window.getByRole("button", { name: "Close window" })).toBeVisible();
     await expect(
-      window.getByRole("button", { name: /No workspace Local Markdown/ })
+      window.getByRole("button", { name: "No workspace", exact: true })
     ).toBeVisible();
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })
@@ -152,6 +153,7 @@ test("phase 3 resizes the workspace sidebar with the drag handle", async ({}, te
       return;
     }
 
+    const initialWidth = Number(await handle.getAttribute("aria-valuenow"));
     const x = box.x + box.width / 2;
     const y = box.y + box.height / 2;
     await window.mouse.move(x, y);
@@ -159,12 +161,12 @@ test("phase 3 resizes the workspace sidebar with the drag handle", async ({}, te
     await window.mouse.move(x + 80, y, { steps: 4 });
     await window.mouse.up();
 
-    await expect.poll(() => handle.getAttribute("aria-valuenow")).toBe("380");
+    await expect.poll(() => handle.getAttribute("aria-valuenow")).toBe(String(initialWidth + 80));
     await expect.poll(() =>
       window.evaluate(
         () => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns
       )
-    ).toContain("380px");
+    ).toContain(`${initialWidth + 80}px`);
   } finally {
     await app.close();
   }

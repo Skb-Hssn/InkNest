@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type TestInfo, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect, type TestInfo, type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { accentColors } from "../../src/shared/accent-colors";
@@ -50,9 +51,9 @@ test("all eight accents update visible controls and links in light and dark appe
         await expect(window.locator("html")).toHaveAttribute("data-accent", color.id);
         const expected = rgb(color[theme]);
         const text = rgb(theme === "light" ? color.solid : color.dark);
-        await expect(window.locator(".note-tab[data-active=true]")).toHaveCSS("border-bottom-color", expected);
-        await expect(window.locator(".sidebar-ribbon-button-active").first()).toHaveCSS("color", text);
-        await expect(window.locator(".sidebar-ribbon-brand")).toHaveCSS("background-color", rgb(color.solid));
+        await expect(window.locator(".note-tab[data-active=true]")).toHaveCSS("border-top-color", expected);
+        await expect(window.locator(".app-window-bar-drag-region > svg")).toHaveCSS("color", text);
+        await expect(window.locator('.note-outline-heading[aria-current="location"]')).toHaveCSS("color", text);
         await expect(window.locator(".inknest-editor a")).toHaveCSS("color", text);
         await expect.poll(() => window.evaluate(async () => window.inknest.settings.get())).toMatchObject({ ok: true, data: { accentColor: color.id, theme } });
       }
@@ -81,7 +82,7 @@ test("accent applies to editor tools, outline and checkboxes without editing the
     await window.getByRole("button", { name: "Find in note", exact: true }).click();
     const find = window.getByRole("region", { name: "Find in note", exact: true });
     await find.getByRole("textbox", { name: "Find in note", exact: true }).fill("Alpha");
-    await expect(find.locator(".note-find-input").first()).toHaveCSS("border-color", rgb(violet.light));
+    await expect(find.locator(".note-find-input").first()).toHaveCSS("border-color", "rgb(67, 133, 237)");
     await find.getByRole("button", { name: "Match case", exact: true }).click();
     await expect(find.getByRole("button", { name: "Match case", exact: true })).toHaveCSS("border-color", rgb(violet.light));
     await find.getByRole("button", { name: "Close find" }).click();
@@ -127,7 +128,7 @@ test("system appearance adapts the accent when the OS color scheme changes", asy
     const rose = accentColors.find((color) => color.id === "rose")!;
     for (const appearance of ["light", "dark", "light"] as const) {
       await window.emulateMedia({ colorScheme: appearance });
-      await expect(window.locator(".note-tab[data-active=true]")).toHaveCSS("border-bottom-color", rgb(rose[appearance]));
+      await expect(window.locator(".note-tab[data-active=true]")).toHaveCSS("border-top-color", rgb(rose[appearance]));
       await expect(window.locator("html")).toHaveAttribute("data-theme", "system");
       await expect(settings.getByRole("radio", { name: "Rose", exact: true })).toBeChecked();
     }

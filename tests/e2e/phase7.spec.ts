@@ -1,4 +1,5 @@
-import { _electron as electron, expect, type Page, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect, type Page } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -56,8 +57,8 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     const workspaceRootName = path.basename(workspaceDir);
     const workspaceRootRow = folderRow(window, workspaceRootName);
     await expect(workspaceRootRow).toBeVisible();
-    await expect(window.getByRole("button", { name: /Projects/ })).toBeVisible();
-    await expect(window.getByRole("button", { name: /Drafts/ })).toBeHidden();
+    await expect(window.getByRole("button", { name: "Projects", exact: true })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Drafts", exact: true })).toBeHidden();
 
     await workspaceRootRow.hover();
     await workspaceRootRow.getByRole("button", { name: "Folder actions" }).click();
@@ -82,7 +83,7 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     await folderRow(window, "Projects")
       .getByRole("button", { name: "Expand folder" })
       .click();
-    await expect(window.getByRole("button", { name: /Drafts/ })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Drafts", exact: true })).toBeVisible();
 
     const projectsRow = folderRow(window, "Projects");
     const projectsActions = projectsRow.locator(".context-menu-anchor");
@@ -107,7 +108,7 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     await projectsRow.hover();
     await projectsRow.getByRole("button", { name: "Folder actions" }).click();
     await folderMenu.getByRole("menuitem", { name: "New folder" }).click();
-    await expect(window.getByRole("button", { name: /New Folder/ })).toBeVisible();
+    await expect(window.getByRole("button", { name: "New Folder", exact: true })).toBeVisible();
     await expect
       .poll(() => existsSync(path.join(workspaceDir, "Projects", "New Folder")))
       .toBe(true);
@@ -119,8 +120,8 @@ test("phase 7 renders collapsible folders with hover actions and inline rename",
     await folderNameInput.fill("Research");
     await folderNameInput.press("Enter");
 
-    await expect(window.getByRole("button", { name: /Research/ })).toBeVisible();
-    await expect(window.getByRole("button", { name: /Projects/ })).toBeHidden();
+    await expect(window.getByRole("button", { name: "Research", exact: true })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Projects", exact: true })).toBeHidden();
     expect(existsSync(path.join(workspaceDir, "Research", "Drafts"))).toBe(true);
     expect(existsSync(path.join(workspaceDir, "Projects"))).toBe(false);
 

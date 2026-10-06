@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -78,7 +79,7 @@ test("phase 4 selects a workspace and persists it in settings", async ({
     });
     const recentWorkspaceSection = recentWorkspaces.locator("..");
     await expect(recentWorkspaces).toBeVisible();
-    await recentWorkspaces.locator("summary").click();
+    await expect(recentWorkspaces).toHaveAttribute("open", "");
     const recentWorkspaceActions = recentWorkspaceSection.getByRole("button", {
       name: "Recent workspaces actions"
     });
@@ -140,7 +141,7 @@ test("phase 4 restores the last workspace after restart", async ({
         lastWorkspacePath: workspaceDir
       }
     });
-    await expect(secondWindow.getByText(workspaceDir).first()).toBeVisible();
+    await expect(secondWindow.locator(".status-bar-path")).toHaveText(workspaceDir);
   } finally {
     await secondApp.close();
   }
@@ -192,7 +193,7 @@ test("phase 4 shows a clear missing-workspace state on startup", async ({
       .filter({ hasText: "Recent workspaces" })
       .locator("summary")
       .click();
-    await expect(window.getByText(missingWorkspace).first()).toBeVisible();
+    await expect(window.locator(".recent-workspace-row")).toHaveAttribute("title", missingWorkspace);
   } finally {
     await app.close();
   }

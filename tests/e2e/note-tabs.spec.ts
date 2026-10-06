@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type Page } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect, type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 

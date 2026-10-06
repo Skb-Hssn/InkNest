@@ -35,6 +35,7 @@ export type WorkspaceStatus =
   | "permission-denied";
 
 export type WorkspaceInfo = {
+  initialNotePaths?: string[];
   path: string | null;
   name: string | null;
   status: WorkspaceStatus;

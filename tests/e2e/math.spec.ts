@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type TestInfo, type Page } from "@playwright/test";
+import { test, toolbarButton } from "./fixtures";
+import { _electron as electron, expect, type TestInfo, type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -86,7 +87,7 @@ for (const display of [false, true]) {
     const { app, window, editor, notePath } = await launch(info);
     try {
       await editor.locator("p").first().click(); await editor.press("End");
-      await window.getByRole("button", { name: display ? "Display math" : "Inline math", exact: true }).click();
+      await (await toolbarButton(window, display ? "Display math" : "Inline math")).click();
       const source = window.getByRole("textbox", { name: display ? "Display equation source" : "Inline equation source" });
       await expect(source).toBeVisible();
       await source.fill("\\frac{1}{2}");
@@ -221,7 +222,7 @@ test("code formatting cannot erase math and find/replace does not alter LaTeX", 
   const { app, window, editor, notePath } = await launch(info, "alpha $\\alpha$ alpha\n");
   try {
     await editor.click(); await editor.press("Control+Home"); await editor.press("Control+a");
-    await window.getByRole("button", { name: "Code", exact: true }).click();
+    await (await toolbarButton(window, "Code")).click();
     await window.getByRole("button", { name: "Code block", exact: true }).click();
     await expect(editor.locator(".katex")).toHaveCount(1);
     await editor.press("ArrowRight"); await editor.press("Control+h");
@@ -377,7 +378,7 @@ test("display insertion inside a table cannot destroy its cells", async ({}, inf
     await window.getByRole("button", { name: "Display math", exact: true }).click();
     await expect(editor.locator(".inknest-math-block")).toHaveCount(0);
     await expect(editor.locator("td")).toHaveText(["Cell", "Data"]);
-    await window.getByRole("button", { name: "Inline math", exact: true }).click();
+    await (await toolbarButton(window, "Inline math")).click();
     const source = window.getByRole("textbox", { name: "Inline equation source" });
     await source.fill("x"); await source.press("Escape");
     await reopen(window);
@@ -443,7 +444,7 @@ test("pasted math preserves literal code, escaped dollars, incomplete delimiters
     await expect(editor.locator("pre code")).toContainText("$$x$$");
     await reopen(window); await expect(editor.locator(".inknest-math")).toHaveCount(0);
     await editor.press("Control+End"); await editor.press("Enter");
-    await window.getByRole("button", { name: "Code", exact: true }).click();
+    await (await toolbarButton(window, "Code")).click();
     await paste(window, "$x$", "<span>$x$</span>");
     await expect(editor.locator(".inknest-math")).toHaveCount(0);
     await expect(editor.locator("code").last()).toHaveText("$x$");

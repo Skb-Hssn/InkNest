@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 const electronLaunchArgs = [
@@ -30,7 +31,7 @@ test("phase 16 opens the command palette and routes keyboard actions", async ({}
     const window = await app.firstWindow();
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
 
-    await window.keyboard.press("Control+k");
+    await window.keyboard.press("Control+Shift+k");
     const palette = window.getByRole("dialog", { name: "Command palette" });
     const input = window.getByRole("combobox", { name: "Command palette search" });
 
@@ -63,7 +64,7 @@ test("phase 16 runs workspace actions from the command palette and adapts its la
     await window.reload();
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
 
-    await window.keyboard.press("Control+k");
+    await window.keyboard.press("Control+Shift+k");
     const input = window.getByRole("combobox", { name: "Command palette search" });
     await input.fill("create new note");
     await input.press("Enter");
@@ -72,12 +73,12 @@ test("phase 16 runs workspace actions from the command palette and adapts its la
     await window.setViewportSize({ width: 800, height: 600 });
     await expect.poll(() =>
       window.evaluate(() => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns)
-    ).not.toContain("300px");
+    ).toContain("232px");
 
     await window.setViewportSize({ width: 1280, height: 800 });
     await expect.poll(() =>
       window.evaluate(() => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns)
-    ).toContain("300px");
+    ).toContain("232px");
   } finally {
     await app.close();
   }

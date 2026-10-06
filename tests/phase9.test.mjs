@@ -109,10 +109,10 @@ test("phase 9 e2e coverage exercises commands and saved Markdown", async () => {
   const source = await readText("tests/e2e/phase9.spec.ts");
   assertIncludesAll(source, [
     'name: "Visual Markdown editor"', 'name: "B", exact: true',
-    'name: "H3", exact: true', "toolbar-button-active",
+    'toolbarButton(window, "H3")', "toolbar-button-active",
     'name: "Code block", exact: true', 'name: "Code block language"',
     'await editor.press("Enter")', 'await editor.press("Tab")', "indented",
-    'name: "Insert table", exact: true', 'name: "Add table row", exact: true',
+    'name: "Insert table", exact: true', 'toolbarButton(window, "Add table row")',
     'writeFile(notePath, "/todo\\n"', 'name: "Link", exact: true',
     "await link.dblclick()", 'name: "Save", exact: true',
     "readFile(notePath, \"utf8\")", "```typescript\\nconst value = 1;\\n    indented\\n    continued\\n```",

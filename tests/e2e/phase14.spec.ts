@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 
 const electronLaunchArgs = [
   ".",
@@ -54,7 +55,7 @@ test("phase 14 persists editor preferences across restarts", async ({}, testInfo
     ).toEqual({
       theme: "dark",
       fontSize: "20px",
-      layout: "app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]",
+      layout: "app-layout-columns grid min-h-0 grid-cols-[232px_minmax(0,1fr)]",
       sidebar: "hidden"
     });
     await expect(window.getByText("0 characters", { exact: true })).toBeVisible();

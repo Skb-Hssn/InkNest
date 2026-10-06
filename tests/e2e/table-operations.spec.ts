@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type Locator, type TestInfo } from "@playwright/test";
+import { test, toolbarButton } from "./fixtures";
+import { _electron as electron, expect, type Locator, type TestInfo } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -131,7 +132,7 @@ for (const [action, row, column, rows, columns] of [
     const { app, window, editor } = await launchTable(testInfo);
     try {
       await editor.locator("tr").nth(row).locator("th, td").nth(column).click();
-      await window.getByRole("button", { name: action, exact: true }).click();
+      await (await toolbarButton(window, action)).click();
       await expect(editor.locator("tr")).toHaveCount(rows);
       if (rows) await expect(editor.locator("tr").first().locator("th")).toHaveCount(columns);
       await expect(editor.locator("p").filter({ hasText: "Before table." })).toBeVisible();
@@ -185,7 +186,7 @@ test("Tab, Shift+Tab, typing, clearing a cell, and exiting a table remain usable
     await editor.pressSequentially("Outside table");
     await expect(editor.locator("p").filter({ hasText: "Outside table" })).toBeVisible();
     await expect(editor.locator("table")).not.toContainText("Outside table");
-    await expect(window.getByRole("button", { name: "Delete table", exact: true })).toBeVisible();
+    await expect((await toolbarButton(window, "Delete table"))).toBeVisible();
   } finally {
     await app.close();
   }
@@ -210,7 +211,7 @@ test("inserting tables with the toolbar and slash command, and commands outside 
     const before = await tableSnapshot(editor);
     await editor.locator("p").filter({ hasText: "Before table." }).click();
     for (const name of ["Delete table", "Delete table row", "Delete table column", "Add table row", "Add table column"]) {
-      await window.getByRole("button", { name, exact: true }).click();
+      await (await toolbarButton(window, name)).click();
       expect(await tableSnapshot(editor)).toEqual(before);
     }
     await editor.locator("p").filter({ hasText: "After table." }).click();

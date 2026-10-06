@@ -25,8 +25,8 @@ test("phase 3 renderer defines the workspace-sidebar and editor layout", async (
   const appSource = await readText("src/renderer/src/App.tsx");
 
   assertIncludesAll(appSource, [
-    "grid-rows-[34px_minmax(0,1fr)_34px]",
-    "grid-cols-[300px_minmax(0,1fr)]",
+    "grid-rows-[32px_minmax(0,1fr)_28px]",
+    "grid-cols-[232px_minmax(0,1fr)]",
     "sidebar-resize-handle",
     "Resize workspace sidebar",
     "workspacePath",
@@ -57,14 +57,14 @@ test("phase 3 workspace sidebar contains workspace, search, folders, and empty s
     "Local Markdown folder",
     "Search notes",
     "Folders",
-    "sidebar-brand",
-    "sidebar-ribbon",
+    "app-window-bar-title",
+    "sidebar-utility-row",
     "sidebar-dock",
     "sidebar-unified",
     "sidebar-workspace-controls",
     "sidebar-content",
     "sidebar-bottom",
-    "File explorer",
+    "sidebar-settings-button",
     "No workspace selected",
     "Choose a local Markdown folder to begin.",
     "Folder tree",

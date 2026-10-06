@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test, type Locator, type TestInfo, type Page } from "@playwright/test";
+import { test, toolbarButton } from "./fixtures";
+import { _electron as electron, expect, type Locator, type TestInfo, type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -53,7 +54,7 @@ async function selectRange(start: Locator, from = 0, end = start, to?: number) {
 }
 
 async function toolbar(window: Page, label: string) {
-  await window.getByRole("button", { name: label, exact: true }).click();
+  await (await toolbarButton(window, label)).click();
 }
 
 for (const [label, selector] of [["B", "strong"], ["I", "em"], ["Strikethrough", "del"], ["Code", "code"]]) {
@@ -140,7 +141,7 @@ for (const [label, selector, key] of [["B", "strong", "Control+b"], ["I", "em", 
     try {
       await selectRange(editor.locator("p").first(), 10, editor.locator("p").first(), 10);
       await toolbar(window, label);
-      await expect(window.getByRole("button", { name: label, exact: true })).toHaveClass(/toolbar-button-active/);
+      await expect((await toolbarButton(window, label))).toHaveClass(/toolbar-button-active/);
       await editor.pressSequentially(" added");
       await expect(editor.locator(selector)).toHaveText(" added");
       await editor.press(key);
@@ -149,9 +150,9 @@ for (const [label, selector, key] of [["B", "strong", "Control+b"], ["I", "em", 
       await selectRange(editor.locator("p").first(), 0, editor.locator("p").first(), 5);
       await editor.press(key);
       await expect(editor.locator(selector).first()).toHaveText("Alpha");
-      await expect(window.getByRole("button", { name: label, exact: true })).toHaveClass(/toolbar-button-active/);
+      await expect((await toolbarButton(window, label))).toHaveClass(/toolbar-button-active/);
       await editor.press("Control+z");
-      await expect(window.getByRole("button", { name: label, exact: true })).not.toHaveClass(/toolbar-button-active/);
+      await expect((await toolbarButton(window, label))).not.toHaveClass(/toolbar-button-active/);
       await expect(editor.locator(selector)).toHaveText(" added");
     } finally { await app.close(); }
   });
@@ -162,7 +163,7 @@ for (const [label, selector, markdown] of [["B", "strong", "**Alpha** text"], ["
     const { app, window, editor } = await launchNote(testInfo, `${markdown}\n\nBeta text\n`);
     try {
       await selectRange(editor.locator("p").first());
-      await expect(window.getByRole("button", { name: label, exact: true })).not.toHaveClass(/toolbar-button-active/);
+      await expect((await toolbarButton(window, label))).not.toHaveClass(/toolbar-button-active/);
       await toolbar(window, label);
       await expect(editor.locator(selector)).toHaveText("Alpha text");
       await toolbar(window, label);
@@ -242,7 +243,7 @@ for (const kind of ["Note", "Warning", "Info", "Success"]) {
       await toolbar(window, `${kind} callout`);
       await expect(editor.locator(`blockquote[data-callout="${kind.toLowerCase()}"]`)).toContainText("Alpha text");
       await expect(editor.locator("blockquote p")).toHaveCount(2);
-      await expect(window.getByRole("button", { name: `${kind} callout`, exact: true })).toHaveClass(/toolbar-button-active/);
+      await expect((await toolbarButton(window, `${kind} callout`))).toHaveClass(/toolbar-button-active/);
       await toolbar(window, "Quote");
       await expect(editor.locator("blockquote")).toHaveCount(1);
       await expect(editor.locator("blockquote")).not.toHaveAttribute("data-callout");

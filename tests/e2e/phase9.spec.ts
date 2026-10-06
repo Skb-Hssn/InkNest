@@ -1,10 +1,9 @@
+import { test, toolbarButton } from "./fixtures";
 import {
   _electron as electron,
   expect,
   type Locator,
-  type Page,
-  test
-} from "@playwright/test";
+  type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -95,7 +94,7 @@ test("phase 9 toolbar formatting updates the editor and saved Markdown", async (
       /toolbar-button-active/
     );
 
-    await window.getByRole("button", { name: "H3", exact: true }).click();
+    await (await toolbarButton(window, "H3")).click();
     await expect(editor.locator("h3")).toContainText("Toolbar text");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
@@ -151,9 +150,9 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(table.locator("th")).toHaveCount(2);
 
     await placeCaretAtEnd(table.locator("td").first());
-    await window.getByRole("button", { name: "Add table row", exact: true }).click();
+    await (await toolbarButton(window, "Add table row")).click();
     await expect(table.locator("tr")).toHaveCount(3);
-    await window.getByRole("button", { name: "Add table column", exact: true }).click();
+    await (await toolbarButton(window, "Add table column")).click();
     await expect(table.locator("tr").first().locator("th, td")).toHaveCount(3);
 
     await window.getByRole("button", { name: "Save", exact: true }).click();

@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 
 const electronLaunchArgs = [
   ".",
@@ -30,7 +31,7 @@ test("phase 1 opens an InkNest renderer window with the workspace shell", async 
       window.getByRole("heading", { name: "InkNest", exact: true })
     ).toBeVisible();
     await expect(
-      window.getByRole("button", { name: /No workspace Local Markdown/ })
+      window.getByRole("button", { name: "No workspace", exact: true })
     ).toBeVisible();
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })

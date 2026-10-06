@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -38,6 +39,9 @@ import {
   Image,
   Italic,
   Link,
+  Leaf,
+  Lightbulb,
+  CircleUserRound,
   List,
   ListChecks,
   ListOrdered,
@@ -55,6 +59,7 @@ import {
   Search,
   Settings,
   SquarePen,
+  Square,
   Strikethrough,
   Sigma,
   Radical,
@@ -205,6 +210,8 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
 ];
 
+const primaryToolbarOrder = ["bold", "italic", "strikethrough", "unordered-list", "ordered-list", "task-list", "blockquote", "callout-note", "link", "image", "code-block", "table", "block-math"];
+
 function getToolbarGroups(commands: ToolbarCommand[]) {
   return commands.reduce<Array<{ name: ToolbarCommand["group"]; commands: ToolbarCommand[] }>>(
     (groups, command) => {
@@ -280,9 +287,10 @@ export function App() {
   const [phase, setPhase] = useState("phase-16-accessibility-and-ui-polish");
   const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
-  const [sidebarWidth, setSidebarWidth] = useState(300);
+  const [sidebarWidth, setSidebarWidth] = useState(232);
   const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [toolbarMenu, setToolbarMenu] = useState<{ kind: "headings" | "more"; left: number; top: number } | null>(null);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
   const [isTrashExpanded, setIsTrashExpanded] = useState(false);
   const [activeSidebarMenu, setActiveSidebarMenu] = useState<"recent" | "trash" | null>(null);
@@ -371,7 +379,7 @@ export function App() {
       }
     });
 
-    window.inknest.workspace.getActive().then((result) => {
+    window.inknest.workspace.getActive().then(async (result) => {
       if (!isMounted) {
         return;
       }
@@ -380,7 +388,18 @@ export function App() {
         setWorkspace(result.data);
 
         if (result.data.status === "ready") {
-          void refreshWorkspace();
+          await refreshWorkspace();
+          if (result.data.initialNotePaths && isMounted) {
+            const loaded = await Promise.all(result.data.initialNotePaths.map((notePath) => window.inknest.notes.read(notePath)));
+            if (!isMounted) return;
+            const notes = loaded.filter((note): note is { ok: true; data: NoteContent } => note.ok);
+            if (notes.length) {
+              setOpenNotePaths(notes.map((note) => note.data.path));
+              setSelectedFolderPath("Notes");
+              setExpandedFolderPaths(new Set([".", "Notes", "Projects"]));
+              applyNoteContent(notes[0].data);
+            }
+          }
         }
       } else {
         setWorkspaceError(result.error.message);
@@ -445,6 +464,7 @@ export function App() {
       const clickedContextMenu =
         eventTarget?.closest("[data-context-menu]") ?? null;
 
+      if (!eventTarget?.closest(".toolbar-menu-trigger, .toolbar-command-menu")) setToolbarMenu(null);
       if (!clickedContextMenu) {
         setActiveMoveFolderPath(null);
         setActiveMoveNotePath(null);
@@ -493,8 +513,19 @@ export function App() {
     });
   }, [hasActiveSearch, notes, searchResults]);
   const folderTree = useMemo(
-    () => buildFolderTree(folders, displayedNotes),
-    [displayedNotes, folders]
+    () => {
+      const tree = buildFolderTree(folders, displayedNotes);
+      if (workspace.initialNotePaths && tree[0]) {
+        const order = ["Notes", "Projects", "Journal", "Archive"];
+        tree[0].children.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+        for (const folder of tree[0].children) if (folder.name === "Notes") {
+          const notes = ["Ideas worth keeping", "Reading list", "Daily notes", "Untitled"];
+          folder.notes.sort((a, b) => notes.indexOf(noteNameFromPath(a.path)) - notes.indexOf(noteNameFromPath(b.path)));
+        }
+      }
+      return tree;
+    },
+    [displayedNotes, folders, workspace.initialNotePaths]
   );
   const visibleExpandedFolderPaths = useMemo(
     () =>
@@ -534,7 +565,7 @@ export function App() {
       : workspace.status === "permission-denied"
         ? "Workspace access needed"
         : "No workspace selected";
-  const currentMode = selectedNoteContent ? "" : "Workspace overview";
+  const currentMode = selectedNoteContent ? "Visual editor" : "Workspace overview";
 
   const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(
     () => [
@@ -696,7 +727,8 @@ export function App() {
     const result = await window.inknest.workspace.scan();
 
     if (result.ok) {
-      setWorkspace(result.data.workspace);
+      setWorkspace((current) => ({ ...result.data.workspace,
+        ...(current.path === result.data.workspace.path && current.initialNotePaths ? { initialNotePaths: current.initialNotePaths } : {}) }));
       setFileModel(result.data);
       setWorkspaceError(null);
 
@@ -1084,6 +1116,8 @@ export function App() {
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
+      setSelectedFolderPath(".");
+      setExpandedFolderPaths(new Set(["."]));
       setOpenNotePaths([]);
       if (result.data.status === "ready") {
         await refreshWorkspace();
@@ -1110,6 +1144,8 @@ export function App() {
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
+      setSelectedFolderPath(".");
+      setExpandedFolderPaths(new Set(["."]));
       setOpenNotePaths([]);
       await refreshWorkspace();
     } else {
@@ -1511,8 +1547,12 @@ export function App() {
 
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setIsCommandPaletteOpen(true);
-        setIsSettingsOpen(false);
+        if (event.shiftKey) { setIsCommandPaletteOpen(true); setIsSettingsOpen(false); }
+        else {
+          setIsSettingsOpen(false);
+          if (!settings.sidebarVisible) void updateAppSettings({ sidebarVisible: true });
+          window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>('input[aria-label="Search notes"]')?.focus());
+        }
         return;
       }
 
@@ -2164,7 +2204,7 @@ export function App() {
 
   return (
     <main
-      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[34px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[32px_minmax(0,1fr)_28px] bg-ink-50 text-ink-900"
       data-build-phase={phase}
       style={{
         "--app-font-size": `${settings.fontSize}px`,
@@ -2173,7 +2213,7 @@ export function App() {
     >
       <header className="app-window-bar" aria-label="Application window controls">
         <div className="app-window-bar-drag-region">
-          <span className="app-window-bar-title">InkNest</span>
+          <Leaf size={19} aria-hidden="true" /><h1 className="app-window-bar-title">InkNest</h1>
         </div>
         <div className="app-window-controls">
           <button
@@ -2192,7 +2232,7 @@ export function App() {
             title={isWindowMaximized ? "Restore window" : "Maximize window"}
             onClick={() => void toggleMaximizeWindow()}
           >
-            {isWindowMaximized ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+            {isWindowMaximized ? <Copy size={13} /> : <Square size={13} />}
           </button>
           <button
             type="button"
@@ -2210,85 +2250,31 @@ export function App() {
         data-layout="app-layout-columns"
         data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
         data-sidebar-resizing={isSidebarResizing ? "true" : "false"}
-        className="app-layout-columns grid min-h-0 grid-cols-[300px_minmax(0,1fr)]"
+        data-example-workspace={Boolean(workspace.initialNotePaths)}
+        className="app-layout-columns grid min-h-0 grid-cols-[232px_minmax(0,1fr)]"
         style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
         <aside
           className="workspace-sidebar"
           aria-hidden={!settings.sidebarVisible}
         >
-          <div className="sidebar-ribbon" aria-label="Sidebar controls">
-            <div className="sidebar-ribbon-brand" title="InkNest" aria-hidden="true">
-              <SquarePen size={16} />
-            </div>
-            <button
-              type="button"
-              aria-label="File explorer"
-              aria-pressed="true"
-              title="File explorer"
-              className="sidebar-ribbon-button sidebar-ribbon-button-active"
-              onClick={() => document.querySelector<HTMLElement>(".sidebar-content")?.scrollTo({ top: 0, behavior: "smooth" })}
-            >
-              <FolderOpen size={18} />
-            </button>
-            <div className="sidebar-ribbon-spacer" />
-            <div className="sidebar-ribbon-settings">
-              <button
-                type="button"
-                aria-label="Settings"
-                aria-pressed={isSettingsOpen}
-                title="Settings"
-                className="sidebar-ribbon-button"
-                onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
-              >
-                <Settings size={18} />
-              </button>
-              {isSettingsOpen && settings.sidebarVisible ? (
-                <SettingsPopover
-                  settings={settings}
-                  onUpdate={(patch) => void updateAppSettings(patch)}
-                  onClose={() => setIsSettingsOpen(false)}
-                  className="sidebar-settings-popover"
-                />
-              ) : null}
-            </div>
-            <button
-              type="button"
-              aria-label="Toggle sidebar"
-              aria-pressed={settings.sidebarVisible}
-              title="Collapse sidebar"
-              className="sidebar-ribbon-button sidebar-collapse-ribbon-button"
-              onClick={() => void updateAppSettings({ sidebarVisible: false })}
-            >
-              <PanelLeft size={18} />
-            </button>
-          </div>
-
           <div className="sidebar-dock">
-            <header className="sidebar-brand">
-              <div className="sidebar-brand-identity">
-                <div className="min-w-0">
-                  <h1>InkNest</h1>
-                  <p className="sidebar-brand-label">File explorer</p>
-                </div>
-              </div>
-            </header>
-
           <div className="sidebar-unified">
             <section className="sidebar-main-view" aria-label="Workspace files">
                 <div className="sidebar-workspace-controls">
                   <button
                     type="button"
                     className="workspace-button"
+                    title={workspace.path ?? "Choose a local Markdown folder"}
                     onClick={() => void chooseWorkspace()}
                     disabled={isBusy}
                   >
                     <span className="workspace-button-icon">
-                      <FolderOpen size={15} />
+                      <CircleUserRound size={15} />
                     </span>
                     <span className="workspace-button-copy">
                       <span className="workspace-button-name">
-                        {isBusy ? "Working" : workspaceName}
+                        {isBusy ? "Working" : hasWorkspace ? `${workspaceName} workspace` : workspaceName}
                       </span>
                       <span className="workspace-button-path">
                         {hasWorkspace ? workspace.path : "Local Markdown folder"}
@@ -2315,7 +2301,7 @@ export function App() {
                       >
                         <X size={13} />
                       </button>
-                    ) : null}
+                    ) : <span className="search-shortcut" aria-hidden="true">Ctrl+K</span>}
                   </label>
 
                   {tagSummaries.length > 0 ? (
@@ -2419,7 +2405,7 @@ export function App() {
             {workspace.recentWorkspaces.length > 0 ? (
               <div className="sidebar-bottom-section sidebar-action-section shrink-0">
                 <div className="sidebar-section-header sidebar-section-header-recent">
-                  <details className="collapsible-section">
+                  <details className="collapsible-section" open>
                     <summary
                       className="collapsible-section-trigger"
                       onClick={() => setActiveSidebarMenu(null)}
@@ -2435,9 +2421,10 @@ export function App() {
                           key={recentPath}
                           type="button"
                           className="recent-workspace-row"
+                          title={recentPath}
                           onClick={() => void reopenWorkspace(recentPath)}
                         >
-                          <span className="recent-workspace-icon"><BookOpenText size={14} /></span>
+                          <span className="recent-workspace-dot" data-current={recentPath === workspace.path} />
                           <span className="min-w-0">
                             <span className="block truncate font-medium">
                               {recentPath.split(/[\\/]/).pop() ?? recentPath}
@@ -2564,6 +2551,14 @@ export function App() {
               ) : null}
             </div>
 
+            <div className="sidebar-utility-row">
+              <button type="button" className="sidebar-settings-button" aria-label="Settings" aria-pressed={isSettingsOpen}
+                onClick={() => setIsSettingsOpen((open) => !open)}><Settings size={15} /><span>Settings</span></button>
+              <button type="button" className="icon-button sidebar-toggle" aria-label="Toggle sidebar" aria-pressed={settings.sidebarVisible}
+                title="Collapse sidebar" onClick={() => void updateAppSettings({ sidebarVisible: false })}><PanelLeft size={15} /></button>
+              {isSettingsOpen && settings.sidebarVisible ? createPortal(<SettingsPopover settings={settings}
+                onUpdate={(patch) => void updateAppSettings(patch)} onClose={() => setIsSettingsOpen(false)} className="reference-settings-popover" />, document.body) : null}
+            </div>
           </div>
           </div>
         </aside>
@@ -2585,7 +2580,7 @@ export function App() {
           onLostPointerCapture={() => finishSidebarResize()}
         />
 
-        <section className="editor-pane flex min-h-0 flex-col bg-white">
+        <section className="editor-pane flex min-h-0 flex-col bg-white" data-note-open={Boolean(selectedNoteContent)}>
           <div className="note-tab-bar">
             <div className="note-tab-list" role="tablist" aria-label="Open notes">
               {openNotePaths.map((notePath) => {
@@ -2676,12 +2671,12 @@ export function App() {
             {selectedNoteContent ? (
               <div className="app-editor-header-actions flex items-center gap-2">
                 <button type="button" className="icon-button" aria-label="Find in note" title="Find in note (Ctrl+F)"
-                  aria-keyshortcuts="Control+F" onClick={() => editorHandleRef.current?.openSearch("find")}><Search size={17} /></button>
+                  aria-keyshortcuts="Control+F" onClick={() => editorHandleRef.current?.openSearch("replace")}><Search size={17} /></button>
                 <button type="button" className="icon-button" aria-label="Find and replace" title="Find and replace (Ctrl+H)"
                   aria-keyshortcuts="Control+H" onClick={() => editorHandleRef.current?.openSearch("replace")}><Replace size={17} /></button>
-                <button type="button" className="icon-button" aria-label="Full width" aria-pressed={settings.fullWidth}
-                  title={settings.fullWidth ? "Use readable width" : "Use full width"}
-                  onClick={() => void updateAppSettings({ fullWidth: !settings.fullWidth })}>{settings.fullWidth ? <Minimize2 size={17} /> : <Maximize2 size={17} />}</button>
+                <button type="button" aria-label="Full width" aria-pressed={settings.fullWidth}
+                  title={settings.fullWidth ? "Use readable width" : "Use full width"} className="icon-button reading-width-control"
+                  onClick={() => void updateAppSettings({ fullWidth: !settings.fullWidth })}><span>Reading width</span><span className="reading-width-switch" data-enabled={!settings.fullWidth} /></button>
                 <button type="button" className="icon-button" aria-label="Show heading minimap" aria-pressed={settings.showOutline}
                   title="Toggle heading minimap" onClick={() => void updateAppSettings({ showOutline: !settings.showOutline })}><ListTree size={17} /></button>
                 <button
@@ -2692,12 +2687,12 @@ export function App() {
                   aria-keyshortcuts="Control+S"
                 >
                   <Save size={15} />
-                  <span>Save</span>
+                  <span className="sr-only">Save</span>
                 </button>
                 <details className="action-menu editor-action-menu">
                   <summary className="secondary-button" aria-label="Export note">
-                    <FileOutput size={15} />
-                    <span>Export</span>
+                    <MoreHorizontal size={15} />
+                    <span className="sr-only">Export</span>
                     <ChevronDown size={14} />
                   </summary>
                   <div className="action-menu-popover" role="menu" aria-label="Export note">
@@ -2734,35 +2729,33 @@ export function App() {
           {selectedNoteContent ? (
             <div className="toolbar-shell">
               <div className="markdown-toolbar" aria-label="Markdown toolbar">
-                {getToolbarGroups(toolbarPlaceholders).map((group) => (
-                  <div
-                    key={group.name}
-                    className="toolbar-group"
-                    aria-label={`${group.name} tools`}
-                  >
-                    {group.commands.map((command) => {
-                      const isActive = activeToolbarCommands.has(command.id);
-
-                      return (
-                        <button
-                          key={command.id}
-                          type="button"
-                          className={`toolbar-button ${
-                            isActive ? "toolbar-button-active" : ""
-                          }`}
-                          aria-label={command.label}
-                          title={command.label}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onClick={(event) => runToolbarCommand(command, event)}
-                          disabled={!selectedNoteContent || isBusy}
-                        >
-                          {command.icon}
-                        </button>
-                      );
-                    })}
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isBusy} aria-label="Heading level" title="Heading level"
+                  aria-expanded={toolbarMenu?.kind === "headings"} onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "headings" ? null : { kind: "headings", left: rect.left, top: rect.bottom + 5 }); }}>H<ChevronDown size={11} /></button>
+                {getToolbarGroups(toolbarPlaceholders.filter((command) => primaryToolbarOrder.includes(command.id)).sort((a, b) => primaryToolbarOrder.indexOf(a.id) - primaryToolbarOrder.indexOf(b.id))).map((group) => (
+                  <div key={group.name} className="toolbar-group" aria-label={`${group.name} tools`}>
+                    {group.commands.map((command) => <button key={command.id} type="button"
+                      className={`toolbar-button ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
+                      aria-label={command.label} title={command.label} onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => runToolbarCommand(command, event)} disabled={isBusy}>
+                      {command.id === "callout-note" ? <Lightbulb size={16} /> : command.icon}
+                    </button>)}
                   </div>
                 ))}
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isBusy} aria-label="More formatting" title="More formatting"
+                  aria-expanded={toolbarMenu?.kind === "more"} onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "more" ? null : { kind: "more", left: Math.min(rect.left, window.innerWidth - 230), top: rect.bottom + 5 }); }}><MoreHorizontal size={16} /></button>
               </div>
+              {toolbarMenu ? createPortal(<div className="toolbar-command-menu" role="group" aria-label={toolbarMenu.kind === "headings" ? "Heading levels" : "Additional formatting"}
+                style={{ left: toolbarMenu.left, top: toolbarMenu.top }}>
+                {toolbarPlaceholders.filter((command) => toolbarMenu.kind === "headings" ? command.group === "headings" :
+                  ["inline-code", "clear-format", "inline-math", "divider", "callout-warning", "callout-info", "callout-success", "table-add-row", "table-delete-row", "table-add-column", "table-delete-column", "table-delete"].includes(command.id)).map((command) =>
+                  <button key={command.id} type="button" aria-label={command.label} disabled={isBusy}
+                    className={`toolbar-button ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
+                    onMouseDown={(event) => event.preventDefault()} onClick={(event) => { runToolbarCommand(command, event); setToolbarMenu(null); }}>
+                    {command.icon}<span>{command.label}</span>
+                  </button>)}
+              </div>, document.body) : null}
             </div>
           ) : null}
 
@@ -3532,6 +3525,8 @@ function FolderTreeRow({
             <span className="tree-count">{node.noteCount}</span>
           </button>
         )}
+        {!isRenaming ? <button type="button" className="folder-add-note" aria-label={`Create note in ${node.name}`} title="New note"
+          onClick={() => onNewNote(node.path)} disabled={!hasWorkspace || isBusy}><Plus size={14} /></button> : null}
         {!isRenaming ? (
           <ContextMenu
             label="Folder"

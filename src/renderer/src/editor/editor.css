@@ -688,3 +688,61 @@
   .note-outline-slot[data-open="false"] .note-heading-minimap,
   .note-outline-resize-grip { transition: none; }
 }
+
+/* The document is the dominant surface; chrome stays compact and neutral. */
+.note-editor-column { flex-direction: column; }
+.note-writing-scroll { flex: 1; min-height: 0; padding: 0; }
+.inknest-editor { line-height: 1.55; }
+.inknest-editor .editor { max-width: 760px; padding: 30px 40px 64px; }
+.inknest-editor h1, .inknest-editor h2, .inknest-editor h3, .inknest-editor h4, .inknest-editor h5, .inknest-editor h6 {
+  font-family: Georgia, "Times New Roman", serif; letter-spacing: -.015em; font-weight: 700;
+}
+.inknest-editor h1 { font-size: 2em; line-height: 1.2; margin-bottom: 10px; }
+.inknest-editor h2 { font-size: 1.375em; line-height: 1.3; margin: 20px 0 7px; }
+.inknest-editor h3 { font-size: 1.15em; margin: 18px 0 6px; }
+.inknest-editor p { margin: 7px 0; }
+.inknest-editor pre { border: 1px solid var(--app-border); border-radius: 6px; background: color-mix(in srgb, var(--app-muted) 5%, var(--app-surface)); padding: 38px 16px 13px; margin: 10px 0; }
+.inknest-editor pre code { font-size: .8em; line-height: 1.65; }
+.inknest-editor table { margin: 10px 0; font-size: .875em; border-radius: 5px; }
+.inknest-editor th, .inknest-editor td { padding: 7px 12px; border-color: var(--app-border); }
+.inknest-editor th { background: color-mix(in srgb, var(--app-muted) 6%, var(--app-surface)); }
+.inknest-editor blockquote.inknest-callout { margin: 14px 0; border-radius: 5px; border: 1px solid color-mix(in srgb, var(--app-accent) 18%, var(--app-border)); border-left: 2px solid var(--app-accent); box-shadow: none; padding: 10px 14px 10px 38px; background: color-mix(in srgb, var(--app-accent) 9%, var(--app-surface)); }
+.inknest-editor .inknest-callout::before { top: 13px; left: 12px; }
+.inknest-math-block { margin: 8px 0; padding: 0; }
+.note-heading-minimap { border-radius: 7px; padding: 8px; top: 16px; right: 16px; box-shadow: 0 3px 12px #00000010; background: var(--app-surface); backdrop-filter: none; }
+.note-outline-title { border: 0; color: var(--app-text); font-weight: 500; padding: 0 2px 6px; margin: 0; }
+.note-outline-title > svg, .note-outline-count, .note-outline-level { display: none; }
+.note-outline-close { margin-left: auto; }
+.note-outline-heading { font-size: 11px; padding-block: 6px; border-radius: 0; }
+.note-outline-heading[aria-current="location"] { background: transparent; box-shadow: inset 2px 0 var(--app-accent); color: var(--app-accent-text); }
+.note-outline-resize-grip { width: 9px; height: 28px; border: 0; background: transparent; box-shadow: none; opacity: 0; }
+.note-outline-resize:hover .note-outline-resize-grip, .note-outline-resize:focus-visible .note-outline-resize-grip { opacity: 1; }
+.note-outline-corner { position: absolute; bottom: 3px; right: 3px; width: 15px; height: 15px; display: flex; align-items: center; justify-content: center; color: var(--app-muted); cursor: nwse-resize; touch-action: none; }
+.note-find-widget { position: relative; top: auto; right: auto; width: 100%; flex-shrink: 0; border: 0; border-bottom: 1px solid var(--app-border); border-radius: 0; box-shadow: none; padding: 8px 16px; gap: 4px; }
+.note-find-row { gap: 4px; }
+.note-find-input { background: var(--app-surface); border-radius: 4px; }
+.note-find-input:focus-within { border-color: #4385ed; box-shadow: 0 0 0 1px #4385ed; }
+.note-find-input textarea { height: 29px; }
+.note-replace-row > button { width: auto; min-width: 80px; font-family: inherit; font-size: 11px; padding-inline: 12px; }
+.note-replace-row > button[aria-label="Replace"] { background: var(--app-accent-solid); color: white; }
+.note-replace-row > button[aria-label="Replace all"] { background: color-mix(in srgb, var(--app-muted) 12%, var(--app-surface)); color: var(--app-text); }
+.note-replace-row > button:disabled { opacity: .45; }
+.note-search-match { background: color-mix(in srgb, #efd05e 48%, transparent); box-shadow: none; }
+.note-search-current { background: color-mix(in srgb, #eec54c 64%, transparent); outline: 1px solid #cba52e; }
+@media (max-width: 950px) { .note-find-row { flex-wrap: nowrap; } .note-find-input { flex-basis: auto; } .inknest-editor .editor { padding-inline: 24px; } }
+.inknest-editor th p, .inknest-editor td p { margin: 0; min-height: 0; line-height: 1.5; }
+.inknest-editor th, .inknest-editor td { padding: 5px 12px; }
+.inknest-code-controls { inset: 6px 12px auto; align-items: center; justify-content: space-between; }
+.inknest-code-controls select, .inknest-code-controls button { border-color: transparent; background: transparent; padding: 3px; font-family: ui-sans-serif, system-ui, sans-serif; color: var(--app-muted); font-size: 11px; }
+.inknest-code-controls button:hover { color: var(--app-text); background: var(--app-surface-subtle); }
+.inknest-editor blockquote.inknest-callout { position: relative; color: var(--app-text); min-height: 38px; }
+.inknest-editor blockquote.inknest-callout::before { content: ""; position: absolute; width: 18px; height: 20px; background: currentColor; mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5"%3E%3Cpath d="M9 18h6M10 22h4M15.09 14a6 6 0 1 0-6.18 0c.78.58 1.09 1.47 1.09 2.5V18h4v-1.5c0-1.03.31-1.92 1.09-2.5Z"/%3E%3C/svg%3E') center / contain no-repeat; }
+:root[data-theme="dark"] .inknest-editor .syntax-keyword { color: #86b9f5; }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .inknest-editor .syntax-keyword { color: #86b9f5; } }
+@container editor-pane (max-width: 700px) {
+  .note-find-row { flex-wrap: wrap; }
+  .note-find-input { flex-basis: 100%; }
+}
+.inknest-editor blockquote.inknest-callout[data-callout="warning"] { border-color: color-mix(in srgb, #d6a146 45%, var(--app-border)); border-left-color: #d6a146; background: color-mix(in srgb, #d6a146 9%, var(--app-surface)); }
+.inknest-editor blockquote.inknest-callout[data-callout="info"] { border-color: color-mix(in srgb, #53949c 40%, var(--app-border)); border-left-color: #53949c; background: color-mix(in srgb, #53949c 9%, var(--app-surface)); }
+.inknest-editor-full-width .editor { max-width: none; }
