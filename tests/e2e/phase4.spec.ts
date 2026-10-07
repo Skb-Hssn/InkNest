@@ -68,6 +68,7 @@ test("phase 4 selects a workspace and persists it in settings", async ({
         lineWrap: true,
         showWordCount: true,
         sidebarVisible: true,
+        lockedNoteKeys: [],
         lastWorkspacePath: workspaceDir,
         recentWorkspaces: [workspaceDir]
       }

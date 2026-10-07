@@ -26,10 +26,19 @@ export function registerSettingsHandlers() {
   registerIpcHandler<AppSettings>(ipcChannels.settings.save, (payload) => {
     assertPlainObject(payload);
 
+    if (payload.lockedNoteKeys !== undefined &&
+        (!Array.isArray(payload.lockedNoteKeys) || payload.lockedNoteKeys.some((key) => typeof key !== "string"))) {
+      throw new Error("lockedNoteKeys must be an array of strings.");
+    }
+
     return updateSettings((settings) => {
       const nextSettings = {
         ...settings
       };
+
+      if (payload.lockedNoteKeys !== undefined) {
+        nextSettings.lockedNoteKeys = [...new Set(payload.lockedNoteKeys as string[])];
+      }
 
       if (payload.theme !== undefined) {
         nextSettings.theme = assertTheme(payload.theme);

@@ -108,6 +108,15 @@ previously active file is unavailable. Pending note edits and the latest tab
 session are saved before the window closes.
 
 
+## Note locks
+
+Use the lock button beside the note's search controls to make a note view-only.
+Locking saves pending edits first; unlocking restores editing. Locks are remembered
+per workspace and note in local settings, including after restarting InkNest.
+Find, copying, links, the heading panel, and export remain available while locked.
+Formatting, task toggles, table changes, pasting, and Find and Replace cannot change
+the locked note. Rename operations inside InkNest preserve its lock.
+
 ## Linux installer
 
 Build an amd64 Debian/Ubuntu installer with:

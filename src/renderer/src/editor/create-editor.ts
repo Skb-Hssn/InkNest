@@ -18,6 +18,7 @@ import {
   moveCaretToCalloutBodyIfNeeded
 } from "./extensions/callout-plugin";
 import { codeBlockView } from "./extensions/code-block-view";
+import { createReadOnlyPlugin } from "./extensions/read-only-plugin";
 import { codeHighlightPlugin } from "./extensions/code-highlight-plugin";
 import { createDocumentObserverPlugin } from "./extensions/document-observer-plugin";
 import { createImageView } from "./extensions/image-view";
@@ -92,6 +93,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           spellcheck: "true"
         },
         handleTextInput(view, from, to, text, defaultInsert) {
+          if (!view.editable) return true;
           if (preserveMathSource(view, from, to, text)) return true;
           const marks = view.state.storedMarks;
           if (marks?.some((mark) => mark.type.name === "inlineCode")) {
@@ -103,6 +105,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           return previous.handleTextInput?.(view, from, to, text, defaultInsert) ?? false;
         },
         handleKeyDown(view, event) {
+          if (!view.editable) return false;
           // Browser caret movement (Home/End and Shift+Arrow) may precede
           // ProseMirror's asynchronous selectionchange event.
           syncEditorDOMSelection(view);
@@ -198,6 +201,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
           );
         },
         handlePaste(view, event) {
+          if (!view.editable) { event.preventDefault(); return true; }
           syncEditorDOMSelection(view);
           const imageItem = Array.from(event.clipboardData?.items ?? []).find(
             (item) => item.kind === "file" && item.type.startsWith("image/")
@@ -245,6 +249,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
             return true;
           },
           dblclick(view, event) {
+            if (!view.editable) return false;
             const target = event.target;
             const link = target instanceof HTMLElement ? target.closest("a") : null;
             if (!(link instanceof HTMLAnchorElement)) {
@@ -273,6 +278,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
 
     })
     .use(commonmark)
+    .use(createReadOnlyPlugin())
     .use(gfm)
     .use(mathPlugins)
     .use(mathPastePlugin)
@@ -303,5 +309,9 @@ export function setEditorEditable(editor: Editor, editable: boolean) {
   editor.action((ctx) => {
     const view = ctx.get(editorViewCtx);
     view.setProps({ editable: () => editable });
+    view.dom.setAttribute("aria-readonly", String(!editable));
+    view.dom.setAttribute("tabindex", "0");
+    view.dom.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[aria-label="Toggle task"], select.code-language-select')
+      .forEach((control) => { control.disabled = !editable; });
   });
 }

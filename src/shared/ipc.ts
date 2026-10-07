@@ -128,6 +128,7 @@ export type AppSettings = {
   outlineWidth: number;
   showWordCount: boolean;
   sidebarVisible: boolean;
+  lockedNoteKeys: string[];
   lastWorkspacePath: string | null;
   recentWorkspaces: string[];
 };
@@ -146,6 +147,7 @@ export type SaveSettingsPayload = Partial<
     | "outlineWidth"
     | "showWordCount"
     | "sidebarVisible"
+    | "lockedNoteKeys"
   >
 >;
 

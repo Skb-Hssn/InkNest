@@ -20,6 +20,7 @@ export const defaultSettings: AppSettings = {
   outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
+  lockedNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -98,6 +99,8 @@ function normalizeSettings(value: unknown): AppSettings {
       candidate.outlineWidth >= 180 && candidate.outlineWidth <= 420 ? candidate.outlineWidth : defaultSettings.outlineWidth,
     showWordCount,
     sidebarVisible,
+    lockedNoteKeys: Array.isArray(candidate.lockedNoteKeys)
+      ? [...new Set(candidate.lockedNoteKeys.filter((key): key is string => typeof key === "string"))] : [],
     lastWorkspacePath,
     recentWorkspaces: Array.from(new Set(recentWorkspaces)).slice(
       0,

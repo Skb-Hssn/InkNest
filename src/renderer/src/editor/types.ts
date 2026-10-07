@@ -70,6 +70,7 @@ export type MarkdownEditorHandle = {
 };
 
 export type MarkdownEditorProps = {
+  readOnly?: boolean;
   markdown: string;
   workspacePath: string | null;
   notePath: string;

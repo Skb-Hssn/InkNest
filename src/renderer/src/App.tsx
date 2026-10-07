@@ -46,6 +46,8 @@ import {
   ListChecks,
   ListOrdered,
   ListTree,
+  LockKeyhole,
+  UnlockKeyhole,
   Replace,
   Maximize2,
   MoreHorizontal,
@@ -120,6 +122,7 @@ const initialSettings: AppSettings = {
   outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
+  lockedNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -578,6 +581,10 @@ export function App() {
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
   const selectedNoteName = selectedNote ? noteNameFromPath(selectedNote.path) : null;
+  const selectedNoteLockKey = selectedNoteContent && workspace.path
+    ? JSON.stringify([workspace.path, selectedNoteContent.path]) : null;
+  const isNoteLocked = selectedNoteLockKey !== null && settings.lockedNoteKeys.includes(selectedNoteLockKey);
+  const isEditorDisabled = isBusy || isNoteLocked;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
   const isDirty = selectedNoteContent !== null && editorMarkdown !== lastSavedMarkdown;
   const saveStatusLabel = selectedNoteContent
@@ -1112,8 +1119,42 @@ export function App() {
     }
   }
 
+  async function toggleNoteLock() {
+    if (!selectedNoteLockKey || isBusy) return;
+    setIsBusy(true);
+    setToolbarMenu(null);
+    setLinkDialog(null);
+    try {
+      if (!(await flushCurrentNote())) return;
+      const lockedNoteKeys = isNoteLocked
+        ? settings.lockedNoteKeys.filter((key) => key !== selectedNoteLockKey)
+        : [...settings.lockedNoteKeys, selectedNoteLockKey];
+      if (await updateAppSettings({ lockedNoteKeys })) {
+        setStatusMessage(isNoteLocked ? "Note unlocked" : "Note locked — view only");
+      }
+    } finally {
+      setIsBusy(false);
+    }
+  }
+
+  async function remapNoteLocks(fromPath: string, toPath: string, folder = false) {
+    const lockedNoteKeys = settings.lockedNoteKeys.map((key) => {
+      try {
+        const [root, notePath] = JSON.parse(key);
+        if (root !== workspace.path || typeof notePath !== "string") return key;
+        if (notePath === fromPath || (folder && notePath.startsWith(`${fromPath}/`))) {
+          return JSON.stringify([root, `${toPath}${notePath.slice(fromPath.length)}`]);
+        }
+      } catch { /* Ignore malformed legacy lock entries. */ }
+      return key;
+    });
+    if (lockedNoteKeys.some((key, index) => key !== settings.lockedNoteKeys[index])) {
+      await updateAppSettings({ lockedNoteKeys });
+    }
+  }
+
   async function insertPastedImage(payload: SaveImagePayload) {
-    if (!selectedNoteContent || isBusy) {
+    if (!selectedNoteContent || isEditorDisabled) {
       return;
     }
 
@@ -1711,7 +1752,7 @@ export function App() {
     command: ToolbarCommand,
     event?: ReactMouseEvent<HTMLButtonElement>
   ) {
-    if (!selectedNoteContent || isBusy) {
+    if (!selectedNoteContent || isEditorDisabled) {
       return;
     }
 
@@ -1755,6 +1796,7 @@ export function App() {
   }
 
   function openLinkDialog(details: LinkDialogDetails) {
+    if (isEditorDisabled) return;
     setLinkDialog({
       text: details.text,
       url: details.url,
@@ -1914,6 +1956,7 @@ export function App() {
     if (result.ok) {
       setEditingFolderPath(null);
       setFolderNameDraft("");
+      await remapNoteLocks(folder.path, result.data.path, true);
 
       setOpenNotePaths((currentPaths) => currentPaths.map((notePath) =>
         notePath.startsWith(`${folder.path}/`)
@@ -2019,6 +2062,7 @@ export function App() {
 
     if (result.ok) {
       remapNoteTabs(note.path, result.data.path);
+      await remapNoteLocks(note.path, result.data.path);
       await refreshWorkspace();
       if (shouldReopen) {
         await openNote(result.data.path);
@@ -2741,6 +2785,12 @@ export function App() {
             </div>
             {selectedNoteContent ? (
               <div className="app-editor-header-actions flex items-center gap-2">
+                <button type="button" className="icon-button" aria-label={isNoteLocked ? "Unlock note" : "Lock note"}
+                  aria-pressed={isNoteLocked} disabled={isBusy}
+                  title={isNoteLocked ? "View only — unlock to edit" : "Lock note to make it view only"}
+                  onClick={() => void toggleNoteLock()}>
+                  {isNoteLocked ? <LockKeyhole size={17} /> : <UnlockKeyhole size={17} />}
+                </button>
                 <button type="button" className="icon-button" aria-label="Find in note" title="Find in note (Ctrl+F)"
                   aria-keyshortcuts="Control+F" onClick={() => editorHandleRef.current?.openSearch("replace")}><Search size={17} /></button>
                 <button type="button" className="icon-button" aria-label="Find and replace" title="Find and replace (Ctrl+H)"
@@ -2800,7 +2850,7 @@ export function App() {
           {selectedNoteContent ? (
             <div className="toolbar-shell">
               <div className="markdown-toolbar" aria-label="Markdown toolbar">
-                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isBusy} aria-label="Heading level" title="Heading level"
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isEditorDisabled} aria-label="Heading level" title="Heading level"
                   aria-expanded={toolbarMenu?.kind === "headings"} onMouseDown={(event) => event.preventDefault()}
                   onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "headings" ? null : { kind: "headings", left: rect.left, top: rect.bottom + 5 }); }}>H<ChevronDown size={11} /></button>
                 {getToolbarGroups(toolbarPlaceholders.filter((command) => primaryToolbarOrder.includes(command.id)).sort((a, b) => primaryToolbarOrder.indexOf(a.id) - primaryToolbarOrder.indexOf(b.id))).map((group) => (
@@ -2808,12 +2858,12 @@ export function App() {
                     {group.commands.map((command) => <button key={command.id} type="button"
                       className={`toolbar-button ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
                       aria-label={command.label} title={command.label} onMouseDown={(event) => event.preventDefault()}
-                      onClick={(event) => runToolbarCommand(command, event)} disabled={isBusy}>
+                      onClick={(event) => runToolbarCommand(command, event)} disabled={isEditorDisabled}>
                       {command.id === "callout-note" ? <Lightbulb size={16} /> : command.icon}
                     </button>)}
                   </div>
                 ))}
-                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isBusy} aria-label="More formatting" title="More formatting"
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isEditorDisabled} aria-label="More formatting" title="More formatting"
                   aria-expanded={toolbarMenu?.kind === "more"} onMouseDown={(event) => event.preventDefault()}
                   onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "more" ? null : { kind: "more", left: Math.min(rect.left, window.innerWidth - 230), top: rect.bottom + 5 }); }}><MoreHorizontal size={16} /></button>
               </div>
@@ -2821,7 +2871,7 @@ export function App() {
                 style={{ left: toolbarMenu.left, top: toolbarMenu.top }}>
                 {toolbarPlaceholders.filter((command) => toolbarMenu.kind === "headings" ? command.group === "headings" :
                   ["inline-code", "clear-format", "inline-math", "divider", "callout-warning", "callout-info", "callout-success", "table-add-row", "table-delete-row", "table-add-column", "table-delete-column", "table-delete"].includes(command.id)).map((command) =>
-                  <button key={command.id} type="button" aria-label={command.label} disabled={isBusy}
+                  <button key={command.id} type="button" aria-label={command.label} disabled={isEditorDisabled}
                     className={`toolbar-button ${command.id.startsWith("table-delete") ? "danger" : ""} ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
                     onMouseDown={(event) => event.preventDefault()} onClick={(event) => { runToolbarCommand(command, event); setToolbarMenu(null); }}>
                     {command.icon}<span>{command.label}</span>
@@ -2952,7 +3002,8 @@ export function App() {
                 markdown={editorMarkdown}
                 workspacePath={workspace.path}
                 notePath={selectedNoteContent.path}
-                disabled={isBusy}
+                disabled={isEditorDisabled}
+                readOnly={isNoteLocked}
                 lineWrap={settings.lineWrap}
                 fullWidth={settings.fullWidth}
                 showOutline={settings.showOutline}

@@ -302,6 +302,7 @@ export const MarkdownEditor = forwardRef<
   }
 
   function handleEditorMouseMove(event: ReactMouseEvent<HTMLDivElement>) {
+    if (propsRef.current.disabled) return;
     const root = rootRef.current;
     const container = containerRef.current;
     const target = event.target;
@@ -470,7 +471,7 @@ export const MarkdownEditor = forwardRef<
     openSearch,
     runCommand(command, options) {
       const editor = editorRef.current;
-      if (!editor) {
+      if (!editor || propsRef.current.disabled) {
         return false;
       }
 
@@ -485,6 +486,8 @@ export const MarkdownEditor = forwardRef<
         : { text: "", url: "", isEditing: false };
     },
     getMarkdown() {
+      // Reading a locked note must not normalize and save its Markdown source.
+      if (propsRef.current.readOnly) return propsRef.current.markdown;
       const editor = editorRef.current;
       if (!editor) {
         return latestMarkdownRef.current;
@@ -518,7 +521,7 @@ export const MarkdownEditor = forwardRef<
       notePath: props.notePath,
       disabled: props.disabled,
       onBodyChange(body) {
-        if (disposed || replacingExternallyRef.current) {
+        if (disposed || replacingExternallyRef.current || propsRef.current.readOnly) {
           return;
         }
 
@@ -574,6 +577,10 @@ export const MarkdownEditor = forwardRef<
     const editor = editorRef.current;
     if (editor) {
       setEditorEditable(editor, !props.disabled);
+      if (props.disabled) {
+        setBlockAction(null);
+        setTableCellAction(null);
+      }
     }
   }, [props.disabled]);
 
@@ -594,8 +601,11 @@ export const MarkdownEditor = forwardRef<
     if (currentBody !== nextEnvelope.body) {
       replacingExternallyRef.current = true;
       try {
+        // Disk reloads must update the view even while the note is locked.
+        setEditorEditable(editor, true);
         editor.action(replaceAll(nextEnvelope.body, true));
       } finally {
+        setEditorEditable(editor, !propsRef.current.disabled);
         replacingExternallyRef.current = false;
       }
     }
