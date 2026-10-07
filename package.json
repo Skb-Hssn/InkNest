@@ -28,6 +28,7 @@
     "lucide-react": "^1.21.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "refractor": "^5.0.0",
     "remark-math": "^6.0.0"
   },
   "devDependencies": {

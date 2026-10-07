@@ -274,7 +274,9 @@ test("code block preserves content, language, indentation and toggles back", asy
     await selectRange(editor.locator("p").first());
     await toolbar(window, "Code block");
     await expect(editor.locator("pre code")).toHaveText("Alpha text");
-    await editor.getByRole("combobox", { name: "Code block language" }).selectOption("typescript");
+    await editor.getByRole("combobox", { name: "Code block language" }).click();
+    await window.getByRole("searchbox", { name: "Search code languages" }).fill("typescript");
+    await window.getByRole("option", { name: "TypeScript", exact: true }).click();
     await editor.locator("pre code").click();
     await editor.press("End");
     await editor.press("Enter");
@@ -559,14 +561,14 @@ test("table cells support inline formatting and safely reject incompatible block
 });
 
 test("an existing custom code language is displayed and survives edits", async ({}, testInfo) => {
-  const { app, window, editor, notePath } = await launchNote(testInfo, "```rust\nlet value = 1;\n```\n");
+  const { app, window, editor, notePath } = await launchNote(testInfo, "```custom-lang\nlet value = 1;\n```\n");
   try {
-    await expect(editor.getByRole("combobox", { name: "Code block language" })).toHaveValue("rust");
+    await expect(editor.getByRole("combobox", { name: "Code block language" })).toHaveAttribute("data-language", "custom-lang");
     await selectRange(editor.locator("pre code"), 14, editor.locator("pre code"), 14);
     await editor.pressSequentially(" // edited");
     await toolbar(window, "Save");
-    await expect.poll(() => readFile(notePath, "utf8")).toContain("```rust");
-    await expect(editor.getByRole("combobox", { name: "Code block language" })).toHaveValue("rust");
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("```custom-lang");
+    await expect(editor.getByRole("combobox", { name: "Code block language" })).toHaveAttribute("data-language", "custom-lang");
   } finally { await app.close(); }
 });
 

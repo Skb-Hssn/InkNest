@@ -314,7 +314,7 @@ export function setEditorEditable(editor: Editor, editable: boolean) {
     view.setProps({ editable: () => editable });
     view.dom.setAttribute("aria-readonly", String(!editable));
     view.dom.setAttribute("tabindex", "0");
-    view.dom.querySelectorAll<HTMLInputElement | HTMLSelectElement>('input[aria-label="Toggle task"], select.code-language-select')
+    view.dom.querySelectorAll<HTMLInputElement | HTMLButtonElement>('input[aria-label="Toggle task"], button.code-language-select')
       .forEach((control) => { control.disabled = !editable; });
   });
 }

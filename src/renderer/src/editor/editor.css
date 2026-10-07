@@ -344,16 +344,16 @@
 }
 
 .inknest-editor .syntax-keyword {
-  color: #2563eb;
+  color: var(--syntax-keyword);
   font-weight: 650;
 }
 
 .inknest-editor .syntax-string {
-  color: #15803d;
+  color: var(--syntax-string);
 }
 
 .inknest-editor .syntax-number {
-  color: #b45309;
+  color: var(--syntax-number);
 }
 
 .inknest-editor .syntax-comment {
@@ -730,8 +730,16 @@
 .inknest-code-controls button:hover { color: var(--app-text); background: var(--app-surface-subtle); }
 .inknest-editor blockquote.inknest-callout { position: relative; color: var(--app-text); min-height: 38px; }
 .inknest-editor blockquote.inknest-callout::before { content: ""; position: absolute; width: 18px; height: 20px; background: currentColor; mask: url('data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="1.5"%3E%3Cpath d="M9 18h6M10 22h4M15.09 14a6 6 0 1 0-6.18 0c.78.58 1.09 1.47 1.09 2.5V18h4v-1.5c0-1.03.31-1.92 1.09-2.5Z"/%3E%3C/svg%3E') center / contain no-repeat; }
-:root[data-theme="dark"] .inknest-editor .syntax-keyword { color: #86b9f5; }
-@media (prefers-color-scheme: dark) { :root[data-theme="system"] .inknest-editor .syntax-keyword { color: #86b9f5; } }
+.inknest-editor { --syntax-keyword: #7543b6; --syntax-string: #247644; --syntax-number: #a75d13; --syntax-function: #245dc5; --syntax-type: #087b83; --syntax-operator: #945071; }
+:root[data-theme="dark"] .inknest-editor { --syntax-keyword: #c4a2f2; --syntax-string: #a5ce8d; --syntax-number: #e2ac79; --syntax-function: #8ab9fa; --syntax-type: #80cccf; --syntax-operator: #dc9dbb; }
+@media (prefers-color-scheme: dark) { :root[data-theme="system"] .inknest-editor { --syntax-keyword: #c4a2f2; --syntax-string: #a5ce8d; --syntax-number: #e2ac79; --syntax-function: #8ab9fa; --syntax-type: #80cccf; --syntax-operator: #dc9dbb; } }
+.inknest-editor :is(.syntax-function, .syntax-function-variable) { color: var(--syntax-function); }
+.inknest-editor :is(.syntax-class-name, .syntax-builtin, .syntax-property, .syntax-attr-name, .syntax-namespace, .syntax-constant, .syntax-symbol) { color: var(--syntax-type); }
+.inknest-editor :is(.syntax-operator, .syntax-directive, .syntax-directive-hash, .syntax-macro, .syntax-tag, .syntax-selector, .syntax-regex, .syntax-important) { color: var(--syntax-operator); }
+.inknest-editor :is(.syntax-boolean, .syntax-variable) { color: var(--syntax-number); }
+.inknest-editor :is(.syntax-punctuation, .syntax-doctype) { color: var(--app-muted); }
+.inknest-editor :is(.syntax-string, .syntax-char, .syntax-attr-value) { color: var(--syntax-string); }
+.inknest-editor .syntax-keyword { color: var(--syntax-keyword); }
 @container editor-pane (max-width: 700px) {
   .note-find-row { flex-wrap: wrap; }
   .note-find-input { flex-basis: 100%; }
@@ -752,3 +760,11 @@
 .inknest-slash-options > button.danger:is(:hover, [aria-selected="true"]):not(:disabled) { color: var(--app-menu-danger); background: color-mix(in srgb, var(--app-menu-danger) 13%, var(--app-surface)); }
 .inknest-slash-options > button:disabled { opacity: .4; cursor: default; }
 .inknest-slash-footer { padding: 7px 9px 4px; font-size: 10px; color: var(--app-muted); border-top: 1px solid var(--app-border); }
+.code-language-picker { position: fixed; z-index: 115; display: flex; flex-direction: column; width: 240px; height: 300px; max-height: calc(100vh - 16px); padding: 6px; border: 1px solid var(--app-border); border-radius: 8px; background: var(--app-surface); color: var(--app-text); box-shadow: 0 10px 30px #0003; }
+.code-language-picker > input { flex-shrink: 0; height: 32px; min-width: 0; width: 100%; padding: 5px 8px; margin-bottom: 6px; border: 1px solid var(--app-border); border-radius: 5px; background: var(--app-surface); color: var(--app-text); font: inherit; font-size: 12px; }
+.code-language-options { flex: 1; min-height: 0; overflow-y: auto; }
+.code-language-options > button { display: block; width: 100%; padding: 6px 9px; border-radius: 4px; text-align: left; font: inherit; font-size: 12px; }
+.code-language-options > button:is(:hover, [aria-selected="true"]) { color: var(--app-menu-safe); background: color-mix(in srgb, var(--app-menu-safe) 13%, var(--app-surface)); }
+.code-language-options > button[data-current="true"] { font-weight: 600; }
+.code-language-empty { padding: 15px 9px; color: var(--app-muted); font-size: 12px; }
+.code-language-select::after { content: "⌄"; margin-left: 6px; }

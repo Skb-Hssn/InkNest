@@ -124,6 +124,17 @@ The menu includes all toolbar formatting options, with table actions enabled
 inside tables. Suggestions stay off in code and locked notes. Existing shortcuts
 such as `/heading`, `/todo`, `/table`, and `/math` still work.
 
+## Code block languages
+
+Click a code block's language label to open a searchable picker with 46 common
+language choices. Its height stays fixed as results are filtered, and the list
+scrolls. Search by name or alias (such as `js`, `golang`, or `yml`), use arrow keys
+and Enter to select, or click a language. Escape cancels. Existing custom language
+names are preserved, and changing the language keeps the code intact.
+Programming languages use grammar-based syntax highlighting with colors for
+keywords, strings, numbers, functions, and other tokens in both light and dark
+themes. Plain text and unrecognized custom languages stay uncolored.
+
 ## Searching notes
 
 

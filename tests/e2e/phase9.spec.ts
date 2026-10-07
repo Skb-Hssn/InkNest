@@ -134,9 +134,9 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await editor.press("Enter");
     await editor.press("Tab");
     await editor.pressSequentially("indented");
-    await codeBlock.getByRole("combobox", { name: "Code block language" }).selectOption(
-      "typescript"
-    );
+    await codeBlock.getByRole("combobox", { name: "Code block language" }).click();
+    await window.getByRole("searchbox", { name: "Search code languages" }).fill("typescript");
+    await window.getByRole("option", { name: "TypeScript", exact: true }).click();
     await expect(codeBlock.locator(".syntax-keyword")).toHaveText("const");
 
     await placeCaretAtEnd(codeBlock.locator("code"));
