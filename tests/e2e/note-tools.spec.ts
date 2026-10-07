@@ -125,6 +125,55 @@ test("heading minimap shows hierarchy, scrolls independently and follows edits a
   } finally { await app.close(); }
 });
 
+test("minimap keeps the clicked heading highlighted between closely spaced headings and follows later scrolling", async ({}, info) => {
+  const names = ["Heading 2", "Heading 3", "Heading 4", "Heading 5", "Heading 6", "Heading 7", "fds"];
+  const markdown = `# Untitled\n\n${"Intro paragraph.\n\n".repeat(25)}` +
+    names.map((name, index) => `${"#".repeat(index === 6 ? 1 : Math.min(index + 2, 6))} ${name}\n\n`).join("") +
+    "Ending paragraph.\n\n".repeat(25);
+  const { app, window } = await launch(info, markdown);
+  try {
+    const outline = window.getByRole("navigation", { name: "Note headings" });
+    for (const name of names) {
+      const target = outline.getByRole("button", { name, exact: true });
+      await target.click();
+      // Let the scroll listener and React update settle before checking its result.
+      await window.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(target).toHaveAttribute("aria-current", "location");
+      await expect(outline.locator('[aria-current="location"]')).toHaveCount(1);
+    }
+    await outline.getByRole("button", { name: "Heading 3", exact: true }).click();
+    await window.locator(".note-writing-scroll").evaluate(element => { element.scrollTop = element.scrollHeight; });
+    await expect(outline.getByRole("button", { name: "fds", exact: true })).toHaveAttribute("aria-current", "location");
+  } finally { await app.close(); }
+});
+
+test("minimap keeps near-end and non-scrolling heading selections instead of forcing the next or last heading", async ({}, info) => {
+  const { app, window, editor, notePath } = await launch(info,
+    `# Title\n\n${"Intro paragraph.\n\n".repeat(40)}## Near end\n\n### Last heading\n\nEnd.\n`);
+  try {
+    const outline = window.getByRole("navigation", { name: "Note headings" });
+    const nearEnd = outline.getByRole("button", { name: "Near end", exact: true });
+    await nearEnd.click();
+    await window.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await expect(nearEnd).toHaveAttribute("aria-current", "location");
+    await expect(outline.getByRole("button", { name: "Last heading", exact: true })).not.toHaveAttribute("aria-current", "location");
+    await writeFile(notePath, "# Title\n\n## Short first\n\n### Short second\n\n## Short last\n");
+    await expect(editor.locator("h2").first()).toHaveText("Short first");
+    for (const name of ["Short last", "Short first", "Short second"]) {
+      const target = outline.getByRole("button", { name, exact: true });
+      await target.click();
+      await window.evaluate(() => new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+      await expect(target).toHaveAttribute("aria-current", "location");
+    }
+    await window.locator(".note-open-area").filter({ hasText: "Other" }).click();
+    await expect(outline.getByRole("button")).toHaveCount(1);
+    await window.getByRole("tab", { name: "Notes", exact: true }).click();
+    await expect(outline.getByRole("button", { name: "Short first", exact: true })).toBeVisible();
+    await outline.getByRole("button", { name: "Short first", exact: true }).click();
+    await expect(outline.getByRole("button", { name: "Short first", exact: true })).toHaveAttribute("aria-current", "location");
+  } finally { await app.close(); }
+});
+
 test("minimap is a floating card with animated opening, closing and a close button", async ({}, info) => {
   const { app, window, editor } = await launch(info);
   try {

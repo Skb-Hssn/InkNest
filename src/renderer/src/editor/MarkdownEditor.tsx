@@ -65,6 +65,8 @@ const tableCellActions: Array<{ action: TableCellAction; label: string }> = [
   { action: "add-column-after", label: "Add column after" }
 ];
 
+const headingScrollOffset = 24;
+
 function blockActionLabel(kind: DeletableBlockKind) {
   return kind === "callout"
     ? "callout"
@@ -85,6 +87,7 @@ export const MarkdownEditor = forwardRef<
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [headings, setHeadings] = useState<NoteHeading[]>([]);
   const [activeHeading, setActiveHeading] = useState<number | null>(null);
+  const navigatedHeadingRef = useRef<{ position: number; scrollTop: number } | null>(null);
   const [editorReady, setEditorReady] = useState(false);
   const [findOpen, setFindOpen] = useState(false);
   const [replaceOpen, setReplaceOpen] = useState(false);
@@ -189,6 +192,7 @@ export const MarkdownEditor = forwardRef<
     });
   }
   function navigateHeading(heading: NoteHeading) {
+    navigatedHeadingRef.current = null;
     editorRef.current?.action((ctx) => {
       const view = ctx.get(editorViewCtx);
       view.dispatch(view.state.tr.setSelection(TextSelection.near(view.state.doc.resolve(heading.position + 1)))
@@ -197,7 +201,8 @@ export const MarkdownEditor = forwardRef<
       const element = view.nodeDOM(heading.position);
       const scroller = scrollRef.current;
       if (element instanceof HTMLElement && scroller) {
-        scroller.scrollTop += element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - 24;
+        scroller.scrollTop += element.getBoundingClientRect().top - scroller.getBoundingClientRect().top - headingScrollOffset;
+        navigatedHeadingRef.current = { position: heading.position, scrollTop: scroller.scrollTop };
       }
       setActiveHeading(heading.position);
     });
@@ -243,11 +248,21 @@ export const MarkdownEditor = forwardRef<
   useEffect(() => {
     const scroller = scrollRef.current;
     if (!scroller || !editorReady) return;
+    navigatedHeadingRef.current = null;
     let frame = 0;
     const update = () => {
       const editor = editorRef.current;
       if (!editor) return;
-      const top = scroller.getBoundingClientRect().top + 80;
+      const navigated = navigatedHeadingRef.current;
+      // Near the document's end, several headings may share the same clamped
+      // scroll position. Keep the explicit choice until the page actually moves.
+      if (navigated && Math.abs(scroller.scrollTop - navigated.scrollTop) < 1 &&
+          headings.some((heading) => heading.position === navigated.position)) {
+        setActiveHeading(navigated.position);
+        return;
+      }
+      navigatedHeadingRef.current = null;
+      const top = scroller.getBoundingClientRect().top + headingScrollOffset + 1;
       let position = headings[0]?.position ?? null;
       editor.action((ctx) => {
         const view = ctx.get(editorViewCtx);

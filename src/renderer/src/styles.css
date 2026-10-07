@@ -1587,7 +1587,7 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--app-accent-sol
 .note-row-selected .note-open-area { color: var(--app-text); }
 [data-example-workspace="true"] .tree-row-root { display: none; }
 [data-example-workspace="true"] .tree-row { padding-left: calc((var(--folder-depth, 0) - 1) * 14px); }
-.sidebar-bottom { padding: 10px 12px 20px; border-top: 1px solid var(--app-border); }
+.sidebar-bottom { padding: 10px 12px 0; border-top: 1px solid var(--app-border); }
 .sidebar-bottom-section + .sidebar-bottom-section { border-top: 1px solid var(--app-border); margin-top: 10px; padding-top: 9px; }
 .collapsible-section-trigger { min-height: 30px; font-size: 12px; letter-spacing: 0; text-transform: none; font-weight: 400; padding-inline: 6px; }
 .sidebar-section-header-recent > details > summary { padding: 0 6px; font-size: 11px; color: var(--app-muted); }
