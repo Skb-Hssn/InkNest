@@ -1690,3 +1690,12 @@ button:focus-visible, summary:focus-visible { outline: 2px solid var(--app-accen
   background: color-mix(in srgb, var(--app-menu-danger) 13%, var(--app-surface));
   outline-color: color-mix(in srgb, var(--app-menu-danger) 35%, transparent);
 }
+.sidebar-favorites { margin-bottom: 10px; }
+.favorite-note-list { padding: 0 8px; }
+.favorite-note-row { display: flex; align-items: center; min-height: 29px; border-radius: 4px; }
+.favorite-note-row:hover { background: var(--app-surface-subtle); }
+.favorite-note-row[data-active="true"] { background: color-mix(in srgb, var(--app-accent) 17%, var(--app-surface)); }
+.favorite-note-open { display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; padding: 5px 9px; font-size: 12px; text-align: left; }
+.favorite-note-open > svg, .note-favorite-star { flex-shrink: 0; color: var(--app-accent); }
+.favorite-note-remove { flex-shrink: 0; padding: 5px; opacity: 0; }
+.favorite-note-row:is(:hover, :focus-within) .favorite-note-remove { opacity: 1; }

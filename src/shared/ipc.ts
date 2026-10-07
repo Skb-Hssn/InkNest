@@ -129,6 +129,7 @@ export type AppSettings = {
   showWordCount: boolean;
   sidebarVisible: boolean;
   lockedNoteKeys: string[];
+  favoriteNoteKeys: string[];
   lastWorkspacePath: string | null;
   recentWorkspaces: string[];
 };
@@ -148,6 +149,7 @@ export type SaveSettingsPayload = Partial<
     | "showWordCount"
     | "sidebarVisible"
     | "lockedNoteKeys"
+    | "favoriteNoteKeys"
   >
 >;
 

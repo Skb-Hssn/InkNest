@@ -63,6 +63,7 @@ import {
   SquarePen,
   Square,
   Strikethrough,
+  Star,
   Sigma,
   Radical,
   TableColumnsSplit,
@@ -123,6 +124,7 @@ const initialSettings: AppSettings = {
   showWordCount: true,
   sidebarVisible: true,
   lockedNoteKeys: [],
+  favoriteNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -296,6 +298,7 @@ export function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [toolbarMenu, setToolbarMenu] = useState<{ kind: "headings" | "more"; left: number; top: number } | null>(null);
   const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
+  const [isFavoritesExpanded, setIsFavoritesExpanded] = useState(true);
   const [isTrashExpanded, setIsTrashExpanded] = useState(false);
   const [activeSidebarMenu, setActiveSidebarMenu] = useState<"recent" | "trash" | null>(null);
   const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false);
@@ -328,6 +331,8 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [isFavoriteSaving, setIsFavoriteSaving] = useState(false);
+  const favoriteSaveInFlightRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -588,6 +593,14 @@ export function App() {
     [fileModel, workspaceRootName]
   );
   const notes = fileModel?.notes ?? [];
+  const favoriteKeys = useMemo(() => new Set(settings.favoriteNoteKeys), [settings.favoriteNoteKeys]);
+  function isFavoriteNote(notePath: string) {
+    const root = workspace.path ?? workspace.lastWorkspacePath;
+    return root !== null && favoriteKeys.has(JSON.stringify([root, notePath]));
+  }
+  const favoriteNotes = useMemo(() => notes.filter((note) => isFavoriteNote(note.path))
+    .sort((a, b) => noteNameFromPath(a.path).localeCompare(noteNameFromPath(b.path))),
+    [notes, favoriteKeys, workspace.path, workspace.lastWorkspacePath]);
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
   const matchingFolders = useMemo(() => {
     const terms = searchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
@@ -1188,8 +1201,24 @@ export function App() {
     }
   }
 
-  async function remapNoteLocks(fromPath: string, toPath: string, folder = false) {
-    const lockedNoteKeys = settings.lockedNoteKeys.map((key) => {
+  async function toggleFavoriteNote(notePath: string) {
+    if (!workspace.path || isBusy || favoriteSaveInFlightRef.current) return;
+    const key = JSON.stringify([workspace.path, notePath]);
+    const wasFavorite = settings.favoriteNoteKeys.includes(key);
+    favoriteSaveInFlightRef.current = true;
+    setIsFavoriteSaving(true);
+    try {
+      const favoriteNoteKeys = wasFavorite ? settings.favoriteNoteKeys.filter((value) => value !== key)
+        : [...settings.favoriteNoteKeys, key];
+      if (await updateAppSettings({ favoriteNoteKeys })) setStatusMessage(wasFavorite ? "Removed from favorites" : "Added to favorites");
+    } finally {
+      favoriteSaveInFlightRef.current = false;
+      setIsFavoriteSaving(false);
+    }
+  }
+
+  async function remapNotePreferences(fromPath: string, toPath: string, folder = false) {
+    const remap = (keys: string[]) => keys.map((key) => {
       try {
         const [root, notePath] = JSON.parse(key);
         if (root !== workspace.path || typeof notePath !== "string") return key;
@@ -1199,8 +1228,11 @@ export function App() {
       } catch { /* Ignore malformed legacy lock entries. */ }
       return key;
     });
-    if (lockedNoteKeys.some((key, index) => key !== settings.lockedNoteKeys[index])) {
-      await updateAppSettings({ lockedNoteKeys });
+    const lockedNoteKeys = remap(settings.lockedNoteKeys);
+    const favoriteNoteKeys = remap(settings.favoriteNoteKeys);
+    if (lockedNoteKeys.some((key, index) => key !== settings.lockedNoteKeys[index]) ||
+        favoriteNoteKeys.some((key, index) => key !== settings.favoriteNoteKeys[index])) {
+      await updateAppSettings({ lockedNoteKeys, favoriteNoteKeys });
     }
   }
 
@@ -2014,7 +2046,7 @@ export function App() {
     if (result.ok) {
       setEditingFolderPath(null);
       setFolderNameDraft("");
-      await remapNoteLocks(folder.path, result.data.path, true);
+      await remapNotePreferences(folder.path, result.data.path, true);
 
       setOpenNotePaths((currentPaths) => currentPaths.map((notePath) =>
         notePath.startsWith(`${folder.path}/`)
@@ -2120,7 +2152,7 @@ export function App() {
 
     if (result.ok) {
       remapNoteTabs(note.path, result.data.path);
-      await remapNoteLocks(note.path, result.data.path);
+      await remapNotePreferences(note.path, result.data.path);
       await refreshWorkspace();
       if (shouldReopen) {
         await openNote(result.data.path);
@@ -2310,6 +2342,9 @@ export function App() {
         key={note.path}
         note={note}
         selected={note.path === selectedNotePath}
+        isFavorite={isFavoriteNote(note.path)}
+        isFavoriteSaving={isFavoriteSaving}
+        onToggleFavorite={() => void toggleFavoriteNote(note.path)}
         isRenaming={note.path === editingNotePath}
         noteNameDraft={noteNameDraft}
         isMoveMenuOpen={note.path === activeMoveNotePath}
@@ -2551,6 +2586,29 @@ export function App() {
                     </div>
                   ) : null}
 
+                  {!hasActiveSearch && favoriteNotes.length > 0 ? (
+                    <section className="sidebar-favorites" aria-label="Favorite notes">
+                      <div className="section-heading sidebar-section-heading">
+                        <h2>Favorites</h2><span className="section-count">{favoriteNotes.length}</span>
+                        <button type="button" className="section-toggle" aria-label={isFavoritesExpanded ? "Collapse favorites" : "Expand favorites"}
+                          aria-expanded={isFavoritesExpanded} onClick={() => setIsFavoritesExpanded((expanded) => !expanded)}>
+                          {isFavoritesExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                        </button>
+                      </div>
+                      {isFavoritesExpanded ? <div className="favorite-note-list">
+                        {favoriteNotes.map((note) => (
+                          <div className="favorite-note-row" key={note.path} data-active={note.path === selectedNotePath}>
+                            <button type="button" className="favorite-note-open" aria-label={`Open favorite ${noteNameFromPath(note.path)}`}
+                              title={note.path} disabled={isBusy} onClick={() => void openNote(note.path)}>
+                              <Star size={14} fill="currentColor" aria-hidden="true" /><span className="truncate">{noteNameFromPath(note.path)}</span>
+                            </button>
+                            <button type="button" className="favorite-note-remove" aria-label={`Remove ${noteNameFromPath(note.path)} from favorites`}
+                              title="Remove from favorites" disabled={isBusy || isFavoriteSaving} onClick={() => void toggleFavoriteNote(note.path)}><X size={12} /></button>
+                          </div>
+                        ))}
+                      </div> : null}
+                    </section>
+                  ) : null}
                   <div className="section-heading sidebar-section-heading">
                     <h2>{hasActiveSearch ? "Search results" : "Folders"}</h2>
                     {hasActiveSearch ? (
@@ -2914,6 +2972,12 @@ export function App() {
             </div>
             {selectedNoteContent ? (
               <div className="app-editor-header-actions flex items-center gap-2">
+                <button type="button" className="icon-button" aria-label={isFavoriteNote(selectedNoteContent.path) ? "Remove from favorites" : "Add to favorites"}
+                  aria-pressed={isFavoriteNote(selectedNoteContent.path)} disabled={isBusy || isFavoriteSaving}
+                  title={isFavoriteNote(selectedNoteContent.path) ? "Remove from favorites" : "Add to favorites"}
+                  onClick={() => void toggleFavoriteNote(selectedNoteContent.path)}>
+                  <Star size={17} fill={isFavoriteNote(selectedNoteContent.path) ? "currentColor" : "none"} />
+                </button>
                 <button type="button" className="icon-button" aria-label={isNoteLocked ? "Unlock note" : "Lock note"}
                   aria-pressed={isNoteLocked} disabled={isBusy}
                   title={isNoteLocked ? "View only — unlock to edit" : "Lock note to make it view only"}
@@ -3889,6 +3953,9 @@ function FolderTreeRow({
 type NoteRowProps = {
   note: NoteSummary | SearchResult;
   selected: boolean;
+  isFavorite: boolean;
+  isFavoriteSaving: boolean;
+  onToggleFavorite: () => void;
   isRenaming: boolean;
   noteNameDraft: string;
   isMoveMenuOpen: boolean;
@@ -3906,6 +3973,9 @@ type NoteRowProps = {
 function NoteRow({
   note,
   selected,
+  isFavorite,
+  isFavoriteSaving,
+  onToggleFavorite,
   isRenaming,
   noteNameDraft,
   isMoveMenuOpen,
@@ -3960,7 +4030,7 @@ function NoteRow({
       ) : (
         <button type="button" className="note-open-area" onClick={onOpen}>
           <div className="flex items-center gap-2">
-            <FileText className="shrink-0" size={15} />
+            {isFavorite ? <Star className="shrink-0 note-favorite-star" size={15} fill="currentColor" aria-label="Favorite note" /> : <FileText className="shrink-0" size={15} />}
             <span className="truncate font-medium" title={noteName}>
               {noteName}
             </span>
@@ -3975,6 +4045,11 @@ function NoteRow({
           onToggle={onToggleMove}
           onContextMenu={onToggleMove}
         >
+          <button type="button" role="menuitem" className="context-menu-item" disabled={isBusy || isFavoriteSaving}
+            onClick={() => { onToggleMove(); onToggleFavorite(); }}>
+            <Star size={14} fill={isFavorite ? "currentColor" : "none"} />
+            <span>{isFavorite ? "Remove from favorites" : "Add to favorites"}</span>
+          </button>
           <button
             type="button"
             role="menuitem"

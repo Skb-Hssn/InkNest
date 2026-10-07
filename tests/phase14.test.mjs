@@ -136,6 +136,7 @@ test("phase 14 normalizes invalid settings and persists valid updates", async ()
       showWordCount: false,
       sidebarVisible: true,
       lockedNoteKeys: [],
+      favoriteNoteKeys: [],
       lastWorkspacePath: null,
       recentWorkspaces: [path.resolve("/workspace/one")]
     });

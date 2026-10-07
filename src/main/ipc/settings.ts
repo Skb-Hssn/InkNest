@@ -25,6 +25,10 @@ export function registerSettingsHandlers() {
 
   registerIpcHandler<AppSettings>(ipcChannels.settings.save, (payload) => {
     assertPlainObject(payload);
+    if (payload.favoriteNoteKeys !== undefined &&
+        (!Array.isArray(payload.favoriteNoteKeys) || payload.favoriteNoteKeys.some((key) => typeof key !== "string"))) {
+      throw new Error("favoriteNoteKeys must be an array of strings.");
+    }
 
     if (payload.lockedNoteKeys !== undefined &&
         (!Array.isArray(payload.lockedNoteKeys) || payload.lockedNoteKeys.some((key) => typeof key !== "string"))) {
@@ -35,6 +39,9 @@ export function registerSettingsHandlers() {
       const nextSettings = {
         ...settings
       };
+      if (payload.favoriteNoteKeys !== undefined) {
+        nextSettings.favoriteNoteKeys = [...new Set(payload.favoriteNoteKeys as string[])];
+      }
 
       if (payload.lockedNoteKeys !== undefined) {
         nextSettings.lockedNoteKeys = [...new Set(payload.lockedNoteKeys as string[])];

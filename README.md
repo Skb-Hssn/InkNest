@@ -145,6 +145,15 @@ filter and opens that folder in the normal tree. Results have no content preview
 Use Find inside the current note (`Ctrl+F`) or Find and Replace (`Ctrl+H`) to
 search its contents. The separate tag filter can still narrow the file list.
 
+## Favorite notes
+
+Use the star in the note toolbar or **Add to favorites** in a file's menu to
+bookmark a note. Favorites appear in a collapsible sidebar section with quick
+access and removal controls. They are remembered per workspace after restarting,
+follow note and folder renames inside InkNest, and return when a trashed note is
+restored. The Favorites section is hidden while filtering the file list so search
+continues to show only matching files and folders.
+
 ## Note locks
 
 Use the lock button beside the note's search controls to make a note view-only.

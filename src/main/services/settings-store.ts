@@ -21,6 +21,7 @@ export const defaultSettings: AppSettings = {
   showWordCount: true,
   sidebarVisible: true,
   lockedNoteKeys: [],
+  favoriteNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -101,6 +102,8 @@ function normalizeSettings(value: unknown): AppSettings {
     sidebarVisible,
     lockedNoteKeys: Array.isArray(candidate.lockedNoteKeys)
       ? [...new Set(candidate.lockedNoteKeys.filter((key): key is string => typeof key === "string"))] : [],
+    favoriteNoteKeys: Array.isArray(candidate.favoriteNoteKeys)
+      ? [...new Set(candidate.favoriteNoteKeys.filter((key): key is string => typeof key === "string"))] : [],
     lastWorkspacePath,
     recentWorkspaces: Array.from(new Set(recentWorkspaces)).slice(
       0,
