@@ -589,6 +589,12 @@ export function App() {
   );
   const notes = fileModel?.notes ?? [];
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
+  const matchingFolders = useMemo(() => {
+    const terms = searchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    return terms.length ? folders.filter((folder) => folder.path !== "." &&
+      terms.every((term) => folder.name.toLocaleLowerCase().includes(term)))
+      .sort((a, b) => a.name.localeCompare(b.name)) : [];
+  }, [folders, searchQuery]);
   const displayedNotes: Array<NoteSummary | SearchResult> = useMemo(() => {
     const source = hasActiveSearch ? searchResults : notes;
     return [...source].sort((firstNote, secondNote) => {
@@ -599,6 +605,9 @@ export function App() {
   }, [hasActiveSearch, notes, searchResults]);
   const folderTree = useMemo(
     () => {
+      if (hasActiveSearch) return matchingFolders.map((folder): FolderTreeNode => ({
+        ...folder, children: [], notes: [], depth: 0, noteCount: 0
+      }));
       const tree = buildFolderTree(folders, displayedNotes);
       if (workspace.initialNotePaths && tree[0]) {
         const order = ["Notes", "Projects", "Journal", "Archive"];
@@ -610,7 +619,7 @@ export function App() {
       }
       return tree;
     },
-    [displayedNotes, folders, workspace.initialNotePaths]
+    [displayedNotes, folders, workspace.initialNotePaths, hasActiveSearch, matchingFolders]
   );
   const visibleExpandedFolderPaths = useMemo(
     () =>
@@ -781,6 +790,7 @@ export function App() {
 
     window.inknest.search.query({
       query: searchQuery,
+      scope: "name",
       tag: selectedTag || undefined
     })
       .then((result) => {
@@ -2295,6 +2305,38 @@ export function App() {
   }
 
   function renderSidebarTree() {
+    const renderNote = (note: NoteSummary | SearchResult) => (
+      <NoteRow
+        key={note.path}
+        note={note}
+        selected={note.path === selectedNotePath}
+        isRenaming={note.path === editingNotePath}
+        noteNameDraft={noteNameDraft}
+        isMoveMenuOpen={note.path === activeMoveNotePath}
+        isBusy={isBusy}
+        onOpen={() => {
+          if ("snippet" in note) {
+            openSearchResult(note);
+          } else {
+            void openNote(note.path);
+          }
+        }}
+        onRename={() => startRenamingNote(note)}
+        onRenameDraftChange={setNoteNameDraft}
+        onSubmitRename={() => void renameNote(note, noteNameDraft)}
+        onCancelRename={() => {
+          setEditingNotePath(null);
+          setNoteNameDraft("");
+        }}
+        onDuplicate={() => void duplicateNote(note)}
+        onToggleMove={() =>
+          setActiveMoveNotePath((currentPath) =>
+            currentPath === note.path ? null : note.path
+          )
+        }
+        onDelete={() => void deleteNote(note)}
+      />
+    );
     return (
       <div className="sidebar-tree">
         <div className="space-y-1" aria-label="Folder tree">
@@ -2310,6 +2352,11 @@ export function App() {
             onSelect={(folderPath) => {
               setActiveMoveNotePath(null);
               setSelectedFolderPath(folderPath);
+              if (hasActiveSearch) {
+                setSearchQuery("");
+                setSelectedTag("");
+                setExpandedFolderPaths((paths) => new Set([...paths, folderPath, ...getAncestorFolderPaths(folderPath)]));
+              }
             }}
             onToggle={toggleFolder}
             onStartRename={startRenamingFolder}
@@ -2327,39 +2374,9 @@ export function App() {
             onNewNote={(folderPath) => void createNote(folderPath)}
             onNewFolder={(parentPath) => void createFolder(parentPath)}
             onDelete={(folder) => void deleteFolder(folder)}
-            renderNote={(note) => (
-              <NoteRow
-                key={note.path}
-                note={note}
-                selected={note.path === selectedNotePath}
-                isRenaming={note.path === editingNotePath}
-                noteNameDraft={noteNameDraft}
-                isMoveMenuOpen={note.path === activeMoveNotePath}
-                isBusy={isBusy}
-                onOpen={() => {
-                  if ("snippet" in note) {
-                    openSearchResult(note);
-                  } else {
-                    void openNote(note.path);
-                  }
-                }}
-                onRename={() => startRenamingNote(note)}
-                onRenameDraftChange={setNoteNameDraft}
-                onSubmitRename={() => void renameNote(note, noteNameDraft)}
-                onCancelRename={() => {
-                  setEditingNotePath(null);
-                  setNoteNameDraft("");
-                }}
-                onDuplicate={() => void duplicateNote(note)}
-                onToggleMove={() =>
-                  setActiveMoveNotePath((currentPath) =>
-                    currentPath === note.path ? null : note.path
-                  )
-                }
-                onDelete={() => void deleteNote(note)}
-              />
-            )}
+            renderNote={renderNote}
           />
+          {hasActiveSearch ? <div className="space-y-1 sidebar-name-results">{displayedNotes.map(renderNote)}</div> : null}
         </div>
       </div>
     );
@@ -2450,7 +2467,7 @@ export function App() {
                     <Search size={16} />
                     <input
                       type="search"
-                      placeholder="Search notes"
+                      placeholder="Search files and folders"
                       aria-label="Search notes"
                       value={searchQuery}
                       onChange={(event) => setSearchQuery(event.target.value)}
@@ -2537,7 +2554,7 @@ export function App() {
                   <div className="section-heading sidebar-section-heading">
                     <h2>{hasActiveSearch ? "Search results" : "Folders"}</h2>
                     {hasActiveSearch ? (
-                      <span className="section-count">{displayedNotes.length}</span>
+                      <span className="section-count">{displayedNotes.length + matchingFolders.length}</span>
                     ) : null}
                     <button
                       type="button"
@@ -2551,11 +2568,11 @@ export function App() {
                   </div>
                   {isFoldersExpanded ? renderSidebarTree() : null}
 
-                  {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 ? (
+                  {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 && matchingFolders.length === 0 ? (
                     <div className="sidebar-empty-state">
                       <EmptyState
                         icon={<Search size={18} />}
-                        title="No matching notes"
+                        title="No matching files or folders"
                         description="Try a different word or clear the active tag."
                       />
                     </div>
@@ -3944,18 +3961,6 @@ function NoteRow({
               {noteName}
             </span>
           </div>
-          {"snippet" in note ? (
-            <p className="mt-1 truncate text-xs text-neutral-500">{note.snippet}</p>
-          ) : null}
-          {"tags" in note && note.tags.length > 0 ? (
-            <div className="note-tag-list" aria-label="Note tags">
-              {note.tags.map((tag) => (
-                <span key={tag} className="note-tag">
-                  #{tag}
-                </span>
-              ))}
-            </div>
-          ) : null}
         </button>
       )}
 

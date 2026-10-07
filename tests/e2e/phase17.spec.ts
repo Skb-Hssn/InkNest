@@ -96,7 +96,7 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
       .toContain("Release validation content.");
 
     const search = window.getByRole("searchbox", { name: "Search notes" });
-    await search.fill("Release validation content");
+    await search.fill("Release");
     const searchResult = window.locator(".note-open-area").first();
     await expect(searchResult).toBeVisible();
     await searchResult.click();

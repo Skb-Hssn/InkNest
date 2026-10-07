@@ -115,6 +115,15 @@ tab (Enter to apply, Escape to cancel). Shift+F10 opens the menu from a focused
 tab, and arrow keys navigate its options.
 
 
+## Searching notes
+
+The sidebar search (`Ctrl+K`) matches file and folder names only, with partial and
+case-insensitive matching. Its filtered list hides unrelated entries and parent
+folders, and never matches note contents. Selecting a matching folder clears the
+filter and opens that folder in the normal tree. Results have no content previews.
+Use Find inside the current note (`Ctrl+F`) or Find and Replace (`Ctrl+H`) to
+search its contents. The separate tag filter can still narrow the file list.
+
 ## Note locks
 
 Use the lock button beside the note's search controls to make a note view-only.

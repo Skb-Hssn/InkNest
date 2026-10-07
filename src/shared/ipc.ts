@@ -227,6 +227,7 @@ export type SaveNotePayload = {
 export type SearchNotesPayload = {
   query?: string;
   tag?: string;
+  scope?: "all" | "name";
 };
 
 export type SearchResult = {

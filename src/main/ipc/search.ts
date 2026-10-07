@@ -23,7 +23,7 @@ export function registerSearchHandlers(
     const request = readSearchPayload(payload);
 
     await searchIndex.ensureWorkspace(workspaceRoot);
-    return searchIndex.search(request.query, request.tag);
+    return searchIndex.search(request.query, request.tag, request.scope);
   });
 
   registerIpcHandler<TagSummary[]>(ipcChannels.search.listTags, async () => {
@@ -35,9 +35,13 @@ export function registerSearchHandlers(
 }
 
 function readSearchPayload(payload: Record<string, unknown>): SearchNotesPayload {
+  if (payload.scope !== undefined && payload.scope !== "all" && payload.scope !== "name") {
+    throw invalidPayload("scope must be all or name.");
+  }
   return {
     query: readOptionalText(payload.query, "query") ?? "",
-    tag: readOptionalText(payload.tag, "tag")
+    tag: readOptionalText(payload.tag, "tag"),
+    scope: payload.scope as SearchNotesPayload["scope"]
   };
 }
 
@@ -52,4 +56,3 @@ function readOptionalText(value: unknown, fieldName: string) {
 
   return value.trim();
 }
-

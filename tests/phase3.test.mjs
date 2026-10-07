@@ -77,7 +77,7 @@ test("phase 3 workspace sidebar contains folders and nested note controls", asyn
 
   assertIncludesAll(appSource, [
     "Notes",
-    "No matching notes",
+    "No matching files or folders",
     "Untitled note",
     "Trash",
     "Trash is empty."

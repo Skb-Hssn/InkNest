@@ -81,7 +81,7 @@ test("phase 11 exposes search, tag, and current milestone contracts", async () =
     "window.inknest.search.query",
     "selectedTag",
     "Filter notes by tag",
-    "No matching notes",
+    "No matching files or folders",
     "snippet"
   ]) {
     assert.ok(app.includes(expected), `Expected renderer source to include ${expected}`);
@@ -126,6 +126,18 @@ test("phase 11 indexes frontmatter tags and searches title, body, path, and tags
     assert.equal(index.search("system-design")[0].title, "Storage Notes");
     assert.equal(index.search("", "database")[0].title, "Storage Notes");
     assert.match(index.search("storage")[0].snippet, /Database indexing/);
+    assert.deepEqual(index.search("storage", undefined, "name"), []);
+    assert.deepEqual(index.search("indexing", undefined, "name"), []);
+    assert.deepEqual(index.search("Projects", undefined, "name"), []);
+    assert.deepEqual(index.search("system-design", undefined, "name"), []);
+    assert.deepEqual(index.search(".md", undefined, "name"), []);
+    const namedResult = index.search(" DATAbaSE ", undefined, "name");
+    assert.equal(namedResult.length, 1);
+    assert.equal(namedResult[0].path, "Projects/Database.md");
+    assert.equal(namedResult[0].title, "Database");
+    assert.equal(namedResult[0].snippet, "");
+    assert.equal(index.search("data", "database", "name").length, 1);
+    assert.deepEqual(index.search("data", "unknown-tag", "name"), []);
 
     await writeFile(
       path.join(workspaceRoot, "Daily.md"),
