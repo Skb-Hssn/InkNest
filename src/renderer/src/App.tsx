@@ -310,6 +310,9 @@ export function App() {
   const [selectedFolderPath, setSelectedFolderPath] = useState(".");
   const [selectedNotePath, setSelectedNotePath] = useState<string | null>(null);
   const [openNotePaths, setOpenNotePaths] = useState<string[]>([]);
+  const [tabMenu, setTabMenu] = useState<{ path: string; left: number; top: number } | null>(null);
+  const [tabRename, setTabRename] = useState<{ path: string; name: string } | null>(null);
+  const tabMenuRef = useRef<HTMLDivElement | null>(null);
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
   const [editorMarkdown, setEditorMarkdown] = useState("");
   const [lastSavedMarkdown, setLastSavedMarkdown] = useState("");
@@ -534,6 +537,44 @@ export function App() {
       window.removeEventListener("keydown", closeActionMenus);
     };
   }, []);
+
+  useEffect(() => {
+    if (!tabMenu) return;
+    if (!openNotePaths.includes(tabMenu.path)) { setTabMenu(null); return; }
+    tabMenuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    const dismiss = (event: Event) => {
+      if (event.target instanceof Node && tabMenuRef.current?.contains(event.target)) return;
+      setTabMenu(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [tabMenu, openNotePaths]);
+
+  useEffect(() => {
+    setTabMenu(null);
+    setTabRename(null);
+  }, [workspace.path]);
+
+  function showTabMenu(notePath: string, left: number, top: number) {
+    if (isBusy || noteNavigationRef.current) return;
+    setTabRename(null);
+    setToolbarMenu(null);
+    setTabMenu({ path: notePath,
+      left: Math.max(8, Math.min(left, window.innerWidth - 238)),
+      top: Math.max(8, Math.min(top, window.innerHeight - 202)) });
+  }
+
+  function focusNoteTab(notePath: string) {
+    document.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach((tab) => {
+      if (tab.title === notePath) tab.focus();
+    });
+  }
 
   const workspaceRootName =
     fileModel?.workspace.name ??
@@ -1385,22 +1426,29 @@ export function App() {
     }
   }
 
-  async function closeNoteTab(notePath: string) {
+  async function closeNoteTabs(notePaths: string[]) {
     if (isBusy || noteNavigationRef.current) {
       return;
     }
     noteNavigationRef.current = true;
     setIsBusy(true);
+    setTabMenu(null);
+    setTabRename(null);
     try {
-      if (selectedNoteContentRef.current?.path === notePath && !(await flushCurrentNote())) {
+      const activePath = selectedNoteContentRef.current?.path;
+      if (activePath && notePaths.includes(activePath) && !(await flushCurrentNote())) {
         return;
       }
       noteNavigationRef.current = false;
-      await removeNoteTabs([notePath]);
+      await removeNoteTabs(notePaths);
     } finally {
       noteNavigationRef.current = false;
       setIsBusy(false);
     }
+  }
+
+  async function closeNoteTab(notePath: string) {
+    await closeNoteTabs([notePath]);
   }
 
   function openSearchResult(result: SearchResult) {
@@ -2703,6 +2751,30 @@ export function App() {
                 const name = noteNameFromPath(notePath);
                 return (
                   <div key={notePath} className="note-tab" data-active={isActive} role="presentation">
+                    {tabRename?.path === notePath ? (
+                      <form className="note-tab-rename" onSubmit={(event) => {
+                        event.preventDefault();
+                        const note = notes.find((note) => note.path === notePath);
+                        if (!note || !tabRename.name.trim()) {
+                          setWorkspaceError("Note title cannot be empty.");
+                          return;
+                        }
+                        const name = tabRename.name;
+                        setTabRename(null);
+                        void renameNote(note, name);
+                      }}>
+                        <input aria-label="Tab name" value={tabRename.name} autoFocus disabled={isBusy}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) => setTabRename({ path: notePath, name: event.target.value })}
+                          onBlur={() => setTabRename(null)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.preventDefault(); setTabRename(null);
+                              window.requestAnimationFrame(() => focusNoteTab(notePath));
+                            }
+                          }} />
+                      </form>
+                    ) : (
                     <button
                       type="button"
                       role="tab"
@@ -2714,6 +2786,10 @@ export function App() {
                       className="note-tab-select"
                       title={notePath}
                       aria-disabled={isBusy}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        showTabMenu(notePath, event.clientX, event.clientY);
+                      }}
                       onClick={() => {
                         if (!isBusy) {
                           void openNote(notePath);
@@ -2721,6 +2797,12 @@ export function App() {
                       }}
                       onKeyDown={async (event) => {
                         if (isBusy) {
+                          return;
+                        }
+                        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                          event.preventDefault();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          showTabMenu(notePath, rect.left, rect.bottom);
                           return;
                         }
                         const index = openNotePaths.indexOf(notePath);
@@ -2741,6 +2823,7 @@ export function App() {
                       <span className="truncate">{name}</span>
                       {isActive && isDirty ? <span className="note-tab-dirty" aria-label="Unsaved changes" /> : null}
                     </button>
+                    )}
                     <button
                       type="button"
                       className="note-tab-close"
@@ -2766,6 +2849,35 @@ export function App() {
               <Plus size={18} />
             </button>
           </div>
+          {tabMenu ? createPortal(
+            <div ref={tabMenuRef} className="toolbar-command-menu note-tab-context-menu" role="menu" aria-label="Tab options"
+              style={{ left: tabMenu.left, top: tabMenu.top }}
+              onContextMenu={(event) => event.preventDefault()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault(); event.stopPropagation(); setTabMenu(null); focusNoteTab(tabMenu.path);
+                  return;
+                }
+                if (event.key === "Tab") { setTabMenu(null); return; }
+                const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+                const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next = event.key === "ArrowDown" ? (index + 1) % items.length
+                  : event.key === "ArrowUp" ? (index - 1 + items.length) % items.length
+                    : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : null;
+                if (next !== null) { event.preventDefault(); items[next]?.focus(); }
+              }}>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || !notes.some((note) => note.path === tabMenu.path)}
+                onClick={() => { setTabRename({ path: tabMenu.path, name: noteNameFromPath(tabMenu.path) }); setTabMenu(null); }}><Edit3 size={15} />Rename</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy}
+                onClick={() => void closeNoteTabs([tabMenu.path])}><X size={15} />Close Tab</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || openNotePaths.length < 2}
+                onClick={() => void closeNoteTabs(openNotePaths.filter((path) => path !== tabMenu.path))}><X size={15} />Close Other Tabs</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy}
+                onClick={() => void closeNoteTabs(openNotePaths)}><X size={15} />Close All Tabs</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || openNotePaths.indexOf(tabMenu.path) === openNotePaths.length - 1}
+                onClick={() => void closeNoteTabs(openNotePaths.slice(openNotePaths.indexOf(tabMenu.path) + 1))}><X size={15} />Close Tabs to the Right</button>
+            </div>, document.body
+          ) : null}
           {/* The centered empty state replaces the old "Untitled note" header. */}
           <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
             <div className="app-editor-header-copy flex min-w-0 items-center gap-2">

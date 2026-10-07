@@ -1610,6 +1610,10 @@ input[type="checkbox"], input[type="radio"] { accent-color: var(--app-accent-sol
 .note-tab-select { font-size: 12px; padding-left: 16px; }
 .note-tab-select > svg { display: none; }
 .note-tab-dirty { background: var(--app-accent); }
+.toolbar-command-menu.note-tab-context-menu { min-width: 230px; }
+.note-tab-context-menu > button { display: flex; align-items: center; gap: 9px; }
+.note-tab-rename { display: flex; align-items: center; padding: 4px 6px; }
+.note-tab-rename input { width: 150px; padding: 3px 6px; border: 1px solid var(--app-accent); border-radius: 4px; background: var(--app-surface); color: var(--app-text); font: inherit; }
 .editor-pane[data-note-open="true"] .app-editor-header { display: contents; }
 .editor-pane[data-note-open="true"] .app-editor-header-copy { display: none; }
 .editor-pane[data-note-open="true"] .app-editor-header-actions {

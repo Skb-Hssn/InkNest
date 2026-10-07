@@ -107,6 +107,13 @@ missing files are skipped, and the first surviving tab becomes active if the
 previously active file is unavailable. Pending note edits and the latest tab
 session are saved before the window closes.
 
+Right-click a note tab for **Rename**, **Close Tab**, **Close Other Tabs**,
+**Close All Tabs**, and **Close Tabs to the Right**. These actions close tabs
+without deleting notes. Pending edits are saved before closing their tab; if
+saving is blocked, the tabs remain open. Rename edits the title directly in the
+tab (Enter to apply, Escape to cancel). Shift+F10 opens the menu from a focused
+tab, and arrow keys navigate its options.
+
 
 ## Note locks
 
