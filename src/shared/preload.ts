@@ -1,5 +1,8 @@
 import type {
   AppInfo,
+  WorkspaceSession,
+  SaveWorkspaceSessionPayload,
+  AppWindowState,
   AppSettings,
   CreateFolderPayload,
   CreateNotePayload,
@@ -40,6 +43,11 @@ import type {
 export type InkNestApi = {
   app: {
     getInfo: () => Promise<IpcResult<AppInfo>>;
+    getWindowState: () => Promise<IpcResult<AppWindowState>>;
+    minimizeWindow: () => Promise<IpcResult<AppWindowState>>;
+    toggleMaximizeWindow: () => Promise<IpcResult<AppWindowState>>;
+    closeWindow: () => Promise<IpcResult<{ closing: true }>>;
+    onWindowStateChanged: (listener: (state: AppWindowState) => void) => () => void;
     onPrepareToClose: (listener: () => void) => () => void;
     closeReady: () => void;
     closeCanceled: () => void;
@@ -49,6 +57,8 @@ export type InkNestApi = {
     choose: () => Promise<IpcResult<WorkspaceInfo>>;
     select: (path: string) => Promise<IpcResult<WorkspaceInfo>>;
     scan: () => Promise<IpcResult<WorkspaceFileModel>>;
+    getSession: () => Promise<IpcResult<WorkspaceSession | null>>;
+    saveSession: (payload: SaveWorkspaceSessionPayload) => Promise<IpcResult<WorkspaceSession>>;
     onChanged: (listener: (event: WorkspaceChangeEvent) => void) => () => void;
   };
   notes: {
@@ -87,6 +97,7 @@ export type InkNestApi = {
   settings: {
     get: () => Promise<IpcResult<AppSettings>>;
     save: (payload: SaveSettingsPayload) => Promise<IpcResult<AppSettings>>;
+    clearRecentWorkspaces: () => Promise<IpcResult<AppSettings>>;
   };
   links: {
     openExternal: (

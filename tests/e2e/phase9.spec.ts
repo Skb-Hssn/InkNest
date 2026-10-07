@@ -1,10 +1,9 @@
+import { test, toolbarButton } from "./fixtures";
 import {
   _electron as electron,
   expect,
   type Locator,
-  type Page,
-  test
-} from "@playwright/test";
+  type Page } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -95,12 +94,13 @@ test("phase 9 toolbar formatting updates the editor and saved Markdown", async (
       /toolbar-button-active/
     );
 
-    await window.getByRole("button", { name: "H3", exact: true }).click();
+    await (await toolbarButton(window, "H3")).click();
     await expect(editor.locator("h3")).toContainText("Toolbar text");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("### **Toolbar text**");
     const savedMarkdown = await readFile(notePath, "utf8");
     expect(savedMarkdown).toBe("### **Toolbar text**\n");
   } finally {
@@ -128,20 +128,20 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(codeBlock).toBeVisible();
     await expect(codeBlock.getByRole("button", { name: "Copy" })).toBeVisible();
 
-    await codeBlock.locator("code").evaluate((code) => {
-      code.textContent = "const value = 1;";
-      code.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "const value = 1;",
-          inputType: "insertText"
-        })
-      );
-    });
-    await codeBlock.getByRole("combobox", { name: "Code block language" }).selectOption(
-      "typescript"
-    );
+    await selectContents(codeBlock.locator("code"));
+    await editor.pressSequentially("const value = 1;");
+    await placeCaretAtEnd(codeBlock.locator("code"));
+    await editor.press("Enter");
+    await editor.press("Tab");
+    await editor.pressSequentially("indented");
+    await codeBlock.getByRole("combobox", { name: "Code block language" }).click();
+    await window.getByRole("searchbox", { name: "Search code languages" }).fill("typescript");
+    await window.getByRole("option", { name: "TypeScript", exact: true }).click();
     await expect(codeBlock.locator(".syntax-keyword")).toHaveText("const");
+
+    await placeCaretAtEnd(codeBlock.locator("code"));
+    await editor.press("Enter");
+    await editor.pressSequentially("continued");
 
     await placeCaretAtEnd(editor);
     await window.getByRole("button", { name: "Insert table", exact: true }).click();
@@ -150,18 +150,20 @@ test("phase 9 inserts and edits code blocks and tables", async ({}, testInfo) =>
     await expect(table.locator("th")).toHaveCount(2);
 
     await placeCaretAtEnd(table.locator("td").first());
-    await window.getByRole("button", { name: "Add table row", exact: true }).click();
+    await (await toolbarButton(window, "Add table row")).click();
     await expect(table.locator("tr")).toHaveCount(3);
-    await window.getByRole("button", { name: "Add table column", exact: true }).click();
+    await (await toolbarButton(window, "Add table column")).click();
     await expect(table.locator("tr").first().locator("th, td")).toHaveCount(3);
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("const value = 1;");
     const savedMarkdown = await readFile(notePath, "utf8");
 
-    expect(savedMarkdown).toContain("```typescript\nconst value = 1;\n```");
-    expect(savedMarkdown).toContain("| Column 1 | Column 2 |  |");
-    expect(savedMarkdown).toContain("| --- | --- | --- |");
+    expect(savedMarkdown).toContain(
+      "```typescript\nconst value = 1;\n    indented\n    continued\n```"
+    );
+    expect(savedMarkdown).toMatch(/\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|\s*:?-+:?\s*\|/);
   } finally {
     await app.close();
   }
@@ -210,7 +212,8 @@ test("phase 9 slash commands and link popover produce editable Markdown", async 
     await expect(link).toHaveAttribute("href", "https://example.com/edited");
 
     await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("[Edited docs](https://example.com/edited)");
     const savedMarkdown = await readFile(notePath, "utf8");
 
     expect(savedMarkdown).toContain("- [ ] Task");

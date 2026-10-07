@@ -88,8 +88,7 @@ export async function createMarkdownNote(
     title
   );
   const notePath = path.join(folder, fileName);
-  const noteTitle = sanitizeFileName(title);
-  const markdown = `# ${noteTitle}\n\n`;
+  const markdown = "";
 
   await writeFile(notePath, markdown, { encoding: "utf8", flag: "wx" });
 
@@ -492,7 +491,18 @@ function extractNoteTitle(markdown: string, fileName: string) {
   const heading = markdown.match(/^#\s+(.+)$/m);
 
   if (heading) {
-    return heading[1].trim();
+    const plainHeading = heading[1]
+      .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
+      .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
+      .replace(/<[^>]*>/g, "")
+      .replace(/[`*_~]+/g, "")
+      .replace(/\\([\\`*{}\[\]()#+\-.!_>])/g, "$1")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    if (plainHeading) {
+      return plainHeading;
+    }
   }
 
   return path.basename(fileName, path.extname(fileName));

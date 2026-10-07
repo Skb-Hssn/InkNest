@@ -81,6 +81,7 @@ test("phase 4 renderer shows workspace prompts, recent workspaces, and no direct
     "workspace.getActive()",
     "workspace.choose()",
     "workspace.select(workspacePath)",
+    "clearRecentWorkspaces",
     "Previous workspace missing",
     "Workspace access needed",
     "Recent workspaces",

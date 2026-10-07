@@ -1,0 +1,41 @@
+appId: io.github.skb-hssn.inknest
+productName: InkNest
+asar: true
+npmRebuild: false
+
+directories:
+  output: release
+  buildResources: resources
+
+files:
+  - out/**/*
+  - package.json
+  - '!node_modules/**/*'
+
+extraResources:
+  - from: resources/icon.png
+    to: icon.png
+
+linux:
+  target:
+    - target: deb
+      arch:
+        - x64
+  executableName: inknest
+  syncDesktopName: true
+  icon: resources/icon.png
+  category: Office
+  maintainer: Sakib Hassan <skbhssn.sh@gmail.com>
+  synopsis: Local-first Markdown notes
+  artifactName: '${name}_${version}_${arch}.${ext}'
+  desktop:
+    entry:
+      Name: InkNest
+      Comment: Write and organize local Markdown notes
+      Categories: Office;Utility;
+      Keywords: notes;markdown;writing;
+      StartupWMClass: io.github.skb-hssn.inknest
+
+deb:
+  packageName: inknest
+  recommends: []

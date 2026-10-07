@@ -1,5 +1,6 @@
 import path from "node:path";
 import { invalidPayload, workspaceRequired } from "./errors";
+import { isAccentColor } from "../../shared/accent-colors";
 
 export type ActiveWorkspaceState = {
   path: string | null;
@@ -31,6 +32,11 @@ export function assertTheme(value: unknown): "system" | "light" | "dark" {
   }
 
   throw invalidPayload("theme must be system, light, or dark.");
+}
+
+export function assertAccentColor(value: unknown) {
+  if (isAccentColor(value)) return value;
+  throw invalidPayload("accentColor must be forest, teal, blue, violet, rose, orange, amber, or graphite.");
 }
 
 export function assertFontSize(value: unknown) {
@@ -72,6 +78,13 @@ export function assertBoolean(value: unknown, fieldName: string) {
     throw invalidPayload(`${fieldName} must be a boolean.`);
   }
 
+  return value;
+}
+
+export function assertOutlineWidth(value: unknown) {
+  if (typeof value !== "number" || !Number.isInteger(value) || value < 180 || value > 420) {
+    throw invalidPayload("outlineWidth must be an integer between 180 and 420.");
+  }
   return value;
 }
 

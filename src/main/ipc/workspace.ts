@@ -1,6 +1,8 @@
+import { isSessionNotePath, normalizeWorkspaceSession, readWorkspaceSession, writeWorkspaceSession } from "../services/workspace-session-store";
+import { exampleNotePaths, getExampleWorkspacePath, prepareFirstLaunchWorkspace } from "../services/example-workspace";
 import { dialog } from "electron";
 import path from "node:path";
-import { ipcChannels, type WorkspaceFileModel, type WorkspaceInfo } from "../../shared/ipc";
+import { ipcChannels, type WorkspaceFileModel, type WorkspaceInfo, type WorkspaceSession } from "../../shared/ipc";
 import { readSettings, rememberWorkspace } from "../services/settings-store";
 import {
   createWorkspaceInfo,
@@ -23,16 +25,26 @@ export function registerWorkspaceHandlers(
   searchIndex?: InMemorySearchIndex,
   workspaceWatcher?: WorkspaceWatcher
 ) {
+  registerIpcHandler<WorkspaceSession | null>(ipcChannels.workspace.getSession, () =>
+    readWorkspaceSession(assertActiveWorkspace(activeWorkspace)));
+  registerIpcHandler<WorkspaceSession>(ipcChannels.workspace.saveSession, async (payload) => {
+    assertPlainObject(payload);
+    const root = assertActiveWorkspace(activeWorkspace);
+    if (path.resolve(assertString(payload.workspacePath, "workspacePath")) !== path.resolve(root))
+      throw invalidPayload("Session belongs to a different workspace.");
+    if (!Array.isArray(payload.openNotePaths) || !payload.openNotePaths.every(isSessionNotePath) ||
+        (payload.activeNotePath !== null && (typeof payload.activeNotePath !== "string" || !payload.openNotePaths.includes(payload.activeNotePath))))
+      throw invalidPayload("Invalid note session.");
+    const session = normalizeWorkspaceSession(payload)!;
+    return writeWorkspaceSession(root, session);
+  });
+
   registerIpcHandler<WorkspaceInfo>(ipcChannels.workspace.getActive, async () => {
     const settings = await readSettings();
 
     if (activeWorkspace.path) {
-      return createWorkspaceInfo(
-        activeWorkspace.path,
-        settings,
-        "ready",
-        "Workspace is ready."
-      );
+      const info = createWorkspaceInfo(activeWorkspace.path, settings, "ready", "Workspace is ready.");
+      return activeWorkspace.path === getExampleWorkspacePath() ? { ...info, initialNotePaths: exampleNotePaths } : info;
     }
 
     return createWorkspaceInfo(
@@ -92,6 +104,7 @@ export function registerWorkspaceHandlers(
 }
 
 export async function restoreLastWorkspace(activeWorkspace: ActiveWorkspaceState) {
+  await prepareFirstLaunchWorkspace();
   const settings = await readSettings();
 
   if (!settings.lastWorkspacePath) {

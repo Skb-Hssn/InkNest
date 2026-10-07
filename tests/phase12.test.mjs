@@ -58,8 +58,9 @@ test("phase 12 exposes import, asset, local-link, and placeholder contracts", as
     readText("src/main/services/asset-service.ts"),
     readText("src/main/ipc/links.ts"),
     readText("src/renderer/src/App.tsx"),
-    readText("src/renderer/src/markdown-editor.ts"),
-    readText("src/renderer/src/styles.css")
+    readText("src/renderer/src/editor/create-editor.ts"),
+    readText("src/renderer/src/editor/extensions/image-view.ts"),
+    readText("src/renderer/src/editor/editor.css")
   ]);
   const combined = sources.join("\n");
 

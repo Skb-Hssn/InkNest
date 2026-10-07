@@ -2,6 +2,7 @@ import { app } from "electron";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import type { AppSettings } from "../../shared/ipc";
+import { defaultAccentColor, isAccentColor } from "../../shared/accent-colors";
 
 const settingsFileName = "settings.json";
 const maxRecentWorkspaces = 5;
@@ -9,12 +10,18 @@ let settingsUpdateQueue: Promise<unknown> = Promise.resolve();
 
 export const defaultSettings: AppSettings = {
   theme: "system",
+  accentColor: defaultAccentColor,
   fontSize: 16,
   fontFamily: "system",
   autoSaveDelayMs: 750,
   lineWrap: true,
+  fullWidth: false,
+  showOutline: true,
+  outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
+  lockedNoteKeys: [],
+  favoriteNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -82,12 +89,21 @@ function normalizeSettings(value: unknown): AppSettings {
 
   return {
     theme,
+    accentColor: isAccentColor(candidate.accentColor) ? candidate.accentColor : defaultAccentColor,
     fontSize,
     fontFamily,
     autoSaveDelayMs,
     lineWrap,
+    fullWidth: typeof candidate.fullWidth === "boolean" ? candidate.fullWidth : defaultSettings.fullWidth,
+    showOutline: typeof candidate.showOutline === "boolean" ? candidate.showOutline : defaultSettings.showOutline,
+    outlineWidth: typeof candidate.outlineWidth === "number" && Number.isInteger(candidate.outlineWidth) &&
+      candidate.outlineWidth >= 180 && candidate.outlineWidth <= 420 ? candidate.outlineWidth : defaultSettings.outlineWidth,
     showWordCount,
     sidebarVisible,
+    lockedNoteKeys: Array.isArray(candidate.lockedNoteKeys)
+      ? [...new Set(candidate.lockedNoteKeys.filter((key): key is string => typeof key === "string"))] : [],
+    favoriteNoteKeys: Array.isArray(candidate.favoriteNoteKeys)
+      ? [...new Set(candidate.favoriteNoteKeys.filter((key): key is string => typeof key === "string"))] : [],
     lastWorkspacePath,
     recentWorkspaces: Array.from(new Set(recentWorkspaces)).slice(
       0,
@@ -140,5 +156,12 @@ export async function rememberWorkspace(workspacePath: string) {
         (recentPath) => recentPath !== resolvedWorkspacePath
       )
     ].slice(0, maxRecentWorkspaces)
+  }));
+}
+
+export async function clearRecentWorkspaces() {
+  return updateSettings((settings) => ({
+    ...settings,
+    recentWorkspaces: []
   }));
 }

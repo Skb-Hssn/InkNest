@@ -128,7 +128,7 @@ test("phase 7 folder service moves folders safely", async () => {
   }
 });
 
-test("phase 7 renderer exposes a collapsible folder tree and move menu", async () => {
+test("phase 7 renderer exposes a collapsible folder tree and folder actions", async () => {
   const appSource = await readText("src/renderer/src/App.tsx");
   const stylesSource = await readText("src/renderer/src/styles.css");
 
@@ -139,17 +139,18 @@ test("phase 7 renderer exposes a collapsible folder tree and move menu", async (
     "FolderTree",
     "FolderTreeRow",
     "toggleFolder",
-    "moveFolder",
-    "window.inknest.folders.move",
-    "Move folder",
-    "Move folder to parent",
-    "isFolderMoveTarget",
+    "createNote",
+    "createFolder",
+    "New note",
+    "New folder",
+    "context-menu-trigger",
+    "onContextMenu",
     "getAncestorFolderPaths"
   ]);
   assertIncludesAll(stylesSource, [
     ".tree-toggle-button",
     ".tree-count",
-    ".folder-move-menu",
+    ".context-menu",
     "--folder-depth"
   ]);
   assert.doesNotMatch(appSource, /from "node:fs"|from "fs"|from "electron"/);

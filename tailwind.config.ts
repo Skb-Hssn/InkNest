@@ -8,8 +8,8 @@ export default {
         ink: {
           50: "#f7f8f6",
           100: "#e7ece8",
-          500: "#3f6f5a",
-          700: "#25483a",
+          500: "rgb(var(--app-accent-rgb, 63 111 90) / <alpha-value>)",
+          700: "rgb(var(--app-accent-solid-rgb, 36 84 63) / <alpha-value>)",
           900: "#17251f"
         },
         ember: {

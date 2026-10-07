@@ -27,5 +27,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install headless window manager
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends openbox xvfb
+
       - name: Run release validation
-        run: xvfb-run -a npm run release-check
+        run: xvfb-run -a -s "-screen 0 1280x1024x24" sh -c 'openbox >/tmp/inknest-openbox.log 2>&1 & npm run release-check'
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-diagnostics
+          path: |
+            test-results/
+            /tmp/inknest-openbox.log
+          retention-days: 7

@@ -1,4 +1,6 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
+import { existsSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -51,49 +53,67 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
     await window.reload();
 
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
-    await window.getByRole("button", { name: "New note", exact: true }).first().click();
+    const workspaceRootRow = window.locator('[aria-label="Folder tree"] .tree-row').first();
+    await workspaceRootRow.hover();
+    await workspaceRootRow.getByRole("button", { name: "Folder actions" }).click();
+    await workspaceRootRow
+      .getByRole("menu", { name: "Folder options" })
+      .getByRole("menuitem", { name: "New note" })
+      .click();
 
     const editor = window.getByRole("textbox", { name: "Visual Markdown editor" });
     await expect(editor).toBeVisible();
-    const title = window.getByRole("textbox", { name: "Note title" });
+    const notePath = path.join(workspaceDir, "Release Smoke.md");
+    const createdNoteRow = window.locator(".note-row").filter({ hasText: "Untitled" }).first();
+    await createdNoteRow.hover();
+    await createdNoteRow.getByRole("button", { name: "Note actions" }).click();
+    await createdNoteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Rename" })
+      .click();
+    const title = window.getByRole("textbox", { name: "File name" });
     await title.fill("Release Smoke");
     await title.press("Enter");
-    await expect(window.getByText("Note renamed").first()).toBeVisible();
-    await expect(window.getByText("Release Smoke.md").first()).toBeVisible();
+    await expect.poll(() => existsSync(notePath)).toBe(true);
+    await expect(
+      window.locator(".note-row").filter({ hasText: "Release Smoke" }).first()
+    ).toBeVisible();
 
     const renamedEditor = window.getByRole("textbox", { name: "Visual Markdown editor" });
 
-    await renamedEditor.evaluate((editableElement) => {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = "Release validation content.";
-      editableElement.appendChild(paragraph);
-      editableElement.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "Release validation content.",
-          inputType: "insertText"
-        })
-      );
-    });
+    await renamedEditor.click();
+    await renamedEditor.press("Control+End");
+    await renamedEditor.press("Enter");
+    await renamedEditor.pressSequentially("Release validation content.");
 
-    await expect(window.getByText(/Unsaved changes/).first()).toBeVisible();
-    await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    const saveButton = window.getByRole("button", { name: "Save", exact: true });
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
-    const notePath = path.join(workspaceDir, "Release Smoke.md");
     await expect
       .poll(() => readFile(notePath, "utf8"), { timeout: 4000 })
       .toContain("Release validation content.");
 
     const search = window.getByRole("searchbox", { name: "Search notes" });
-    await search.fill("Release validation content");
+    await search.fill("Release");
     const searchResult = window.locator(".note-open-area").first();
     await expect(searchResult).toBeVisible();
     await searchResult.click();
 
-    await title.fill("Release Renamed");
-    await title.press("Enter");
-    await expect(window.getByText("Release Renamed.md").first()).toBeVisible();
+    const searchNoteRow = window.locator(".note-row").first();
+    await searchNoteRow.hover();
+    await searchNoteRow.getByRole("button", { name: "Note actions" }).click();
+    await searchNoteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Rename" })
+      .click();
+    const renamedTitle = window.getByRole("textbox", { name: "File name" });
+    await renamedTitle.fill("Release Renamed");
+    await renamedTitle.press("Enter");
+    const renamedNotePath = path.join(workspaceDir, "Release Renamed.md");
+    await expect.poll(() => existsSync(renamedNotePath)).toBe(true);
+    await expect.poll(() => readFile(renamedNotePath, "utf8")).toContain("Release validation content.");
 
     const exported = await window.evaluate(
       ({ sourcePath, destinationPath }) =>
@@ -120,12 +140,18 @@ test("phase 17 release smoke flow covers the core MVP acceptance path", async ({
       .toContain("Release validation content.");
 
     const noteRow = window.locator(".note-row").first();
+    await noteRow.hover();
+    await noteRow.getByRole("button", { name: "Note actions" }).click();
     window.once("dialog", (dialog) => dialog.accept());
-    await noteRow.getByRole("button", { name: "Delete" }).click();
-    await expect(window.getByText("Release Renamed.md").last()).toBeVisible();
-    await expect(window.getByRole("button", { name: "Restore note" })).toBeVisible();
-
-    await window.getByRole("button", { name: "Restore note" }).click();
+    await noteRow
+      .getByRole("menu", { name: "Note options" })
+      .getByRole("menuitem", { name: "Delete" })
+      .click();
+    await expect.poll(() => existsSync(renamedNotePath)).toBe(false);
+    const restoreButton = window.getByRole("button", { name: "Restore note" });
+    await expect(restoreButton).toBeVisible();
+    await expect(restoreButton).toBeEnabled();
+    await restoreButton.click();
     await expect(window.locator(".note-open-area").first()).toBeVisible();
   } finally {
     await app.close();

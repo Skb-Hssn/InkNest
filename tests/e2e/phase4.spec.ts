@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -57,17 +58,50 @@ test("phase 4 selects a workspace and persists it in settings", async ({
       ok: true,
       data: {
         theme: "system",
+        accentColor: "forest",
+        fullWidth: false,
+        showOutline: true,
+        outlineWidth: 232,
         fontSize: 16,
         fontFamily: "system",
         autoSaveDelayMs: 750,
         lineWrap: true,
         showWordCount: true,
         sidebarVisible: true,
+        lockedNoteKeys: [],
+        favoriteNoteKeys: [],
         lastWorkspacePath: workspaceDir,
         recentWorkspaces: [workspaceDir]
       }
     });
     expect(activeWorkspace).toEqual(selectedWorkspace);
+
+    const recentWorkspaces = window.locator("details.collapsible-section").filter({
+      hasText: "Recent workspaces"
+    });
+    const recentWorkspaceSection = recentWorkspaces.locator("..");
+    await expect(recentWorkspaces).toBeVisible();
+    await expect(recentWorkspaces).toHaveAttribute("open", "");
+    const recentWorkspaceActions = recentWorkspaceSection.getByRole("button", {
+      name: "Recent workspaces actions"
+    });
+    await recentWorkspaces.locator("summary").hover();
+    await recentWorkspaceActions.click();
+    await expect(
+      recentWorkspaceSection.getByRole("menu", { name: "Recent workspaces options" })
+    ).toBeVisible();
+    await recentWorkspaceSection
+      .getByRole("menuitem", { name: "Clear recent workspaces" })
+      .click();
+    await expect(recentWorkspaces).toHaveCount(0);
+
+    const clearedWorkspace = await window.evaluate(() =>
+      window.inknest.workspace.getActive()
+    );
+    expect(clearedWorkspace).toMatchObject({
+      ok: true,
+      data: { recentWorkspaces: [] }
+    });
   } finally {
     await app.close();
   }
@@ -109,7 +143,7 @@ test("phase 4 restores the last workspace after restart", async ({
         lastWorkspacePath: workspaceDir
       }
     });
-    await expect(secondWindow.getByText(workspaceDir).first()).toBeVisible();
+    await expect(secondWindow.locator(".status-bar-path")).toHaveText(workspaceDir);
   } finally {
     await secondApp.close();
   }
@@ -156,7 +190,12 @@ test("phase 4 shows a clear missing-workspace state on startup", async ({
       }
     });
     await expect(window.getByText("Previous workspace missing")).toBeVisible();
-    await expect(window.getByText(missingWorkspace).first()).toBeVisible();
+    await window
+      .locator("details.collapsible-section")
+      .filter({ hasText: "Recent workspaces" })
+      .locator("summary")
+      .click();
+    await expect(window.locator(".recent-workspace-row")).toHaveAttribute("title", missingWorkspace);
   } finally {
     await app.close();
   }

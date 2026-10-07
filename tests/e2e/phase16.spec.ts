@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { mkdir } from "node:fs/promises";
 
 const electronLaunchArgs = [
@@ -30,7 +31,7 @@ test("phase 16 opens the command palette and routes keyboard actions", async ({}
     const window = await app.firstWindow();
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
 
-    await window.keyboard.press("Control+k");
+    await window.keyboard.press("Control+Shift+k");
     const palette = window.getByRole("dialog", { name: "Command palette" });
     const input = window.getByRole("combobox", { name: "Command palette search" });
 
@@ -46,7 +47,7 @@ test("phase 16 opens the command palette and routes keyboard actions", async ({}
     await window.keyboard.press("/");
     await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeFocused();
     await expect(window.getByText("Workspace overview")).toBeVisible();
-    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("0 words · 0 characters", { exact: true })).toBeVisible();
   } finally {
     await app.close();
   }
@@ -63,7 +64,7 @@ test("phase 16 runs workspace actions from the command palette and adapts its la
     await window.reload();
     await expect(window.getByRole("heading", { name: "InkNest", exact: true })).toBeVisible();
 
-    await window.keyboard.press("Control+k");
+    await window.keyboard.press("Control+Shift+k");
     const input = window.getByRole("combobox", { name: "Command palette search" });
     await input.fill("create new note");
     await input.press("Enter");
@@ -72,12 +73,53 @@ test("phase 16 runs workspace actions from the command palette and adapts its la
     await window.setViewportSize({ width: 800, height: 600 });
     await expect.poll(() =>
       window.evaluate(() => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns)
-    ).not.toContain("300px");
+    ).toContain("232px");
 
     await window.setViewportSize({ width: 1280, height: 800 });
     await expect.poll(() =>
       window.evaluate(() => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns)
-    ).toContain("300px");
+    ).toContain("232px");
+  } finally {
+    await app.close();
+  }
+});
+
+test("phase 16 keeps the default dark desktop layout compact and readable", async ({}, testInfo) => {
+  const workspaceDir = testInfo.outputPath("workspace");
+  await mkdir(workspaceDir, { recursive: true });
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    await window.evaluate((workspacePath) => window.inknest.workspace.select(workspacePath), workspaceDir);
+    await window.evaluate(() => window.inknest.settings.save({ theme: "dark" }));
+    await window.reload();
+    await window.setViewportSize({ width: 1280, height: 800 });
+    await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "New note", exact: true })).toHaveCount(0);
+
+    const metrics = await window.evaluate(() => {
+      const editorHeader = document.querySelector<HTMLElement>(".app-editor-header")!;
+      const headerCopy = document.querySelector<HTMLElement>(".app-editor-header-copy")!;
+      const headerRect = editorHeader.getBoundingClientRect();
+
+      return {
+        headerHeight: headerRect.height,
+        headerContainsCopy:
+          headerCopy.getBoundingClientRect().left >= headerRect.left &&
+          headerCopy.getBoundingClientRect().right <= headerRect.right,
+        hasToolbar: Boolean(document.querySelector(".markdown-toolbar")),
+        hasImportButton: Array.from(document.querySelectorAll<HTMLButtonElement>("button"))
+          .some((button) => button.textContent?.trim() === "Import")
+      };
+    });
+
+    expect(metrics).toMatchObject({
+      headerHeight: 56,
+      headerContainsCopy: true,
+      hasToolbar: false,
+      hasImportButton: false,
+    });
   } finally {
     await app.close();
   }

@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 
 const electronLaunchArgs = [
   ".",
@@ -33,33 +34,34 @@ test("phase 3 renders the static workspace, notes, editor, and status layout", a
     await expect(
       window.getByRole("heading", { name: "InkNest", exact: true })
     ).toBeVisible();
+    await expect(window.getByRole("button", { name: "Minimize window" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Maximize window" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Close window" })).toBeVisible();
     await expect(
-      window.getByRole("button", { name: /No workspace Local Markdown/ })
+      window.getByRole("button", { name: "No workspace", exact: true })
     ).toBeVisible();
-    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
     await expect(
       window.getByRole("heading", { name: "Folders", exact: true })
     ).toBeVisible();
     await expect(window.getByText("No workspace selected")).toBeVisible();
-    await expect(window.getByText("No search results")).toBeVisible();
-    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
-
     await expect(
-      window.getByRole("heading", { name: "Notes", exact: true })
+      window.locator('[aria-label="Folder tree"] .tree-open-area').first()
+    ).toHaveText(/Workspace/);
+    await expect(
+      window.locator('[aria-label="Folder tree"] .tree-open-area').first()
     ).toBeVisible();
-    await expect(window.getByRole("button", { name: "Workspace root" })).toBeVisible();
-    await expect(window.getByText("No notes here")).toBeVisible();
+    await expect(window.getByRole("searchbox", { name: "Search notes" })).toBeVisible();
+    await window.getByRole("button", { name: "Trash", exact: true }).click();
     await expect(window.getByText("Trash is empty.")).toBeVisible();
 
-    await expect(window.getByRole("heading", { name: "Untitled note" })).toBeVisible();
-    await expect(window.getByText("No file selected")).toBeVisible();
-    await expect(window.getByText("Saved").first()).toBeVisible();
+    await expect(window.getByRole("heading", { name: "Editor" })).toBeVisible();
     await expect(window.getByRole("heading", { name: "No note selected" })).toBeVisible();
     await expect(
-      window.getByText("Open or create a Markdown note to inspect its saved content here.")
+      window.getByText("Select a note from the list or create a new one to start writing.")
     ).toBeVisible();
     await expect(window.getByText("Open a local Markdown folder to begin")).toBeVisible();
-    await expect(window.getByText("No note - 0 words - 0 characters")).toBeVisible();
+    await expect(window.getByText("Workspace overview")).toBeVisible();
+    await expect(window.getByText("0 words · 0 characters")).toBeVisible();
   } finally {
     await app.close();
   }
@@ -73,23 +75,35 @@ test("phase 3 exposes visible static controls for future interactions", async ({
     const window = await app.firstWindow();
 
     await expect(window.getByRole("button", { name: "Toggle sidebar" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Collapse notes list" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Filter folders" })).toBeVisible();
-    await expect(window.getByRole("button", { name: "Sort notes" })).toBeVisible();
+    const foldersHeading = window.getByRole("heading", { name: "Folders", exact: true });
+    const foldersHeader = foldersHeading.locator("..");
+    await expect(foldersHeader.getByRole("button", { name: "Expand folders" })).toHaveCount(0);
+    await expect(foldersHeader.getByRole("button", { name: "Collapse folders" })).toBeVisible();
+    await expect(foldersHeader.getByRole("button", { name: "Filter folders" })).toHaveCount(0);
+    await expect(foldersHeader.locator('summary[aria-label="Sort notes"]')).toHaveCount(0);
+    await expect(foldersHeader.getByRole("button", { name: "New note" })).toHaveCount(0);
     await expect(window.getByRole("button", { name: "Settings" })).toBeVisible();
+    await expect(window.getByRole("button", { name: "Open command palette" })).toHaveCount(0);
+    await expect(window.getByRole("button", { name: "New note", exact: true })).toHaveCount(0);
+    await expect(window.getByRole("button", { name: "New folder", exact: true })).toHaveCount(0);
+    await expect(window.getByRole("button", { name: "Import options" })).toHaveCount(0);
 
-    await expect(
-      window.getByRole("button", { name: "New note", exact: true }).first()
-    ).toBeVisible();
-    await expect(
-      window.getByRole("button", { name: "New folder", exact: true }).first()
-    ).toBeVisible();
+    await expect(window.locator(".markdown-toolbar")).not.toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
 
-    for (const action of ["H1", "B", "I", "List", "Link", "Image"]) {
-      await expect(
-        window.getByRole("button", { name: action, exact: true })
-      ).toBeVisible();
-    }
+test("phase 3 controls the frameless window from the in-app title bar", async ({}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    const maximize = window.getByRole("button", { name: "Maximize window" });
+    await maximize.click();
+    await expect(window.getByRole("button", { name: "Restore window" })).toBeVisible();
+    await window.getByRole("button", { name: "Restore window" }).click();
+    await expect(window.getByRole("button", { name: "Maximize window" })).toBeVisible();
   } finally {
     await app.close();
   }
@@ -119,8 +133,40 @@ test("phase 3 renderer receives the static layout phase through preload", async 
       hasProcess: false
     });
     await expect(
-      window.getByText("phase-17-release-validation")
+      window.locator('main.app-shell[data-build-phase="phase-17-release-validation"]')
     ).toBeVisible();
+  } finally {
+    await app.close();
+  }
+});
+
+test("phase 3 resizes the workspace sidebar with the drag handle", async ({}, testInfo) => {
+  const app = await launchInkNest(testInfo.outputPath("user-data"));
+
+  try {
+    const window = await app.firstWindow();
+    const handle = window.getByRole("separator", { name: "Resize workspace sidebar" });
+    const box = await handle.boundingBox();
+
+    expect(box).not.toBeNull();
+    if (!box) {
+      return;
+    }
+
+    const initialWidth = Number(await handle.getAttribute("aria-valuenow"));
+    const x = box.x + box.width / 2;
+    const y = box.y + box.height / 2;
+    await window.mouse.move(x, y);
+    await window.mouse.down();
+    await window.mouse.move(x + 80, y, { steps: 4 });
+    await window.mouse.up();
+
+    await expect.poll(() => handle.getAttribute("aria-valuenow")).toBe(String(initialWidth + 80));
+    await expect.poll(() =>
+      window.evaluate(
+        () => getComputedStyle(document.querySelector('[data-layout="app-layout-columns"]')!).gridTemplateColumns
+      )
+    ).toContain(`${initialWidth + 80}px`);
   } finally {
     await app.close();
   }

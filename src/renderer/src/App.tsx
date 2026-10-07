@@ -1,14 +1,11 @@
+import { createPortal } from "react-dom";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
-  type ClipboardEvent,
+  type PointerEvent as ReactPointerEvent,
   type FormEvent,
-  type KeyboardEvent,
-  type MouseEvent,
   type ReactNode,
-  forwardRef,
   useEffect,
-  useImperativeHandle,
   useMemo,
   useRef,
   useState
@@ -29,11 +26,10 @@ import {
   Eraser,
   FileText,
   FilePlus2,
+  FileOutput,
   Folder,
-  FolderInput,
   FolderOpen,
   FolderPlus,
-  Hash,
   Heading1,
   Heading2,
   Heading3,
@@ -43,21 +39,33 @@ import {
   Image,
   Italic,
   Link,
+  Leaf,
+  Lightbulb,
+  CircleUserRound,
   List,
   ListChecks,
-  ListFilter,
   ListOrdered,
+  ListTree,
+  LockKeyhole,
+  UnlockKeyhole,
+  Replace,
+  Maximize2,
+  MoreHorizontal,
   Minus,
+  Minimize2,
   PanelLeft,
-  PanelRightClose,
+  Plus,
   Quote,
   RotateCcw,
   Save,
   Search,
   Settings,
-  SlidersHorizontal,
   SquarePen,
+  Square,
   Strikethrough,
+  Star,
+  Sigma,
+  Radical,
   TableColumnsSplit,
   TableProperties,
   TableRowsSplit,
@@ -68,35 +76,26 @@ import type {
   DeletedNoteSummary,
   FolderSummary,
   NoteContent,
-  type WorkspaceChangeEvent,
+  WorkspaceChangeEvent,
   NoteSummary,
-  type ExportFormat,
-  type AppSettings,
-  type SaveSettingsPayload,
-  type SaveImagePayload,
+  ExportFormat,
+  AppSettings,
+  SaveSettingsPayload,
+  SaveImagePayload,
   SearchResult,
   TagSummary,
   WorkspaceFileModel,
-  WorkspaceInfo
+  WorkspaceInfo,
+  SaveWorkspaceSessionPayload
 } from "../../shared/ipc";
+import { accentColors, defaultAccentColor } from "../../shared/accent-colors";
 import {
-  applyMarkdownEditorCommand,
-  applySlashCommandAtSelection,
-  editorDomToMarkdown,
-  exitEditorBlockFromElement,
-  exitCurrentEditorBlock,
-  exitInlineAtomAtSelection,
-  handleListKeyAtSelection,
-  insertPlainTextAtSelection,
-  insertCodeIndentAtSelection,
-  isSelectionInsideCodeBlock,
-  moveTableSelection,
-  normalizeEmptyBlockAtSelection,
-  updateCodeBlockLanguageFromSelect,
+  MarkdownEditor,
+  type LinkDialogDetails,
   type MarkdownEditorCommand,
   type MarkdownEditorCommandOptions,
-  markdownToHtml
-} from "./markdown-editor";
+  type MarkdownEditorHandle
+} from "./editor";
 
 const initialWorkspace: WorkspaceInfo = {
   path: null,
@@ -108,18 +107,24 @@ const initialWorkspace: WorkspaceInfo = {
 };
 
 const rootFolder: FolderSummary = {
-  name: "Workspace root",
+  name: "Workspace",
   path: "."
 };
 
 const initialSettings: AppSettings = {
   theme: "system",
+  accentColor: defaultAccentColor,
   fontSize: 16,
   fontFamily: "system",
   autoSaveDelayMs: 750,
   lineWrap: true,
+  fullWidth: false,
+  showOutline: true,
+  outlineWidth: 232,
   showWordCount: true,
   sidebarVisible: true,
+  lockedNoteKeys: [],
+  favoriteNoteKeys: [],
   lastWorkspacePath: null,
   recentWorkspaces: []
 };
@@ -149,16 +154,6 @@ type LinkDialogState = {
     top: number;
   };
   error?: string;
-};
-
-type LinkDialogDetails = {
-  text: string;
-  url: string;
-  isEditing: boolean;
-  position?: {
-    left: number;
-    top: number;
-  };
 };
 
 function tableActionIcon(baseIcon: ReactNode, badgeIcon: ReactNode) {
@@ -205,11 +200,14 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "link", label: "Link", icon: <Link size={16} />, group: "links" },
   { id: "image", label: "Image", icon: <Image size={16} />, group: "media" },
   { id: "code-block", label: "Code block", icon: <Code2 size={16} />, group: "code" },
+  { id: "inline-math", label: "Inline math", icon: <Radical size={16} />, group: "insert" },
+  { id: "block-math", label: "Display math", icon: <Sigma size={16} />, group: "insert" },
   { id: "table", label: "Insert table", icon: <TableProperties size={16} />, group: "table" },
   { id: "table-add-row", label: "Add table row", icon: addRowIcon, group: "table" },
   { id: "table-delete-row", label: "Delete table row", icon: deleteRowIcon, group: "table" },
   { id: "table-add-column", label: "Add table column", icon: addColumnIcon, group: "table" },
   { id: "table-delete-column", label: "Delete table column", icon: deleteColumnIcon, group: "table" },
+  { id: "table-delete", label: "Delete table", icon: tableActionIcon(<TableProperties size={16} />, <Trash2 size={10} />), group: "table" },
   { id: "blockquote", label: "Quote", icon: <Quote size={16} />, group: "blocks" },
   { id: "callout-note", label: "Note callout", icon: <Quote size={16} />, group: "blocks" },
   { id: "callout-warning", label: "Warning callout", icon: <AlertTriangle size={16} />, group: "blocks" },
@@ -217,6 +215,8 @@ const toolbarPlaceholders: ToolbarCommand[] = [
   { id: "callout-success", label: "Success callout", icon: <Check size={16} />, group: "blocks" },
   { id: "divider", label: "Divider", icon: <Minus size={16} />, group: "insert" }
 ];
+
+const primaryToolbarOrder = ["bold", "italic", "strikethrough", "unordered-list", "ordered-list", "task-list", "blockquote", "callout-note", "link", "image", "code-block", "table", "block-math"];
 
 function getToolbarGroups(commands: ToolbarCommand[]) {
   return commands.reduce<Array<{ name: ToolbarCommand["group"]; commands: ToolbarCommand[] }>>(
@@ -254,6 +254,10 @@ function fileNameFromPath(path: string) {
   return path.split(/[\\/]/).pop() ?? "Image";
 }
 
+function noteNameFromPath(notePath: string) {
+  return fileNameFromPath(notePath).replace(/\.md$/i, "");
+}
+
 function fontFamilyCssValue(fontFamily: AppSettings["fontFamily"]) {
   if (fontFamily === "serif") {
     return "Georgia, Cambria, 'Times New Roman', serif";
@@ -282,12 +286,22 @@ type CommandPaletteCommand = {
 
 // Keep the debounce inside the product's 500ms-1000ms autosave range.
 const autoSaveDelayMs = 750;
+const sidebarMinWidth = 220;
+const sidebarMaxWidth = 480;
 
 export function App() {
   const [phase, setPhase] = useState("phase-16-accessibility-and-ui-polish");
-  const editorHandleRef = useRef<VisualMarkdownEditorHandle | null>(null);
+  const editorHandleRef = useRef<MarkdownEditorHandle | null>(null);
   const [settings, setSettings] = useState<AppSettings>(initialSettings);
+  const [sidebarWidth, setSidebarWidth] = useState(232);
+  const [isSidebarResizing, setIsSidebarResizing] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [toolbarMenu, setToolbarMenu] = useState<{ kind: "headings" | "more"; left: number; top: number } | null>(null);
+  const [isFoldersExpanded, setIsFoldersExpanded] = useState(true);
+  const [isFavoritesExpanded, setIsFavoritesExpanded] = useState(true);
+  const [isTrashExpanded, setIsTrashExpanded] = useState(false);
+  const [activeSidebarMenu, setActiveSidebarMenu] = useState<"recent" | "trash" | null>(null);
+  const [isEmptyTrashDialogOpen, setIsEmptyTrashDialogOpen] = useState(false);
   const [workspace, setWorkspace] = useState<WorkspaceInfo>(initialWorkspace);
   const [fileModel, setFileModel] = useState<WorkspaceFileModel | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -298,12 +312,17 @@ export function App() {
   const [trashNotes, setTrashNotes] = useState<DeletedNoteSummary[]>([]);
   const [selectedFolderPath, setSelectedFolderPath] = useState(".");
   const [selectedNotePath, setSelectedNotePath] = useState<string | null>(null);
+  const [openNotePaths, setOpenNotePaths] = useState<string[]>([]);
+  const [tabMenu, setTabMenu] = useState<{ path: string; left: number; top: number } | null>(null);
+  const [tabRename, setTabRename] = useState<{ path: string; name: string } | null>(null);
+  const tabMenuRef = useRef<HTMLDivElement | null>(null);
   const [selectedNoteContent, setSelectedNoteContent] = useState<NoteContent | null>(null);
   const [editorMarkdown, setEditorMarkdown] = useState("");
   const [lastSavedMarkdown, setLastSavedMarkdown] = useState("");
-  const [noteTitleDraft, setNoteTitleDraft] = useState("");
   const [activeMoveNotePath, setActiveMoveNotePath] = useState<string | null>(null);
   const [activeMoveFolderPath, setActiveMoveFolderPath] = useState<string | null>(null);
+  const [editingNotePath, setEditingNotePath] = useState<string | null>(null);
+  const [noteNameDraft, setNoteNameDraft] = useState("");
   const [editingFolderPath, setEditingFolderPath] = useState<string | null>(null);
   const [folderNameDraft, setFolderNameDraft] = useState("");
   const [expandedFolderPaths, setExpandedFolderPaths] = useState<Set<string>>(
@@ -312,6 +331,8 @@ export function App() {
   const [workspaceError, setWorkspaceError] = useState<string | null>(null);
   const [statusMessage, setStatusMessage] = useState("Ready");
   const [isBusy, setIsBusy] = useState(false);
+  const [isFavoriteSaving, setIsFavoriteSaving] = useState(false);
+  const favoriteSaveInFlightRef = useRef(false);
   const [isSaving, setIsSaving] = useState(false);
   const [saveState, setSaveState] = useState<SaveState>("saved");
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -320,12 +341,14 @@ export function App() {
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [commandPaletteQuery, setCommandPaletteQuery] = useState("");
   const [activeCommandIndex, setActiveCommandIndex] = useState(0);
+  const [isWindowMaximized, setIsWindowMaximized] = useState(false);
   const [linkDialog, setLinkDialog] = useState<LinkDialogState | null>(null);
   const [activeToolbarCommands, setActiveToolbarCommands] = useState<
     Set<MarkdownEditorCommand>
   >(() => new Set());
   const saveTimerRef = useRef<number | null>(null);
   const saveInFlightRef = useRef<Promise<boolean> | null>(null);
+  const pendingNoteSaveRef = useRef<{ path: string; markdown: string } | null>(null);
   const saveQueuedRef = useRef(false);
   const editorMarkdownRef = useRef(editorMarkdown);
   const lastSavedMarkdownRef = useRef(lastSavedMarkdown);
@@ -334,6 +357,60 @@ export function App() {
   const externalNoteChangeRef = useRef<ExternalNoteChange | null>(externalNoteChange);
   const commandPaletteInputRef = useRef<HTMLInputElement | null>(null);
   const pendingSettingsSavesRef = useRef<Set<Promise<unknown>>>(new Set());
+  const sidebarResizeStartRef = useRef<{ clientX: number; width: number } | null>(null);
+  const noteNavigationRef = useRef(false);
+  const [sessionReadyWorkspace, setSessionReadyWorkspace] = useState<string | null>(null);
+  const sessionSnapshotRef = useRef<SaveWorkspaceSessionPayload | null>(null);
+  const sessionSaveQueueRef = useRef<Promise<boolean>>(Promise.resolve(true));
+
+  if (sessionReadyWorkspace !== workspace.path) sessionSnapshotRef.current = null;
+  else if (workspace.path) sessionSnapshotRef.current = {
+    workspacePath: workspace.path, openNotePaths,
+    activeNotePath: selectedNotePath && openNotePaths.includes(selectedNotePath) ? selectedNotePath : openNotePaths[0] ?? null
+  };
+
+  function persistSession(snapshot = sessionSnapshotRef.current): Promise<boolean> {
+    if (!snapshot) return sessionSaveQueueRef.current;
+    const save = sessionSaveQueueRef.current.then(async () => {
+      const result = await window.inknest.workspace.saveSession(snapshot);
+      if (!result.ok) { setWorkspaceError(`Could not preserve the open note tabs: ${result.error.message}`); return false; }
+      setWorkspaceError((error) => error?.startsWith("Could not preserve the open note tabs") ? null : error);
+      return true;
+    }).catch(() => { setWorkspaceError("Could not preserve the open note tabs."); return false; });
+    sessionSaveQueueRef.current = save;
+    return save;
+  }
+
+  useEffect(() => {
+    if (workspace.path && sessionReadyWorkspace === workspace.path) void persistSession();
+  }, [workspace.path, sessionReadyWorkspace, openNotePaths, selectedNotePath]);
+
+  async function restoreWorkspaceSession(info: WorkspaceInfo, current = () => true) {
+    const model = await refreshWorkspace();
+    if (!current() || !model || model.workspace.path !== info.path) return;
+    const saved = await window.inknest.workspace.getSession();
+    if (!current()) return;
+    if (!saved.ok) setWorkspaceError(saved.error.message);
+    const session = saved.ok ? saved.data : null;
+    const existing = new Set(model.notes.map((note) => note.path));
+    const paths = (session?.openNotePaths ?? info.initialNotePaths ?? []).filter((notePath) => existing.has(notePath));
+    const results = await Promise.all(paths.map((notePath) => window.inknest.notes.read(notePath)));
+    if (!current()) return;
+    const restored = results.filter((result): result is { ok: true; data: NoteContent } => result.ok).map((result) => result.data);
+    setOpenNotePaths(restored.map((note) => note.path));
+    const active = restored.find((note) => note.path === session?.activeNotePath) ?? restored[0];
+    if (active) {
+      const folder = active.path.includes("/") ? active.path.slice(0, active.path.lastIndexOf("/")) : ".";
+      setSelectedFolderPath(folder);
+      setExpandedFolderPaths(new Set([".", ...getAncestorFolderPaths(folder), folder, ...(info.initialNotePaths ? ["Notes", "Projects"] : [])]));
+      applyNoteContent(active);
+    }
+    setSessionReadyWorkspace(info.path);
+  }
+
+  useEffect(() => {
+    document.getElementById("active-note-tab")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [selectedNotePath, openNotePaths]);
 
   editorMarkdownRef.current = editorMarkdown;
   lastSavedMarkdownRef.current = lastSavedMarkdown;
@@ -363,7 +440,7 @@ export function App() {
       }
     });
 
-    window.inknest.workspace.getActive().then((result) => {
+    window.inknest.workspace.getActive().then(async (result) => {
       if (!isMounted) {
         return;
       }
@@ -372,7 +449,9 @@ export function App() {
         setWorkspace(result.data);
 
         if (result.data.status === "ready") {
-          void refreshWorkspace();
+          setIsBusy(true);
+          try { await restoreWorkspaceSession(result.data, () => isMounted); }
+          finally { if (isMounted) setIsBusy(false); }
         }
       } else {
         setWorkspaceError(result.error.message);
@@ -388,19 +467,187 @@ export function App() {
     document.documentElement.dataset.theme = settings.theme;
   }, [settings.theme]);
 
+  useEffect(() => {
+    const color = accentColors.find((accent) => accent.id === settings.accentColor) ?? accentColors[0];
+    const root = document.documentElement;
+    root.dataset.accent = color.id;
+    root.style.setProperty("--app-accent-light-rgb", color.light.join(" "));
+    root.style.setProperty("--app-accent-dark-rgb", color.dark.join(" "));
+    root.style.setProperty("--app-accent-solid-rgb", color.solid.join(" "));
+  }, [settings.accentColor]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    window.inknest.app.getWindowState().then((result) => {
+      if (isMounted && result.ok) {
+        setIsWindowMaximized(result.data.isMaximized);
+      }
+    });
+
+    const unsubscribe = window.inknest.app.onWindowStateChanged((state) => {
+      if (isMounted) {
+        setIsWindowMaximized(state.isMaximized);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    function closeActionMenus(event: Event) {
+      if (event instanceof globalThis.KeyboardEvent) {
+        if (event.key !== "Escape") {
+          return;
+        }
+
+        setActiveMoveFolderPath(null);
+        setActiveMoveNotePath(null);
+        setActiveSidebarMenu(null);
+        setIsEmptyTrashDialogOpen(false);
+      }
+
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      const clickedMenu =
+        eventTarget?.closest(".action-menu") ?? null;
+      const clickedContextMenu =
+        eventTarget?.closest("[data-context-menu]") ?? null;
+
+      if (!eventTarget?.closest(".toolbar-menu-trigger, .toolbar-command-menu")) setToolbarMenu(null);
+      if (!clickedContextMenu) {
+        setActiveMoveFolderPath(null);
+        setActiveMoveNotePath(null);
+        setActiveSidebarMenu(null);
+      }
+
+      document
+        .querySelectorAll<HTMLDetailsElement>(".action-menu[open]")
+        .forEach((menu) => {
+          if (menu !== clickedMenu) {
+            menu.removeAttribute("open");
+          }
+        });
+    }
+
+    document.addEventListener("pointerdown", closeActionMenus);
+    document.addEventListener("click", closeActionMenus);
+    window.addEventListener("keydown", closeActionMenus);
+
+    return () => {
+      document.removeEventListener("pointerdown", closeActionMenus);
+      document.removeEventListener("click", closeActionMenus);
+      window.removeEventListener("keydown", closeActionMenus);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!tabMenu) return;
+    if (!openNotePaths.includes(tabMenu.path)) { setTabMenu(null); return; }
+    tabMenuRef.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    const dismiss = (event: Event) => {
+      if (event.target instanceof Node && tabMenuRef.current?.contains(event.target)) return;
+      setTabMenu(null);
+    };
+    document.addEventListener("pointerdown", dismiss);
+    document.addEventListener("scroll", dismiss, true);
+    window.addEventListener("resize", dismiss);
+    return () => {
+      document.removeEventListener("pointerdown", dismiss);
+      document.removeEventListener("scroll", dismiss, true);
+      window.removeEventListener("resize", dismiss);
+    };
+  }, [tabMenu, openNotePaths]);
+
+  useEffect(() => {
+    setTabMenu(null);
+    setTabRename(null);
+  }, [workspace.path]);
+
+  function showTabMenu(notePath: string, left: number, top: number) {
+    if (isBusy || noteNavigationRef.current) return;
+    setTabRename(null);
+    setToolbarMenu(null);
+    setTabMenu({ path: notePath,
+      left: Math.max(8, Math.min(left, window.innerWidth - 238)),
+      top: Math.max(8, Math.min(top, window.innerHeight - 202)) });
+  }
+
+  function focusNoteTab(notePath: string) {
+    document.querySelectorAll<HTMLButtonElement>('[role="tab"]').forEach((tab) => {
+      if (tab.title === notePath) tab.focus();
+    });
+  }
+
+  const workspaceRootName =
+    fileModel?.workspace.name ??
+    workspace.name ??
+    (workspace.path ? fileNameFromPath(workspace.path) : rootFolder.name);
   const folders = useMemo(
-    () => [rootFolder, ...(fileModel?.folders ?? [])],
-    [fileModel]
+    () => [
+      { ...rootFolder, name: workspaceRootName },
+      ...(fileModel?.folders ?? [])
+    ],
+    [fileModel, workspaceRootName]
   );
   const notes = fileModel?.notes ?? [];
-  const folderTree = useMemo(() => buildFolderTree(folders, notes), [folders, notes]);
-  const visibleNotes = notes.filter((note) => note.folderPath === selectedFolderPath);
+  const favoriteKeys = useMemo(() => new Set(settings.favoriteNoteKeys), [settings.favoriteNoteKeys]);
+  function isFavoriteNote(notePath: string) {
+    const root = workspace.path ?? workspace.lastWorkspacePath;
+    return root !== null && favoriteKeys.has(JSON.stringify([root, notePath]));
+  }
+  const favoriteNotes = useMemo(() => notes.filter((note) => isFavoriteNote(note.path))
+    .sort((a, b) => noteNameFromPath(a.path).localeCompare(noteNameFromPath(b.path))),
+    [notes, favoriteKeys, workspace.path, workspace.lastWorkspacePath]);
   const hasActiveSearch = searchQuery.trim().length > 0 || selectedTag.length > 0;
-  const displayedNotes: Array<NoteSummary | SearchResult> = hasActiveSearch
-    ? searchResults
-    : visibleNotes;
+  const matchingFolders = useMemo(() => {
+    const terms = searchQuery.trim().toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    return terms.length ? folders.filter((folder) => folder.path !== "." &&
+      terms.every((term) => folder.name.toLocaleLowerCase().includes(term)))
+      .sort((a, b) => a.name.localeCompare(b.name)) : [];
+  }, [folders, searchQuery]);
+  const displayedNotes: Array<NoteSummary | SearchResult> = useMemo(() => {
+    const source = hasActiveSearch ? searchResults : notes;
+    return [...source].sort((firstNote, secondNote) => {
+      return noteNameFromPath(firstNote.path).localeCompare(
+        noteNameFromPath(secondNote.path)
+      );
+    });
+  }, [hasActiveSearch, notes, searchResults]);
+  const folderTree = useMemo(
+    () => {
+      if (hasActiveSearch) return matchingFolders.map((folder): FolderTreeNode => ({
+        ...folder, children: [], notes: [], depth: 0, noteCount: 0
+      }));
+      const tree = buildFolderTree(folders, displayedNotes);
+      if (workspace.initialNotePaths && tree[0]) {
+        const order = ["Notes", "Projects", "Journal", "Archive"];
+        tree[0].children.sort((a, b) => order.indexOf(a.name) - order.indexOf(b.name));
+        for (const folder of tree[0].children) if (folder.name === "Notes") {
+          const notes = ["Ideas worth keeping", "Reading list", "Daily notes", "Untitled"];
+          folder.notes.sort((a, b) => notes.indexOf(noteNameFromPath(a.path)) - notes.indexOf(noteNameFromPath(b.path)));
+        }
+      }
+      return tree;
+    },
+    [displayedNotes, folders, workspace.initialNotePaths, hasActiveSearch, matchingFolders]
+  );
+  const visibleExpandedFolderPaths = useMemo(
+    () =>
+      hasActiveSearch
+        ? new Set(collectFolderTreePaths(folderTree))
+        : expandedFolderPaths,
+    [expandedFolderPaths, folderTree, hasActiveSearch]
+  );
   const selectedNote =
     notes.find((note) => note.path === selectedNotePath) ?? null;
+  const selectedNoteName = selectedNote ? noteNameFromPath(selectedNote.path) : null;
+  const selectedNoteLockKey = selectedNoteContent && workspace.path
+    ? JSON.stringify([workspace.path, selectedNoteContent.path]) : null;
+  const isNoteLocked = selectedNoteLockKey !== null && settings.lockedNoteKeys.includes(selectedNoteLockKey);
+  const isEditorDisabled = isBusy || isNoteLocked;
   const hasWorkspace = workspace.status === "ready" && workspace.path !== null;
   const isDirty = selectedNoteContent !== null && editorMarkdown !== lastSavedMarkdown;
   const saveStatusLabel = selectedNoteContent
@@ -412,6 +659,7 @@ export function App() {
           ? "Unsaved changes"
           : "Saved"
     : "No note";
+  const editorStatusLabel = statusMessage === "Ready" ? saveStatusLabel : statusMessage;
   const wordCount = editorMarkdown.trim()
     ? editorMarkdown.trim().split(/\s+/).length
     : 0;
@@ -422,16 +670,13 @@ export function App() {
     workspace.lastWorkspacePath ??
     "Open a local Markdown folder to begin";
   const currentFilePath = selectedNote?.path ?? selectedNoteContent?.path ?? workspacePath;
-  const selectedFolderLabel =
-    folders.find((folder) => folder.path === selectedFolderPath)?.name ??
-    selectedFolderPath;
   const workspacePromptTitle =
     workspace.status === "missing"
       ? "Previous workspace missing"
       : workspace.status === "permission-denied"
         ? "Workspace access needed"
         : "No workspace selected";
-  const currentMode = selectedNoteContent ? "Visual Markdown" : "Workspace overview";
+  const currentMode = selectedNoteContent ? "Visual editor" : "Workspace overview";
 
   const commandPaletteCommands = useMemo<CommandPaletteCommand[]>(
     () => [
@@ -490,21 +735,21 @@ export function App() {
         id: "export-markdown",
         label: "Export Markdown",
         description: "Save the current note as Markdown.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       },
       {
         id: "export-html",
         label: "Export HTML",
         description: "Save a readable HTML version of the current note.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       },
       {
         id: "export-pdf",
         label: "Export PDF",
         description: "Print the current note to PDF.",
-        icon: <FileText size={16} />,
+        icon: <FileOutput size={16} />,
         disabled: !selectedNoteContent || isBusy
       }
     ],
@@ -517,10 +762,6 @@ export function App() {
       `${command.label} ${command.description}`.toLocaleLowerCase().includes(query)
     );
   });
-
-  useEffect(() => {
-    setNoteTitleDraft(selectedNote?.title ?? "");
-  }, [selectedNote?.title]);
 
   useEffect(() => {
     if (!fileModel) {
@@ -562,6 +803,7 @@ export function App() {
 
     window.inknest.search.query({
       query: searchQuery,
+      scope: "name",
       tag: selectedTag || undefined
     })
       .then((result) => {
@@ -597,7 +839,8 @@ export function App() {
     const result = await window.inknest.workspace.scan();
 
     if (result.ok) {
-      setWorkspace(result.data.workspace);
+      setWorkspace((current) => ({ ...result.data.workspace,
+        ...(current.path === result.data.workspace.path && current.initialNotePaths ? { initialNotePaths: current.initialNotePaths } : {}) }));
       setFileModel(result.data);
       setWorkspaceError(null);
 
@@ -619,6 +862,11 @@ export function App() {
   }
 
   function applyNoteContent(note: NoteContent) {
+    setOpenNotePaths((currentPaths) =>
+      currentPaths.includes(note.path) ? currentPaths : [...currentPaths, note.path]
+    );
+    setLinkDialog(null);
+    setActiveToolbarCommands(new Set());
     selectedNoteContentRef.current = note;
     editorMarkdownRef.current = note.markdown;
     lastSavedMarkdownRef.current = note.markdown;
@@ -691,17 +939,37 @@ export function App() {
     }
 
     const openNotePath = selectedNoteContentRef.current?.path;
+    setOpenNotePaths((currentPaths) =>
+      currentPaths.filter((notePath) =>
+        notePath === openNotePath || !change.deletedPaths.includes(notePath)
+      )
+    );
     const noteWasDeleted = openNotePath
       ? change.deletedPaths.includes(openNotePath)
       : false;
     const noteWasChanged = openNotePath
       ? change.changedPaths.includes(openNotePath)
       : false;
-    const hasLocalChanges =
-      editorMarkdownRef.current !== lastSavedMarkdownRef.current;
-
+    syncEditorMarkdownSnapshot();
     if (openNotePath && (noteWasDeleted || noteWasChanged)) {
-      if (noteWasDeleted || hasLocalChanges) {
+      let ownSaveNotification = false;
+      if (noteWasChanged && !noteWasDeleted) {
+        const disk = await window.inknest.notes.read(openNotePath);
+        if (selectedNoteContentRef.current?.path !== openNotePath ||
+            (sessionSnapshotRef.current && sessionSnapshotRef.current.workspacePath !== change.workspacePath)) return;
+        const pending = pendingNoteSaveRef.current;
+        ownSaveNotification = disk.ok && (disk.data.markdown === lastSavedMarkdownRef.current ||
+          (pending?.path === openNotePath && disk.data.markdown === pending.markdown));
+      }
+      // A watcher can observe our atomic save before its IPC response arrives.
+      // Matching saved content is not a competing external edit.
+      if (ownSaveNotification) {
+        await refreshWorkspace();
+        return;
+      }
+      syncEditorMarkdownSnapshot();
+      const hasLocalChangesNow = editorMarkdownRef.current !== lastSavedMarkdownRef.current;
+      if (noteWasDeleted || hasLocalChangesNow) {
         setExternalNoteChange({
           kind: noteWasDeleted ? "deleted" : "changed",
           path: openNotePath
@@ -760,10 +1028,105 @@ export function App() {
     }
   }
 
+  async function clearRecentWorkspaces() {
+    setStatusMessage("Clearing recent workspaces");
+
+    const clearPromise = window.inknest.settings.clearRecentWorkspaces();
+    pendingSettingsSavesRef.current.add(clearPromise);
+
+    try {
+      const result = await clearPromise;
+
+      if (result.ok) {
+        setSettings(result.data);
+        setWorkspace((currentWorkspace) => ({
+          ...currentWorkspace,
+          recentWorkspaces: result.data.recentWorkspaces
+        }));
+        setStatusMessage("Recent workspaces cleared");
+        setWorkspaceError(null);
+        return true;
+      }
+
+      setWorkspaceError(result.error.message);
+      setStatusMessage("Recent workspaces could not be cleared");
+      return false;
+    } finally {
+      pendingSettingsSavesRef.current.delete(clearPromise);
+    }
+  }
+
+  function requestEmptyTrash() {
+    setActiveSidebarMenu(null);
+    setIsEmptyTrashDialogOpen(true);
+  }
+
+  async function emptyTrash() {
+    setIsEmptyTrashDialogOpen(false);
+
+    if (trashNotes.length === 0) {
+      setStatusMessage("Trash is already empty");
+      return;
+    }
+
+    setIsBusy(true);
+    setWorkspaceError(null);
+
+    let deletedCount = 0;
+    let errorMessage: string | null = null;
+
+    for (const note of trashNotes) {
+      const result = await window.inknest.notes.permanentlyDelete({
+        trashPath: note.trashPath,
+        confirmed: true
+      });
+
+      if (!result.ok) {
+        errorMessage = result.error.message;
+        break;
+      }
+
+      deletedCount += 1;
+    }
+
+    await refreshWorkspace();
+
+    if (errorMessage) {
+      setWorkspaceError(errorMessage);
+      setStatusMessage(
+        deletedCount > 0 ? `Trash partially emptied (${deletedCount} deleted)` : "Trash could not be emptied"
+      );
+    } else {
+      setStatusMessage("Trash emptied");
+    }
+
+    setIsBusy(false);
+  }
+
   async function flushPendingSettings() {
     while (pendingSettingsSavesRef.current.size > 0) {
       await Promise.allSettled([...pendingSettingsSavesRef.current]);
     }
+  }
+
+  async function minimizeWindow() {
+    const result = await window.inknest.app.minimizeWindow();
+
+    if (result.ok) {
+      setIsWindowMaximized(result.data.isMaximized);
+    }
+  }
+
+  async function toggleMaximizeWindow() {
+    const result = await window.inknest.app.toggleMaximizeWindow();
+
+    if (result.ok) {
+      setIsWindowMaximized(result.data.isMaximized);
+    }
+  }
+
+  async function closeWindow() {
+    await window.inknest.app.closeWindow();
   }
 
   function closeCommandPalette() {
@@ -820,43 +1183,61 @@ export function App() {
     }
   }
 
-  async function importNotes(mode: "files" | "folder") {
-    if (!(await flushCurrentNote())) {
-      return;
-    }
-
+  async function toggleNoteLock() {
+    if (!selectedNoteLockKey || isBusy) return;
     setIsBusy(true);
-    setWorkspaceError(null);
-    const result =
-      mode === "files"
-        ? await window.inknest.notes.importFiles({ folderPath: selectedFolderPath })
-        : await window.inknest.notes.importFolder({ folderPath: selectedFolderPath });
-
-    if (result.ok) {
-      await refreshWorkspace();
-      const firstImportedNote = result.data.imported[0];
-
-      if (firstImportedNote) {
-        setSelectedFolderPath(firstImportedNote.folderPath);
-        await openNote(firstImportedNote.path);
+    setToolbarMenu(null);
+    setLinkDialog(null);
+    try {
+      if (!(await flushCurrentNote())) return;
+      const lockedNoteKeys = isNoteLocked
+        ? settings.lockedNoteKeys.filter((key) => key !== selectedNoteLockKey)
+        : [...settings.lockedNoteKeys, selectedNoteLockKey];
+      if (await updateAppSettings({ lockedNoteKeys })) {
+        setStatusMessage(isNoteLocked ? "Note unlocked" : "Note locked — view only");
       }
-
-      const importedCount = result.data.imported.length;
-      const skippedCount = result.data.skipped.length;
-      setStatusMessage(
-        skippedCount > 0
-          ? `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}; skipped ${skippedCount}`
-          : `Imported ${importedCount} note${importedCount === 1 ? "" : "s"}`
-      );
-    } else {
-      setWorkspaceError(result.error.message);
+    } finally {
+      setIsBusy(false);
     }
+  }
 
-    setIsBusy(false);
+  async function toggleFavoriteNote(notePath: string) {
+    if (!workspace.path || isBusy || favoriteSaveInFlightRef.current) return;
+    const key = JSON.stringify([workspace.path, notePath]);
+    const wasFavorite = settings.favoriteNoteKeys.includes(key);
+    favoriteSaveInFlightRef.current = true;
+    setIsFavoriteSaving(true);
+    try {
+      const favoriteNoteKeys = wasFavorite ? settings.favoriteNoteKeys.filter((value) => value !== key)
+        : [...settings.favoriteNoteKeys, key];
+      if (await updateAppSettings({ favoriteNoteKeys })) setStatusMessage(wasFavorite ? "Removed from favorites" : "Added to favorites");
+    } finally {
+      favoriteSaveInFlightRef.current = false;
+      setIsFavoriteSaving(false);
+    }
+  }
+
+  async function remapNotePreferences(fromPath: string, toPath: string, folder = false) {
+    const remap = (keys: string[]) => keys.map((key) => {
+      try {
+        const [root, notePath] = JSON.parse(key);
+        if (root !== workspace.path || typeof notePath !== "string") return key;
+        if (notePath === fromPath || (folder && notePath.startsWith(`${fromPath}/`))) {
+          return JSON.stringify([root, `${toPath}${notePath.slice(fromPath.length)}`]);
+        }
+      } catch { /* Ignore malformed legacy lock entries. */ }
+      return key;
+    });
+    const lockedNoteKeys = remap(settings.lockedNoteKeys);
+    const favoriteNoteKeys = remap(settings.favoriteNoteKeys);
+    if (lockedNoteKeys.some((key, index) => key !== settings.lockedNoteKeys[index]) ||
+        favoriteNoteKeys.some((key, index) => key !== settings.favoriteNoteKeys[index])) {
+      await updateAppSettings({ lockedNoteKeys, favoriteNoteKeys });
+    }
   }
 
   async function insertPastedImage(payload: SaveImagePayload) {
-    if (!selectedNoteContent || isBusy) {
+    if (!selectedNoteContent || isEditorDisabled) {
       return;
     }
 
@@ -900,7 +1281,7 @@ export function App() {
   }
 
   async function chooseWorkspace() {
-    if (!(await flushCurrentNote())) {
+    if (!(await flushCurrentNote()) || !(await persistSession())) {
       return;
     }
 
@@ -910,12 +1291,21 @@ export function App() {
     const result = await window.inknest.workspace.choose();
 
     if (result.ok) {
+      if (result.data.path === workspace.path) {
+        if (result.data.status === "ready") await refreshWorkspace();
+        setIsBusy(false);
+        return;
+      }
+      setSessionReadyWorkspace(null);
       setWorkspace(result.data);
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
+      setSelectedFolderPath(".");
+      setExpandedFolderPaths(new Set(["."]));
+      setOpenNotePaths([]);
       if (result.data.status === "ready") {
-        await refreshWorkspace();
+        await restoreWorkspaceSession(result.data);
       }
     } else {
       setWorkspaceError(result.error.message);
@@ -925,7 +1315,7 @@ export function App() {
   }
 
   async function reopenWorkspace(workspacePath: string) {
-    if (!(await flushCurrentNote())) {
+    if (!(await flushCurrentNote()) || !(await persistSession())) {
       return;
     }
 
@@ -935,11 +1325,20 @@ export function App() {
     const result = await window.inknest.workspace.select(workspacePath);
 
     if (result.ok) {
+      if (result.data.path === workspace.path) {
+        if (result.data.status === "ready") await refreshWorkspace();
+        setIsBusy(false);
+        return;
+      }
+      setSessionReadyWorkspace(null);
       setWorkspace(result.data);
       setSearchQuery("");
       setSelectedTag("");
       clearSelectedNote();
-      await refreshWorkspace();
+      setSelectedFolderPath(".");
+      setExpandedFolderPaths(new Set(["."]));
+      setOpenNotePaths([]);
+      await restoreWorkspaceSession(result.data);
     } else {
       setWorkspaceError(result.error.message);
     }
@@ -959,6 +1358,23 @@ export function App() {
   function hasPendingSave() {
     const note = selectedNoteContentRef.current;
     return note !== null && editorMarkdownRef.current !== lastSavedMarkdownRef.current;
+  }
+
+  function syncEditorMarkdownSnapshot() {
+    const note = selectedNoteContentRef.current;
+    const nextMarkdown = editorHandleRef.current?.getMarkdown();
+
+    if (!note || nextMarkdown === undefined || nextMarkdown === editorMarkdownRef.current) {
+      return editorMarkdownRef.current;
+    }
+
+    editorMarkdownRef.current = nextMarkdown;
+    setEditorMarkdown(nextMarkdown);
+    if (saveStateRef.current !== "saving") {
+      updateSaveState("unsaved");
+    }
+
+    return nextMarkdown;
   }
 
   function clearAutoSaveTimer() {
@@ -983,6 +1399,8 @@ export function App() {
 
   function clearSelectedNote() {
     clearAutoSaveTimer();
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     selectedNoteContentRef.current = null;
     editorMarkdownRef.current = "";
     lastSavedMarkdownRef.current = "";
@@ -990,29 +1408,89 @@ export function App() {
     setSelectedNoteContent(null);
     setEditorMarkdown("");
     setLastSavedMarkdown("");
+    setExternalNoteChange(null);
+    setLinkDialog(null);
     updateSaveState("saved");
     updateSaveError(null);
     setActiveToolbarCommands(new Set());
   }
 
   async function openNote(notePath: string) {
-    if (!(await flushCurrentNote())) {
+    if (noteNavigationRef.current) {
       return;
     }
 
-    setActiveMoveNotePath(null);
-    setIsBusy(true);
-    const result = await window.inknest.notes.read(notePath);
-
-    if (result.ok) {
-      applyNoteContent(result.data);
-      updateSaveState("saved");
-      setStatusMessage("Note opened");
-    } else {
-      setWorkspaceError(result.error.message);
+    if (selectedNoteContentRef.current?.path === notePath) {
+      return;
     }
 
-    setIsBusy(false);
+    noteNavigationRef.current = true;
+    setIsBusy(true);
+    try {
+      if (!(await flushCurrentNote())) {
+        return;
+      }
+
+      setActiveMoveNotePath(null);
+      const result = await window.inknest.notes.read(notePath);
+
+      if (result.ok) {
+        applyNoteContent(result.data);
+        setWorkspaceError(null);
+        setStatusMessage("Note opened");
+      } else {
+        setWorkspaceError(result.error.message);
+      }
+    } finally {
+      noteNavigationRef.current = false;
+      setIsBusy(false);
+    }
+  }
+
+  function remapNoteTabs(fromPath: string, toPath: string) {
+    setOpenNotePaths((currentPaths) => [...new Set(currentPaths.map((notePath) =>
+      notePath === fromPath ? toPath : notePath
+    ))]);
+  }
+
+  async function removeNoteTabs(notePaths: string[]) {
+    const remainingPaths = openNotePaths.filter((notePath) => !notePaths.includes(notePath));
+    const activePath = selectedNoteContentRef.current?.path;
+    setOpenNotePaths((currentPaths) => currentPaths.filter((notePath) => !notePaths.includes(notePath)));
+
+    if (activePath && notePaths.includes(activePath)) {
+      const activeIndex = openNotePaths.indexOf(activePath);
+      const nextPath = remainingPaths[Math.min(activeIndex, remainingPaths.length - 1)];
+      clearSelectedNote();
+      if (nextPath) {
+        await openNote(nextPath);
+      }
+    }
+  }
+
+  async function closeNoteTabs(notePaths: string[]) {
+    if (isBusy || noteNavigationRef.current) {
+      return;
+    }
+    noteNavigationRef.current = true;
+    setIsBusy(true);
+    setTabMenu(null);
+    setTabRename(null);
+    try {
+      const activePath = selectedNoteContentRef.current?.path;
+      if (activePath && notePaths.includes(activePath) && !(await flushCurrentNote())) {
+        return;
+      }
+      noteNavigationRef.current = false;
+      await removeNoteTabs(notePaths);
+    } finally {
+      noteNavigationRef.current = false;
+      setIsBusy(false);
+    }
+  }
+
+  async function closeNoteTab(notePath: string) {
+    await closeNoteTabs([notePath]);
   }
 
   function openSearchResult(result: SearchResult) {
@@ -1022,7 +1500,7 @@ export function App() {
 
   async function saveCurrentNote(): Promise<boolean> {
     const note = selectedNoteContentRef.current;
-    const markdownToSave = editorMarkdownRef.current;
+    const markdownToSave = syncEditorMarkdownSnapshot();
 
     if (externalNoteChangeRef.current) {
       setStatusMessage("Resolve the external change first");
@@ -1040,6 +1518,8 @@ export function App() {
     }
 
     const requestPath = note.path;
+    const pendingSave = { path: requestPath, markdown: markdownToSave.trim() ? markdownToSave : "" };
+    pendingNoteSaveRef.current = pendingSave;
     updateSaveState("saving");
     updateSaveError(null);
     setStatusMessage("Saving");
@@ -1111,6 +1591,7 @@ export function App() {
         saveInFlightRef.current = null;
       }
 
+      if (pendingNoteSaveRef.current === pendingSave) pendingNoteSaveRef.current = null;
       setIsSaving(false);
 
       if (saveQueuedRef.current) {
@@ -1144,7 +1625,7 @@ export function App() {
 
   async function saveLocalVersionAsNewNote() {
     const note = selectedNoteContentRef.current;
-    const markdownToSave = editorMarkdownRef.current;
+    const markdownToSave = syncEditorMarkdownSnapshot();
 
     if (!note) {
       return;
@@ -1180,6 +1661,7 @@ export function App() {
     }
 
     await refreshWorkspace();
+    remapNoteTabs(note.path, saved.data.path);
     applyNoteContent(saved.data);
     setIsBusy(false);
     setStatusMessage("Saved local version as new note");
@@ -1201,7 +1683,7 @@ export function App() {
     if (!result.ok) {
       setWorkspaceError(result.error.message);
       setStatusMessage("Export failed");
-    } else if (result.data.exported) {
+    } else if ("exported" in result.data && result.data.exported) {
       setStatusMessage(`Exported ${format === "markdown" ? "Markdown" : format.toUpperCase()}`);
     }
 
@@ -1210,6 +1692,7 @@ export function App() {
 
   async function flushCurrentNote() {
     clearAutoSaveTimer();
+    syncEditorMarkdownSnapshot();
 
     while (true) {
       if (saveInFlightRef.current) {
@@ -1256,10 +1739,21 @@ export function App() {
         target instanceof HTMLTextAreaElement ||
         (target instanceof HTMLElement && target.isContentEditable);
 
+      if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey &&
+          ["f", "h"].includes(event.key.toLowerCase()) && editorHandleRef.current && !isSettingsOpen && !isCommandPaletteOpen) {
+        event.preventDefault();
+        editorHandleRef.current.openSearch(event.key.toLowerCase() === "h" ? "replace" : "find");
+        return;
+      }
+
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        setIsCommandPaletteOpen(true);
-        setIsSettingsOpen(false);
+        if (event.shiftKey) { setIsCommandPaletteOpen(true); setIsSettingsOpen(false); }
+        else {
+          setIsSettingsOpen(false);
+          if (!settings.sidebarVisible) void updateAppSettings({ sidebarVisible: true });
+          window.requestAnimationFrame(() => document.querySelector<HTMLInputElement>('input[aria-label="Search notes"]')?.focus());
+        }
         return;
       }
 
@@ -1322,8 +1816,9 @@ export function App() {
         try {
           const didFlush = await flushCurrentNote();
           await flushPendingSettings();
+          const didSaveSession = await persistSession();
 
-          if (didFlush) {
+          if (didFlush && didSaveSession) {
             window.inknest.app.closeReady();
             return;
           }
@@ -1347,7 +1842,7 @@ export function App() {
     command: ToolbarCommand,
     event?: ReactMouseEvent<HTMLButtonElement>
   ) {
-    if (!selectedNoteContent || isBusy) {
+    if (!selectedNoteContent || isEditorDisabled) {
       return;
     }
 
@@ -1364,12 +1859,6 @@ export function App() {
           buttonRect ? buttonRect.bottom + 8 : 120
         )
       });
-      return;
-    }
-
-    if (command.id === "code-block") {
-      editorHandleRef.current?.runCommand("code-block");
-      setStatusMessage("Inserted code block");
       return;
     }
 
@@ -1392,21 +1881,12 @@ export function App() {
       options.alt = fileNameFromPath(result.data.path);
     }
 
-    if (command.id === "math-edit") {
-      const equation = window.prompt("LaTeX math", "x^2 + y^2 = z^2");
-
-      if (!equation) {
-        return;
-      }
-
-      options.equation = equation;
-    }
-
-    editorHandleRef.current?.runCommand(command.id, options);
-    setStatusMessage(`Applied ${command.label}`);
+    const didRun = editorHandleRef.current?.runCommand(command.id, options);
+    setStatusMessage(didRun ? `Applied ${command.label}` : `Cannot apply ${command.label} to this selection`);
   }
 
   function openLinkDialog(details: LinkDialogDetails) {
+    if (isEditorDisabled) return;
     setLinkDialog({
       text: details.text,
       url: details.url,
@@ -1433,10 +1913,14 @@ export function App() {
       return;
     }
 
-    editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
+    const didRun = editorHandleRef.current?.runCommand(linkDialog.isEditing ? "link-edit" : "link", {
       label: text,
       url
     });
+    if (!didRun) {
+      setLinkDialog({ ...linkDialog, error: "Select text in a paragraph or heading to add a link." });
+      return;
+    }
     setStatusMessage(linkDialog.isEditing ? "Updated link" : "Inserted link");
     setLinkDialog(null);
   }
@@ -1451,11 +1935,28 @@ export function App() {
     setLinkDialog(null);
   }
 
-  async function createNote() {
+  async function createNote(folderPath = selectedFolderPath) {
+    if (isBusy || !(await flushCurrentNote())) {
+      return;
+    }
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
+    setEditingFolderPath(null);
+    setSelectedFolderPath(folderPath);
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths);
+      nextPaths.add(folderPath);
+      for (const ancestorPath of getAncestorFolderPaths(folderPath)) {
+        nextPaths.add(ancestorPath);
+      }
+      return nextPaths;
+    });
     setIsBusy(true);
     const result = await window.inknest.notes.create({
       title: "Untitled",
-      folderPath: selectedFolderPath
+      folderPath
     });
 
     if (result.ok) {
@@ -1469,13 +1970,24 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function createFolder() {
+  async function createFolder(parentPath = selectedFolderPath) {
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setEditingFolderPath(null);
+    setSelectedFolderPath(parentPath);
+    setExpandedFolderPaths((currentPaths) => {
+      const nextPaths = new Set(currentPaths);
+      nextPaths.add(parentPath);
+      for (const ancestorPath of getAncestorFolderPaths(parentPath)) {
+        nextPaths.add(ancestorPath);
+      }
+      return nextPaths;
+    });
     setIsBusy(true);
     const result = await window.inknest.folders.create({
-      parentPath: selectedFolderPath,
+      parentPath,
       name: "New Folder"
     });
 
@@ -1501,6 +2013,8 @@ export function App() {
   function startRenamingFolder(folder: FolderSummary) {
     setActiveMoveNotePath(null);
     setActiveMoveFolderPath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setEditingFolderPath(folder.path);
     setFolderNameDraft(folder.name);
   }
@@ -1532,9 +2046,16 @@ export function App() {
     if (result.ok) {
       setEditingFolderPath(null);
       setFolderNameDraft("");
+      await remapNotePreferences(folder.path, result.data.path, true);
+
+      setOpenNotePaths((currentPaths) => currentPaths.map((notePath) =>
+        notePath.startsWith(`${folder.path}/`)
+          ? `${result.data.path}${notePath.slice(folder.path.length)}`
+          : notePath
+      ));
 
       if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        clearSelectedNote();
+        await openNote(`${result.data.path}${selectedNote.path.slice(folder.path.length)}`);
       }
 
       await refreshWorkspace();
@@ -1582,56 +2103,10 @@ export function App() {
         setSelectedFolderPath(".");
       }
 
-      if (
-        selectedNote?.folderPath === folder.path ||
-        selectedNote?.folderPath.startsWith(`${folder.path}/`)
-      ) {
-        clearSelectedNote();
-      }
+      await removeNoteTabs(openNotePaths.filter((notePath) => notePath.startsWith(`${folder.path}/`)));
 
       await refreshWorkspace();
       setStatusMessage("Folder deleted");
-    } else {
-      setWorkspaceError(result.error.message);
-    }
-
-    setIsBusy(false);
-  }
-
-  async function moveFolder(folder: FolderSummary, parentPath: string) {
-    if (
-      selectedNote &&
-      isSameOrChildFolderPath(selectedNote.folderPath, folder.path) &&
-      !(await flushCurrentNote())
-    ) {
-      return;
-    }
-
-    setActiveMoveNotePath(null);
-    setActiveMoveFolderPath(null);
-    setEditingFolderPath(null);
-    setIsBusy(true);
-    const result = await window.inknest.folders.move({
-      path: folder.path,
-      parentPath
-    });
-
-    if (result.ok) {
-      if (selectedNote && isSameOrChildFolderPath(selectedNote.folderPath, folder.path)) {
-        clearSelectedNote();
-      }
-
-      await refreshWorkspace();
-      setSelectedFolderPath(result.data.path);
-      setExpandedFolderPaths((currentPaths) => {
-        const nextPaths = new Set(currentPaths);
-        nextPaths.add(result.data.path);
-        for (const ancestorPath of getAncestorFolderPaths(result.data.path)) {
-          nextPaths.add(ancestorPath);
-        }
-        return nextPaths;
-      });
-      setStatusMessage("Folder moved");
     } else {
       setWorkspaceError(result.error.message);
     }
@@ -1653,37 +2128,50 @@ export function App() {
     });
   }
 
-  async function renameNote() {
-    if (!selectedNote) {
-      return;
-    }
-
-    const title = noteTitleDraft.trim();
+  async function renameNote(note: NoteSummary | SearchResult, name: string) {
+    const title = noteNameFromPath(name.trim());
 
     if (!title) {
       setWorkspaceError("Note title cannot be empty.");
       return;
     }
 
-    if (!(await flushCurrentNote())) {
+    const shouldReopen = note.path === selectedNotePath;
+    if (shouldReopen && !(await flushCurrentNote())) {
       return;
     }
 
+    setActiveMoveNotePath(null);
+    setEditingNotePath(null);
+    setNoteNameDraft("");
     setIsBusy(true);
     const result = await window.inknest.notes.rename({
-      path: selectedNote.path,
+      path: note.path,
       title
     });
 
     if (result.ok) {
+      remapNoteTabs(note.path, result.data.path);
+      await remapNotePreferences(note.path, result.data.path);
       await refreshWorkspace();
-      await openNote(result.data.path);
+      if (shouldReopen) {
+        await openNote(result.data.path);
+      }
       setStatusMessage("Note renamed");
     } else {
       setWorkspaceError(result.error.message);
     }
 
     setIsBusy(false);
+  }
+
+  function startRenamingNote(note: NoteSummary | SearchResult) {
+    setActiveMoveNotePath(null);
+    setActiveMoveFolderPath(null);
+    setEditingFolderPath(null);
+    setFolderNameDraft("");
+    setEditingNotePath(note.path);
+    setNoteNameDraft(noteNameFromPath(note.path));
   }
 
   async function duplicateNote(note: NoteSummary) {
@@ -1708,34 +2196,10 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function moveNote(note: NoteSummary, folderPath: string) {
-    if (note.path === selectedNotePath && !(await flushCurrentNote())) {
-      return;
-    }
-
-    setActiveMoveNotePath(null);
-    setIsBusy(true);
-    const result = await window.inknest.notes.move({
-      path: note.path,
-      folderPath
-    });
-
-    if (result.ok) {
-      setSelectedFolderPath(result.data.folderPath);
-      await refreshWorkspace();
-      await openNote(result.data.path);
-      setStatusMessage("Note moved");
-    } else {
-      setWorkspaceError(result.error.message);
-    }
-
-    setIsBusy(false);
-  }
-
   async function deleteNote(note: NoteSummary) {
     setActiveMoveNotePath(null);
 
-    if (!window.confirm(`Move "${note.title}" to trash?`)) {
+    if (!window.confirm(`Move "${noteNameFromPath(note.path)}" to trash?`)) {
       return;
     }
 
@@ -1749,10 +2213,9 @@ export function App() {
     });
 
     if (result.ok) {
-      if (note.path === selectedNotePath) {
-        clearSelectedNote();
-      }
+      await removeNoteTabs([note.path]);
       await refreshWorkspace();
+      setIsTrashExpanded(true);
       setStatusMessage("Note moved to trash");
     } else {
       setWorkspaceError(result.error.message);
@@ -1761,9 +2224,13 @@ export function App() {
     setIsBusy(false);
   }
 
-  async function restoreNote(trashPath: string) {
+  async function restoreNote(note: DeletedNoteSummary) {
+    if (!window.confirm(`Restore "${noteNameFromPath(note.originalPath)}"?`)) {
+      return;
+    }
+
     setIsBusy(true);
-    const result = await window.inknest.notes.restore({ trashPath });
+    const result = await window.inknest.notes.restore({ trashPath: note.trashPath });
 
     if (result.ok) {
       await refreshWorkspace();
@@ -1797,675 +2264,814 @@ export function App() {
     setIsBusy(false);
   }
 
+  function getSidebarWidthMax() {
+    if (typeof window !== "undefined" && window.innerWidth <= 1100) {
+      return Math.max(
+        sidebarMinWidth,
+        Math.min(sidebarMaxWidth, Math.floor(window.innerWidth * 0.4))
+      );
+    }
+
+    return sidebarMaxWidth;
+  }
+
+  function clampSidebarWidth(width: number) {
+    return Math.min(getSidebarWidthMax(), Math.max(sidebarMinWidth, width));
+  }
+
+  function finishSidebarResize(event?: ReactPointerEvent<HTMLDivElement>) {
+    if (event?.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
+
+    sidebarResizeStartRef.current = null;
+    setIsSidebarResizing(false);
+  }
+
+  function handleSidebarPointerDown(event: ReactPointerEvent<HTMLDivElement>) {
+    if (!settings.sidebarVisible) {
+      return;
+    }
+
+    event.preventDefault();
+    event.currentTarget.setPointerCapture(event.pointerId);
+    sidebarResizeStartRef.current = {
+      clientX: event.clientX,
+      width: sidebarWidth
+    };
+    setIsSidebarResizing(true);
+  }
+
+  function handleSidebarPointerMove(event: ReactPointerEvent<HTMLDivElement>) {
+    const start = sidebarResizeStartRef.current;
+
+    if (!start) {
+      return;
+    }
+
+    setSidebarWidth(clampSidebarWidth(start.width + event.clientX - start.clientX));
+  }
+
+  function handleSidebarKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
+    if (!settings.sidebarVisible) {
+      return;
+    }
+
+    const step = event.shiftKey ? 32 : 16;
+    let nextWidth: number | null = null;
+
+    if (event.key === "ArrowLeft") {
+      nextWidth = sidebarWidth - step;
+    } else if (event.key === "ArrowRight") {
+      nextWidth = sidebarWidth + step;
+    } else if (event.key === "Home") {
+      nextWidth = sidebarMinWidth;
+    } else if (event.key === "End") {
+      nextWidth = getSidebarWidthMax();
+    }
+
+    if (nextWidth !== null) {
+      event.preventDefault();
+      setSidebarWidth(clampSidebarWidth(nextWidth));
+    }
+  }
+
+  function renderSidebarTree() {
+    const renderNote = (note: NoteSummary | SearchResult) => (
+      <NoteRow
+        key={note.path}
+        note={note}
+        selected={note.path === selectedNotePath}
+        isFavorite={isFavoriteNote(note.path)}
+        isFavoriteSaving={isFavoriteSaving}
+        onToggleFavorite={() => void toggleFavoriteNote(note.path)}
+        isRenaming={note.path === editingNotePath}
+        noteNameDraft={noteNameDraft}
+        isMoveMenuOpen={note.path === activeMoveNotePath}
+        isBusy={isBusy}
+        onOpen={() => {
+          if ("snippet" in note) {
+            openSearchResult(note);
+          } else {
+            void openNote(note.path);
+          }
+        }}
+        onRename={() => startRenamingNote(note)}
+        onRenameDraftChange={setNoteNameDraft}
+        onSubmitRename={() => void renameNote(note, noteNameDraft)}
+        onCancelRename={() => {
+          setEditingNotePath(null);
+          setNoteNameDraft("");
+        }}
+        onDuplicate={() => void duplicateNote(note)}
+        onToggleMove={() =>
+          setActiveMoveNotePath((currentPath) =>
+            currentPath === note.path ? null : note.path
+          )
+        }
+        onDelete={() => void deleteNote(note)}
+      />
+    );
+    return (
+      <div className="sidebar-tree">
+        <div className="space-y-1" aria-label="Folder tree">
+          <FolderTree
+            nodes={folderTree}
+            selectedFolderPath={selectedFolderPath}
+            expandedFolderPaths={visibleExpandedFolderPaths}
+            activeMoveFolderPath={activeMoveFolderPath}
+            editingFolderPath={editingFolderPath}
+            folderNameDraft={folderNameDraft}
+            hasWorkspace={hasWorkspace}
+            isBusy={isBusy}
+            onSelect={(folderPath) => {
+              setActiveMoveNotePath(null);
+              setSelectedFolderPath(folderPath);
+              if (hasActiveSearch) {
+                setSearchQuery("");
+                setSelectedTag("");
+                setExpandedFolderPaths((paths) => new Set([...paths, folderPath, ...getAncestorFolderPaths(folderPath)]));
+              }
+            }}
+            onToggle={toggleFolder}
+            onStartRename={startRenamingFolder}
+            onRenameDraftChange={setFolderNameDraft}
+            onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
+            onCancelRename={() => {
+              setEditingFolderPath(null);
+              setFolderNameDraft("");
+            }}
+            onToggleMove={(folderPath) =>
+              setActiveMoveFolderPath((currentPath) =>
+                currentPath === folderPath ? null : folderPath
+              )
+            }
+            onNewNote={(folderPath) => void createNote(folderPath)}
+            onNewFolder={(parentPath) => void createFolder(parentPath)}
+            onDelete={(folder) => void deleteFolder(folder)}
+            renderNote={renderNote}
+          />
+          {hasActiveSearch ? <div className="space-y-1 sidebar-name-results">{displayedNotes.map(renderNote)}</div> : null}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <main
-      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[56px_minmax(0,1fr)_34px] bg-ink-50 text-ink-900"
+      className="app-shell grid h-screen min-w-0 overflow-hidden grid-rows-[32px_minmax(0,1fr)_28px] bg-ink-50 text-ink-900"
+      data-build-phase={phase}
       style={{
         "--app-font-size": `${settings.fontSize}px`,
         "--app-font-family": fontFamilyCssValue(settings.fontFamily)
       } as CSSProperties}
     >
-      <header className="flex min-w-0 items-center justify-between border-b border-ink-100 bg-white px-4">
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            aria-label="Toggle sidebar"
-            aria-pressed={settings.sidebarVisible}
-            className="icon-button"
-            onClick={() => void updateAppSettings({ sidebarVisible: !settings.sidebarVisible })}
-          >
-            <PanelLeft size={18} />
-          </button>
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-ink-700 text-white">
-            <SquarePen size={17} />
-          </div>
-          <div>
-            <h1 className="text-sm font-semibold leading-5">InkNest</h1>
-            <p className="text-xs text-neutral-500">{workspaceName}</p>
-          </div>
+      <header className="app-window-bar" aria-label="Application window controls">
+        <div className="app-window-bar-drag-region">
+          <Leaf size={19} aria-hidden="true" /><h1 className="app-window-bar-title">InkNest</h1>
         </div>
-
-        <div className="app-header-actions relative flex items-center gap-2">
+        <div className="app-window-controls">
           <button
             type="button"
-            className="command-button"
-            onClick={() => void createNote()}
-            disabled={!hasWorkspace || isBusy}
+            className="app-window-control"
+            aria-label="Minimize window"
+            title="Minimize window"
+            onClick={() => void minimizeWindow()}
           >
-            <FilePlus2 size={16} />
-            <span>New note</span>
+            <Minus size={15} />
           </button>
           <button
             type="button"
-            className="secondary-button"
-            onClick={() => void importNotes("files")}
-            disabled={!hasWorkspace || isBusy}
+            className="app-window-control"
+            aria-label={isWindowMaximized ? "Restore window" : "Maximize window"}
+            title={isWindowMaximized ? "Restore window" : "Maximize window"}
+            onClick={() => void toggleMaximizeWindow()}
           >
-            <FileText size={16} />
-            <span>Import</span>
+            {isWindowMaximized ? <Copy size={13} /> : <Square size={13} />}
           </button>
           <button
             type="button"
-            className="secondary-button"
-            onClick={() => void createFolder()}
-            disabled={!hasWorkspace || isBusy}
+            className="app-window-control app-window-control-close"
+            aria-label="Close window"
+            title="Close window"
+            onClick={() => void closeWindow()}
           >
-            <FolderPlus size={16} />
-            <span>New folder</span>
+            <X size={15} />
           </button>
-          <button
-            type="button"
-            aria-label="Settings"
-            aria-pressed={isSettingsOpen}
-            title="Settings"
-            className="icon-button"
-            onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
-          >
-            <Settings size={18} />
-          </button>
-          <button
-            type="button"
-            aria-label="Open command palette"
-            title="Open command palette (Ctrl+K)"
-            aria-keyshortcuts="Control+K"
-            className="icon-button"
-            onClick={() => {
-              setIsCommandPaletteOpen(true);
-              setIsSettingsOpen(false);
-            }}
-          >
-            <Command size={18} />
-          </button>
-          {isSettingsOpen ? (
-            <div className="settings-popover" role="dialog" aria-label="Settings">
-              <div className="settings-popover-header">
-                <div>
-                  <p className="settings-popover-title">Settings</p>
-                  <p className="settings-popover-description">Customize your writing space.</p>
-                </div>
-                <button
-                  type="button"
-                  className="icon-button"
-                  aria-label="Close settings"
-                  onClick={() => setIsSettingsOpen(false)}
-                >
-                  <X size={16} />
-                </button>
-              </div>
-
-              <label className="settings-field">
-                <span>Theme</span>
-                <select
-                  aria-label="Theme"
-                  value={settings.theme}
-                  onChange={(event) =>
-                    void updateAppSettings({
-                      theme: event.target.value as AppSettings["theme"]
-                    })
-                  }
-                >
-                  <option value="system">System</option>
-                  <option value="light">Light</option>
-                  <option value="dark">Dark</option>
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Font size</span>
-                <select
-                  aria-label="Font size"
-                  value={settings.fontSize}
-                  onChange={(event) =>
-                    void updateAppSettings({ fontSize: Number(event.target.value) })
-                  }
-                >
-                  {[12, 14, 16, 18, 20, 22, 24].map((fontSize) => (
-                    <option key={fontSize} value={fontSize}>
-                      {fontSize}px
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Font family</span>
-                <select
-                  aria-label="Font family"
-                  value={settings.fontFamily}
-                  onChange={(event) =>
-                    void updateAppSettings({
-                      fontFamily: event.target.value as AppSettings["fontFamily"]
-                    })
-                  }
-                >
-                  <option value="system">System sans</option>
-                  <option value="serif">Serif</option>
-                  <option value="mono">Monospace</option>
-                </select>
-              </label>
-
-              <label className="settings-field">
-                <span>Auto-save delay</span>
-                <select
-                  aria-label="Auto-save delay"
-                  value={settings.autoSaveDelayMs}
-                  onChange={(event) =>
-                    void updateAppSettings({ autoSaveDelayMs: Number(event.target.value) })
-                  }
-                >
-                  {[500, 750, 1000, 1500, 2000, 3000, 5000].map((delay) => (
-                    <option key={delay} value={delay}>
-                      {delay} ms
-                    </option>
-                  ))}
-                </select>
-              </label>
-
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.lineWrap}
-                  onChange={(event) =>
-                    void updateAppSettings({ lineWrap: event.target.checked })
-                  }
-                />
-                <span>Wrap editor lines</span>
-              </label>
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.showWordCount}
-                  onChange={(event) =>
-                    void updateAppSettings({ showWordCount: event.target.checked })
-                  }
-                />
-                <span>Show word count</span>
-              </label>
-              <label className="settings-checkbox">
-                <input
-                  type="checkbox"
-                  checked={settings.sidebarVisible}
-                  onChange={(event) =>
-                    void updateAppSettings({ sidebarVisible: event.target.checked })
-                  }
-                />
-                <span>Show sidebar</span>
-              </label>
-
-              <div className="settings-default-workspace">
-                <span>Default workspace</span>
-                <strong title={settings.lastWorkspacePath ?? undefined}>
-                  {settings.lastWorkspacePath ?? "No workspace selected"}
-                </strong>
-              </div>
-            </div>
-          ) : null}
         </div>
       </header>
 
       <section
         data-layout="app-layout-columns"
-        className={`grid min-h-0 ${settings.sidebarVisible ? "grid-cols-[300px_minmax(320px,400px)_minmax(0,1fr)]" : "sidebar-hidden"}`}
+        data-workspace-sidebar={settings.sidebarVisible ? "visible" : "hidden"}
+        data-sidebar-resizing={isSidebarResizing ? "true" : "false"}
+        data-example-workspace={Boolean(workspace.initialNotePaths)}
+        className="app-layout-columns grid min-h-0 grid-cols-[232px_minmax(0,1fr)]"
+        style={{ "--sidebar-width": `${sidebarWidth}px` } as CSSProperties}
       >
-        <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-white">
-          <div className="space-y-3 border-b border-ink-100 p-3">
-            <button
-              type="button"
-              className="workspace-button"
-              onClick={() => void chooseWorkspace()}
-              disabled={isBusy}
-            >
-              <span className="flex h-7 w-7 items-center justify-center rounded-md bg-ink-700 text-white">
-                <FolderOpen size={15} />
-              </span>
-              <span className="min-w-0">
-                <span className="block truncate text-sm font-medium">
-                  {isBusy ? "Working" : workspaceName}
-                </span>
-                <span className="block truncate text-xs text-neutral-500">
-                  {hasWorkspace ? workspace.path : "Local Markdown folder"}
-                </span>
-              </span>
-              <ChevronDown className="ml-auto text-neutral-400" size={16} />
-            </button>
+        <aside
+          className="workspace-sidebar"
+          aria-hidden={!settings.sidebarVisible}
+        >
+          <div className="sidebar-dock">
+          <div className="sidebar-unified">
+            <section className="sidebar-main-view" aria-label="Workspace files">
+                <div className="sidebar-workspace-controls">
+                  <button
+                    type="button"
+                    className="workspace-button"
+                    title={workspace.path ?? "Choose a local Markdown folder"}
+                    onClick={() => void chooseWorkspace()}
+                    disabled={isBusy}
+                  >
+                    <span className="workspace-button-icon">
+                      <CircleUserRound size={15} />
+                    </span>
+                    <span className="workspace-button-copy">
+                      <span className="workspace-button-name">
+                        {isBusy ? "Working" : hasWorkspace ? `${workspaceName} workspace` : workspaceName}
+                      </span>
+                      <span className="workspace-button-path">
+                        {hasWorkspace ? workspace.path : "Local Markdown folder"}
+                      </span>
+                    </span>
+                    <ChevronDown className="workspace-button-chevron" size={15} />
+                  </button>
 
-            <label className="search-box">
-              <Search size={16} />
-              <input
-                type="search"
-                placeholder="Search notes"
-                aria-label="Search notes"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-              />
-            </label>
+                  <label className="search-box">
+                    <Search size={16} />
+                    <input
+                      type="search"
+                      placeholder="Search files and folders"
+                      aria-label="Search notes"
+                      value={searchQuery}
+                      onChange={(event) => setSearchQuery(event.target.value)}
+                    />
+                    {searchQuery ? (
+                      <button
+                        type="button"
+                        aria-label="Clear search"
+                        className="search-clear-button"
+                        onClick={() => setSearchQuery("")}
+                      >
+                        <X size={13} />
+                      </button>
+                    ) : <span className="search-shortcut" aria-hidden="true">Ctrl+K</span>}
+                  </label>
 
-            {tagSummaries.length > 0 ? (
-              <div className="tag-filter-panel" aria-label="Filter notes by tag">
-                <div className="flex items-center justify-between gap-2">
-                  <p className="text-xs font-semibold uppercase text-neutral-500">Tags</p>
-                  {selectedTag ? (
-                    <button
-                      type="button"
-                      className="tag-filter-clear"
-                      onClick={() => setSelectedTag("")}
-                    >
-                      Clear
-                    </button>
+                  {tagSummaries.length > 0 ? (
+                    <div className="tag-filter-panel" aria-label="Filter notes by tag">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase text-neutral-500">Tags</p>
+                        {selectedTag ? (
+                          <button
+                            type="button"
+                            className="tag-filter-clear"
+                            onClick={() => setSelectedTag("")}
+                          >
+                            Clear
+                          </button>
+                        ) : null}
+                      </div>
+                      <div className="tag-filter-list">
+                        {tagSummaries.map((tagSummary) => (
+                          <button
+                            key={tagSummary.tag}
+                            type="button"
+                            className={`tag-filter-chip ${
+                              selectedTag === tagSummary.tag ? "tag-filter-chip-active" : ""
+                            }`}
+                            aria-pressed={selectedTag === tagSummary.tag}
+                            onClick={() =>
+                              setSelectedTag((currentTag) =>
+                                currentTag === tagSummary.tag ? "" : tagSummary.tag
+                              )
+                            }
+                          >
+                            <span>#{tagSummary.tag}</span>
+                            <span className="tag-filter-count">{tagSummary.count}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ) : null}
                 </div>
-                <div className="tag-filter-list">
-                  {tagSummaries.map((tagSummary) => (
-                    <button
-                      key={tagSummary.tag}
-                      type="button"
-                      className={`tag-filter-chip ${
-                        selectedTag === tagSummary.tag ? "tag-filter-chip-active" : ""
-                      }`}
-                      aria-pressed={selectedTag === tagSummary.tag}
-                      onClick={() =>
-                        setSelectedTag((currentTag) =>
-                          currentTag === tagSummary.tag ? "" : tagSummary.tag
-                        )
-                      }
-                    >
-                      <span>#{tagSummary.tag}</span>
-                      <span className="tag-filter-count">{tagSummary.count}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
 
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void createNote()}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FilePlus2 size={16} />
-                <span>New note</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void createFolder()}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FolderPlus size={16} />
-                <span>New folder</span>
-              </button>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void importNotes("files")}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FileText size={15} />
-                <span>Import files</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button justify-center"
-                onClick={() => void importNotes("folder")}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FolderInput size={15} />
-                <span>Import folder</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex items-center justify-between border-b border-ink-100 px-3 py-2">
-            <h2 className="text-xs font-semibold uppercase text-neutral-500">
-              Folders
-            </h2>
-            <button type="button" aria-label="Filter folders" className="icon-button">
-              <ListFilter size={16} />
-            </button>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {!hasWorkspace ? (
-              <div className="border-b border-ink-100 px-4 py-4">
-                <EmptyState
-                  icon={
-                    workspace.status === "missing" ||
-                    workspace.status === "permission-denied" ? (
-                      <AlertTriangle size={18} />
-                    ) : (
-                      <Folder size={18} />
-                    )
-                  }
-                  title={workspacePromptTitle}
-                  description={workspace.message}
-                />
-                <button
-                  type="button"
-                  className="secondary-button mt-3 w-full justify-center"
-                  onClick={() => void chooseWorkspace()}
-                  disabled={isBusy}
-                >
-                  <FolderOpen size={16} />
-                  <span>Choose workspace</span>
-                </button>
-              </div>
-            ) : null}
-
-            {workspaceError ? (
-              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {workspaceError}
-              </p>
-            ) : null}
-
-            {workspace.recentWorkspaces.length > 0 ? (
-              <div className="border-b border-ink-100 px-3 py-3">
-                <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
-                  Recent workspaces
-                </p>
-                <div className="space-y-1">
-                  {workspace.recentWorkspaces.map((recentPath) => (
-                    <button
-                      key={recentPath}
-                      type="button"
-                      className="recent-workspace-row"
-                      onClick={() => void reopenWorkspace(recentPath)}
-                    >
-                      <BookOpenText size={15} />
-                      <span className="min-w-0">
-                        <span className="block truncate font-medium">
-                          {recentPath.split(/[\\/]/).pop() ?? recentPath}
-                        </span>
-                        <span className="block truncate text-xs text-neutral-500">
-                          {recentPath}
-                        </span>
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="px-3 py-3">
-              <div className="space-y-1" aria-label="Folder tree">
-                <FolderTree
-                  nodes={folderTree}
-                  folders={folders}
-                  selectedFolderPath={selectedFolderPath}
-                  expandedFolderPaths={expandedFolderPaths}
-                  activeMoveFolderPath={activeMoveFolderPath}
-                  editingFolderPath={editingFolderPath}
-                  folderNameDraft={folderNameDraft}
-                  hasWorkspace={hasWorkspace}
-                  isBusy={isBusy}
-                  onSelect={(folderPath) => {
-                    setActiveMoveNotePath(null);
-                    setSelectedFolderPath(folderPath);
-                  }}
-                  onToggle={toggleFolder}
-                  onStartRename={startRenamingFolder}
-                  onRenameDraftChange={setFolderNameDraft}
-                  onSubmitRename={(folder) => void renameFolder(folder, folderNameDraft)}
-                  onCancelRename={() => {
-                    setEditingFolderPath(null);
-                    setFolderNameDraft("");
-                  }}
-                  onToggleMove={(folderPath) =>
-                    setActiveMoveFolderPath((currentPath) =>
-                      currentPath === folderPath ? null : folderPath
-                    )
-                  }
-                  onMove={(folder, parentPath) => void moveFolder(folder, parentPath)}
-                  onDelete={(folder) => void deleteFolder(folder)}
-                />
-              </div>
-            </div>
-
-            {!hasWorkspace || hasActiveSearch ? (
-              <div className="border-t border-ink-100 px-4 py-4">
-                <EmptyState
-                  icon={<Search size={18} />}
-                  title="No search results"
-                  description={
-                    !hasWorkspace
-                      ? "Search arrives in a later phase."
-                      : "Try a different search or tag."
-                  }
-                />
-              </div>
-            ) : null}
-          </div>
-        </aside>
-
-        <aside className="flex min-h-0 flex-col border-r border-ink-100 bg-neutral-50">
-          <div className="flex items-center justify-between border-b border-ink-100 px-4 py-3">
-            <div className="min-w-0">
-              <h2 className="text-sm font-semibold">Notes</h2>
-              <p className="truncate text-xs text-neutral-500">
-                {hasActiveSearch
-                  ? `${displayedNotes.length} search result${displayedNotes.length === 1 ? "" : "s"}`
-                  : selectedFolderLabel}
-              </p>
-            </div>
-            <div className="flex items-center gap-1">
-              <button type="button" aria-label="Collapse notes list" className="icon-button">
-                <PanelRightClose size={16} />
-              </button>
-              <button type="button" aria-label="Sort notes" className="icon-button">
-                <SlidersHorizontal size={16} />
-              </button>
-              <button
-                type="button"
-                aria-label="New note"
-                className="icon-button"
-                onClick={() => void createNote()}
-                disabled={!hasWorkspace || isBusy}
-              >
-                <FilePlus2 size={16} />
-              </button>
-            </div>
-          </div>
-
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            {displayedNotes.length === 0 ? (
-              <div className="border-b border-ink-100 px-5 py-5">
-                <EmptyState
-                  icon={<Hash size={18} />}
-                  title={hasActiveSearch ? "No matching notes" : "No notes here"}
-                  description={
-                    hasActiveSearch
-                      ? "No note matches the current search."
-                      : "Create a note in this folder to start writing."
-                  }
-                />
-              </div>
-            ) : null}
-
-            {searchError ? (
-              <p className="m-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-                {searchError}
-              </p>
-            ) : null}
-
-            <div className="space-y-2 px-3 py-3" aria-label="Note list">
-              {displayedNotes.map((note) => (
-                <NoteRow
-                  key={note.path}
-                  note={note}
-                  folders={folders}
-                  selected={note.path === selectedNotePath}
-                  isMoveMenuOpen={note.path === activeMoveNotePath}
-                  isBusy={isBusy}
-                  onOpen={() => {
-                    if (hasActiveSearch && "snippet" in note) {
-                      openSearchResult(note);
-                    } else {
-                      void openNote(note.path);
-                    }
-                  }}
-                  onDuplicate={() => void duplicateNote(note)}
-                  onToggleMove={() =>
-                    setActiveMoveNotePath((currentPath) =>
-                      currentPath === note.path ? null : note.path
-                    )
-                  }
-                  onMove={(folderPath) => void moveNote(note, folderPath)}
-                  onDelete={() => void deleteNote(note)}
-                />
-              ))}
-            </div>
-
-            <div className="border-t border-ink-100 px-3 py-3">
-              <p className="mb-2 text-xs font-semibold uppercase text-neutral-500">
-                Trash
-              </p>
-              {trashNotes.length === 0 ? (
-                <p className="px-2 text-sm text-neutral-500">Trash is empty.</p>
-              ) : (
-                <div className="space-y-2">
-                  {trashNotes.map((note) => (
-                    <div key={note.trashPath} className="trash-row">
-                      <div className="min-w-0">
-                        <p className="truncate text-sm font-medium">{note.title}</p>
-                        <p className="truncate text-xs text-neutral-500">
-                          {note.originalPath}
-                        </p>
-                      </div>
+                <div className="sidebar-content">
+                  {workspaceError ? <p className="sidebar-alert">{workspaceError}</p> : null}
+                  {searchError ? <p className="sidebar-alert">{searchError}</p> : null}
+                  {!hasWorkspace ? (
+                    <div className="sidebar-empty-state">
+                      <EmptyState
+                        icon={
+                          workspace.status === "missing" ||
+                          workspace.status === "permission-denied" ? (
+                            <AlertTriangle size={18} />
+                          ) : (
+                            <Folder size={18} />
+                          )
+                        }
+                        title={workspacePromptTitle}
+                        description={workspace.message}
+                      />
                       <button
                         type="button"
-                        aria-label="Restore note"
-                        className="icon-button"
-                        onClick={() => void restoreNote(note.trashPath)}
+                        className="secondary-button mt-3 w-full justify-center"
+                        onClick={() => void chooseWorkspace()}
                         disabled={isBusy}
                       >
-                        <RotateCcw size={15} />
-                      </button>
-                      <button
-                        type="button"
-                        aria-label="Permanently delete note"
-                        className="icon-button danger"
-                        onClick={() => void permanentlyDeleteNote(note.trashPath)}
-                        disabled={isBusy}
-                      >
-                        <Trash2 size={15} />
+                        <FolderOpen size={16} />
+                        <span>Choose workspace</span>
                       </button>
                     </div>
-                  ))}
+                  ) : null}
+
+                  {!hasActiveSearch && favoriteNotes.length > 0 ? (
+                    <section className="sidebar-favorites" aria-label="Favorite notes">
+                      <div className="section-heading sidebar-section-heading">
+                        <h2>Favorites</h2><span className="section-count">{favoriteNotes.length}</span>
+                        <button type="button" className="section-toggle" aria-label={isFavoritesExpanded ? "Collapse favorites" : "Expand favorites"}
+                          aria-expanded={isFavoritesExpanded} onClick={() => setIsFavoritesExpanded((expanded) => !expanded)}>
+                          {isFavoritesExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                        </button>
+                      </div>
+                      {isFavoritesExpanded ? <div className="favorite-note-list">
+                        {favoriteNotes.map((note) => (
+                          <div className="favorite-note-row" key={note.path} data-active={note.path === selectedNotePath}>
+                            <button type="button" className="favorite-note-open" aria-label={`Open favorite ${noteNameFromPath(note.path)}`}
+                              title={note.path} disabled={isBusy} onClick={() => void openNote(note.path)}>
+                              <Star size={14} fill="currentColor" aria-hidden="true" /><span className="truncate">{noteNameFromPath(note.path)}</span>
+                            </button>
+                            <button type="button" className="favorite-note-remove" aria-label={`Remove ${noteNameFromPath(note.path)} from favorites`}
+                              title="Remove from favorites" disabled={isBusy || isFavoriteSaving} onClick={() => void toggleFavoriteNote(note.path)}><X size={12} /></button>
+                          </div>
+                        ))}
+                      </div> : null}
+                    </section>
+                  ) : null}
+                  <div className="section-heading sidebar-section-heading">
+                    <h2>{hasActiveSearch ? "Search results" : "Folders"}</h2>
+                    {hasActiveSearch ? (
+                      <span className="section-count">{displayedNotes.length + matchingFolders.length}</span>
+                    ) : null}
+                    <button
+                      type="button"
+                      aria-label={isFoldersExpanded ? "Collapse folders" : "Expand folders"}
+                      aria-expanded={isFoldersExpanded}
+                      className="section-toggle"
+                      onClick={() => setIsFoldersExpanded((isExpanded) => !isExpanded)}
+                    >
+                      {isFoldersExpanded ? <ChevronDown size={15} /> : <ChevronRight size={15} />}
+                    </button>
+                  </div>
+                  {isFoldersExpanded ? renderSidebarTree() : null}
+
+                  {hasWorkspace && hasActiveSearch && displayedNotes.length === 0 && matchingFolders.length === 0 ? (
+                    <div className="sidebar-empty-state">
+                      <EmptyState
+                        icon={<Search size={18} />}
+                        title="No matching files or folders"
+                        description="Try a different word or clear the active tag."
+                      />
+                    </div>
+                  ) : null}
                 </div>
-              )}
+            </section>
+          </div>
+
+          <div className="sidebar-bottom">
+            {workspace.recentWorkspaces.length > 0 ? (
+              <div className="sidebar-bottom-section sidebar-action-section shrink-0">
+                <div className="sidebar-section-header sidebar-section-header-recent">
+                  <details className="collapsible-section" open>
+                    <summary
+                      className="collapsible-section-trigger"
+                      onClick={() => setActiveSidebarMenu(null)}
+                    >
+                      <BookOpenText size={15} />
+                      <span className="collapsible-section-label">Recent workspaces</span>
+                      <span className="section-count">{workspace.recentWorkspaces.length}</span>
+                      <ChevronRight className="collapsible-chevron" size={14} />
+                    </summary>
+                    <div className="recent-workspace-list">
+                      {workspace.recentWorkspaces.map((recentPath) => (
+                        <button
+                          key={recentPath}
+                          type="button"
+                          className="recent-workspace-row"
+                          title={recentPath}
+                          onClick={() => void reopenWorkspace(recentPath)}
+                        >
+                          <span className="recent-workspace-dot" data-current={recentPath === workspace.path} />
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {recentPath.split(/[\\/]/).pop() ?? recentPath}
+                            </span>
+                            <span className="block truncate text-[11px] text-neutral-500">
+                              {recentPath}
+                            </span>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </details>
+                  <ContextMenu
+                    label="Recent workspaces"
+                    className="sidebar-section-action-menu"
+                    open={activeSidebarMenu === "recent"}
+                    onToggle={() =>
+                      setActiveSidebarMenu((currentMenu) =>
+                        currentMenu === "recent" ? null : "recent"
+                      )
+                    }
+                    onContextMenu={() => setActiveSidebarMenu("recent")}
+                  >
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="context-menu-item"
+                      onClick={() => {
+                        setActiveSidebarMenu(null);
+                        void clearRecentWorkspaces();
+                      }}
+                      disabled={isBusy}
+                    >
+                      <X size={14} />
+                      <span>Clear recent workspaces</span>
+                    </button>
+                  </ContextMenu>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="trash-section workspace-trash-section sidebar-bottom-section sidebar-action-section shrink-0">
+              <div className="sidebar-section-header sidebar-section-header-trash">
+                <button
+                  type="button"
+                  className="collapsible-section-trigger w-full"
+                  aria-label="Trash"
+                  aria-expanded={isTrashExpanded}
+                  aria-controls="trash-notes"
+                  onClick={() => {
+                    setActiveSidebarMenu(null);
+                    setIsTrashExpanded((isExpanded) => !isExpanded);
+                  }}
+                >
+                  <Trash2 size={15} />
+                  <span className="collapsible-section-label">Trash</span>
+                  {trashNotes.length > 0 ? (
+                    <span className="section-count">{trashNotes.length}</span>
+                  ) : (
+                    <span className="section-empty-label">Empty</span>
+                  )}
+                  {isTrashExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                </button>
+                <ContextMenu
+                  label="Trash"
+                  className="sidebar-section-action-menu"
+                  open={activeSidebarMenu === "trash"}
+                  onToggle={() =>
+                    setActiveSidebarMenu((currentMenu) =>
+                      currentMenu === "trash" ? null : "trash"
+                    )
+                  }
+                  onContextMenu={() => setActiveSidebarMenu("trash")}
+                >
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="context-menu-item danger"
+                    onClick={requestEmptyTrash}
+                    disabled={isBusy || !hasWorkspace}
+                  >
+                    <Trash2 size={14} />
+                    <span>Empty Trash</span>
+                  </button>
+                </ContextMenu>
+              </div>
+              {isTrashExpanded ? (
+                <div id="trash-notes" className="trash-note-list">
+                  {trashNotes.length > 0 ? (
+                    trashNotes.map((note) => (
+                      <div key={note.trashPath} className="trash-row">
+                        <p
+                          className="min-w-0 truncate text-sm font-medium"
+                          title={noteNameFromPath(note.originalPath)}
+                        >
+                          {noteNameFromPath(note.originalPath)}
+                        </p>
+                        <button
+                          type="button"
+                          aria-label="Restore note"
+                          title="Restore note"
+                          className="icon-button"
+                          onClick={() => void restoreNote(note)}
+                          disabled={isBusy}
+                        >
+                          <RotateCcw size={15} />
+                        </button>
+                        <button
+                          type="button"
+                          aria-label="Permanently delete note"
+                          title="Permanently delete note"
+                          className="icon-button danger"
+                          onClick={() => void permanentlyDeleteNote(note.trashPath)}
+                          disabled={isBusy}
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="trash-empty-message">Trash is empty.</p>
+                  )}
+                </div>
+              ) : null}
             </div>
+
+            <div className="sidebar-utility-row">
+              <button type="button" className="sidebar-settings-button" aria-label="Settings" aria-pressed={isSettingsOpen}
+                onClick={() => setIsSettingsOpen((open) => !open)}><Settings size={15} /><span>Settings</span></button>
+              <button type="button" className="icon-button sidebar-toggle" aria-label="Toggle sidebar" aria-pressed={settings.sidebarVisible}
+                title="Collapse sidebar" onClick={() => void updateAppSettings({ sidebarVisible: false })}><PanelLeft size={15} /></button>
+              {isSettingsOpen && settings.sidebarVisible ? createPortal(<SettingsPopover settings={settings}
+                onUpdate={(patch) => void updateAppSettings(patch)} onClose={() => setIsSettingsOpen(false)} className="reference-settings-popover" />, document.body) : null}
+            </div>
+          </div>
           </div>
         </aside>
 
-        <section className="flex min-h-0 flex-col bg-white">
-          <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
-            <div className="min-w-0">
-              {selectedNote ? (
-                <input
-                  type="text"
-                  aria-label="Note title"
-                  className="note-title-input"
-                  value={noteTitleDraft}
-                  onChange={(event) => setNoteTitleDraft(event.target.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter") {
-                      event.preventDefault();
-                      event.currentTarget.blur();
-                      void renameNote();
-                    }
-                  }}
-                  disabled={isBusy}
-                />
-              ) : (
-                <h2 className="truncate text-sm font-semibold">Untitled note</h2>
-              )}
-              <p className="truncate text-xs text-neutral-500">
-                {selectedNote?.path ?? selectedNoteContent?.path ?? "No file selected"}
-              </p>
-            </div>
-            <div className="app-editor-header-actions flex items-center gap-2">
-              <button
-                type="button"
-                className="secondary-button"
-                onClick={() => void saveCurrentNote()}
-                disabled={!selectedNoteContent || !isDirty || isBusy || isSaving}
-                aria-keyshortcuts="Control+S"
-              >
-                <Save size={15} />
-                <span>Save</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export Markdown"
-                onClick={() => void exportCurrentNote("markdown")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export MD</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export HTML"
-                onClick={() => void exportCurrentNote("html")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export HTML</span>
-              </button>
-              <button
-                type="button"
-                className="secondary-button"
-                aria-label="Export PDF"
-                onClick={() => void exportCurrentNote("pdf")}
-                disabled={!selectedNoteContent || isBusy}
-              >
-                <span>Export PDF</span>
-              </button>
-              <span className="status-pill" aria-live="polite" title={saveError ?? undefined}>
-                <Check size={13} />
-                {statusMessage} - {saveStatusLabel}
-              </span>
-            </div>
-          </div>
+        <div
+          className="sidebar-resize-handle"
+          role="separator"
+          tabIndex={settings.sidebarVisible ? 0 : -1}
+          aria-label="Resize workspace sidebar"
+          aria-orientation="vertical"
+          aria-valuemin={sidebarMinWidth}
+          aria-valuemax={getSidebarWidthMax()}
+          aria-valuenow={Math.round(clampSidebarWidth(sidebarWidth))}
+          onKeyDown={handleSidebarKeyDown}
+          onPointerDown={handleSidebarPointerDown}
+          onPointerMove={handleSidebarPointerMove}
+          onPointerUp={finishSidebarResize}
+          onPointerCancel={finishSidebarResize}
+          onLostPointerCapture={() => finishSidebarResize()}
+        />
 
-          <div className="toolbar-shell">
-            <div
-              className="markdown-toolbar"
-              aria-label="Markdown toolbar"
+        <section className="editor-pane flex min-h-0 flex-col bg-white" data-note-open={Boolean(selectedNoteContent)}>
+          <div className="note-tab-bar">
+            <div className="note-tab-list" role="tablist" aria-label="Open notes">
+              {openNotePaths.map((notePath) => {
+                const isActive = notePath === selectedNotePath;
+                const name = noteNameFromPath(notePath);
+                return (
+                  <div key={notePath} className="note-tab" data-active={isActive} role="presentation">
+                    {tabRename?.path === notePath ? (
+                      <form className="note-tab-rename" onSubmit={(event) => {
+                        event.preventDefault();
+                        const note = notes.find((note) => note.path === notePath);
+                        if (!note || !tabRename.name.trim()) {
+                          setWorkspaceError("Note title cannot be empty.");
+                          return;
+                        }
+                        const name = tabRename.name;
+                        setTabRename(null);
+                        void renameNote(note, name);
+                      }}>
+                        <input aria-label="Tab name" value={tabRename.name} autoFocus disabled={isBusy}
+                          onFocus={(event) => event.currentTarget.select()}
+                          onChange={(event) => setTabRename({ path: notePath, name: event.target.value })}
+                          onBlur={() => setTabRename(null)}
+                          onKeyDown={(event) => {
+                            if (event.key === "Escape") {
+                              event.preventDefault(); setTabRename(null);
+                              window.requestAnimationFrame(() => focusNoteTab(notePath));
+                            }
+                          }} />
+                      </form>
+                    ) : (
+                    <button
+                      type="button"
+                      role="tab"
+                      aria-label={name}
+                      id={isActive ? "active-note-tab" : undefined}
+                      aria-selected={isActive}
+                      aria-controls={isActive ? "note-tab-panel" : undefined}
+                      tabIndex={isActive || !selectedNotePath ? 0 : -1}
+                      className="note-tab-select"
+                      title={notePath}
+                      aria-disabled={isBusy}
+                      onContextMenu={(event) => {
+                        event.preventDefault();
+                        showTabMenu(notePath, event.clientX, event.clientY);
+                      }}
+                      onClick={() => {
+                        if (!isBusy) {
+                          void openNote(notePath);
+                        }
+                      }}
+                      onKeyDown={async (event) => {
+                        if (isBusy) {
+                          return;
+                        }
+                        if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+                          event.preventDefault();
+                          const rect = event.currentTarget.getBoundingClientRect();
+                          showTabMenu(notePath, rect.left, rect.bottom);
+                          return;
+                        }
+                        const index = openNotePaths.indexOf(notePath);
+                        const nextIndex = event.key === "ArrowRight" ? (index + 1) % openNotePaths.length
+                          : event.key === "ArrowLeft" ? (index - 1 + openNotePaths.length) % openNotePaths.length
+                            : event.key === "Home" ? 0
+                              : event.key === "End" ? openNotePaths.length - 1 : null;
+                        if (nextIndex !== null) {
+                          event.preventDefault();
+                          const tabs = event.currentTarget.closest('[role="tablist"]')?.querySelectorAll<HTMLButtonElement>('[role="tab"]');
+                          const nextTab = tabs?.[nextIndex];
+                          await openNote(openNotePaths[nextIndex]);
+                          nextTab?.focus();
+                        }
+                      }}
+                    >
+                      <FileText size={14} aria-hidden="true" />
+                      <span className="truncate">{name}</span>
+                      {isActive && isDirty ? <span className="note-tab-dirty" aria-label="Unsaved changes" /> : null}
+                    </button>
+                    )}
+                    <button
+                      type="button"
+                      className="note-tab-close"
+                      aria-label={`Close ${name} tab`}
+                      title={`Close ${name} tab`}
+                      disabled={isBusy}
+                      onClick={() => void closeNoteTab(notePath)}
+                    >
+                      <X size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              type="button"
+              className="icon-button note-tab-add"
+              aria-label="Create new note"
+              title="Create new unnamed note"
+              disabled={!hasWorkspace || isBusy}
+              onClick={() => void createNote()}
             >
-              {getToolbarGroups(toolbarPlaceholders).map((group) => (
-                <div
-                  key={group.name}
-                  className="toolbar-group"
-                  aria-label={`${group.name} tools`}
-                >
-                  {group.commands.map((command) => {
-                    const isActive = activeToolbarCommands.has(command.id);
-
-                    return (
-                      <button
-                        key={command.id}
-                        type="button"
-                        className={`toolbar-button ${
-                          isActive ? "toolbar-button-active" : ""
-                        }`}
-                        aria-label={command.label}
-                        title={command.label}
-                        onMouseDown={(event) => event.preventDefault()}
-                        onClick={(event) => runToolbarCommand(command, event)}
-                        disabled={!selectedNoteContent || isBusy}
-                      >
-                        {command.icon}
-                      </button>
-                    );
-                  })}
-                </div>
-              ))}
-            </div>
+              <Plus size={18} />
+            </button>
           </div>
+          {tabMenu ? createPortal(
+            <div ref={tabMenuRef} className="toolbar-command-menu note-tab-context-menu" role="menu" aria-label="Tab options"
+              style={{ left: tabMenu.left, top: tabMenu.top }}
+              onContextMenu={(event) => event.preventDefault()}
+              onKeyDown={(event) => {
+                if (event.key === "Escape") {
+                  event.preventDefault(); event.stopPropagation(); setTabMenu(null); focusNoteTab(tabMenu.path);
+                  return;
+                }
+                if (event.key === "Tab") { setTabMenu(null); return; }
+                const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('button:not(:disabled)')];
+                const index = items.indexOf(document.activeElement as HTMLButtonElement);
+                const next = event.key === "ArrowDown" ? (index + 1) % items.length
+                  : event.key === "ArrowUp" ? (index - 1 + items.length) % items.length
+                    : event.key === "Home" ? 0 : event.key === "End" ? items.length - 1 : null;
+                if (next !== null) { event.preventDefault(); items[next]?.focus(); }
+              }}>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || !notes.some((note) => note.path === tabMenu.path)}
+                onClick={() => { setTabRename({ path: tabMenu.path, name: noteNameFromPath(tabMenu.path) }); setTabMenu(null); }}><Edit3 size={15} />Rename</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy}
+                onClick={() => void closeNoteTabs([tabMenu.path])}><X size={15} />Close Tab</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || openNotePaths.length < 2}
+                onClick={() => void closeNoteTabs(openNotePaths.filter((path) => path !== tabMenu.path))}><X size={15} />Close Other Tabs</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy}
+                onClick={() => void closeNoteTabs(openNotePaths)}><X size={15} />Close All Tabs</button>
+              <button type="button" className="toolbar-button" role="menuitem" disabled={isBusy || openNotePaths.indexOf(tabMenu.path) === openNotePaths.length - 1}
+                onClick={() => void closeNoteTabs(openNotePaths.slice(openNotePaths.indexOf(tabMenu.path) + 1))}><X size={15} />Close Tabs to the Right</button>
+            </div>, document.body
+          ) : null}
+          {/* The centered empty state replaces the old "Untitled note" header. */}
+          <div className="app-editor-header flex h-14 items-center justify-between border-b border-ink-100 px-5">
+            <div className="app-editor-header-copy flex min-w-0 items-center gap-2">
+              <div className="min-w-0 flex-1">
+                {selectedNote ? (
+                  <h2
+                    className="truncate text-sm font-semibold"
+                    title={selectedNoteName ?? undefined}
+                  >
+                    {selectedNoteName}
+                  </h2>
+                ) : (
+                  <h2 className="truncate text-sm font-semibold">Editor</h2>
+                )}
+                {/* The header intentionally omits the former "No file selected" path line. */}
+              </div>
+            </div>
+            {selectedNoteContent ? (
+              <div className="app-editor-header-actions flex items-center gap-2">
+                <button type="button" className="icon-button" aria-label={isFavoriteNote(selectedNoteContent.path) ? "Remove from favorites" : "Add to favorites"}
+                  aria-pressed={isFavoriteNote(selectedNoteContent.path)} disabled={isBusy || isFavoriteSaving}
+                  title={isFavoriteNote(selectedNoteContent.path) ? "Remove from favorites" : "Add to favorites"}
+                  onClick={() => void toggleFavoriteNote(selectedNoteContent.path)}>
+                  <Star size={17} fill={isFavoriteNote(selectedNoteContent.path) ? "currentColor" : "none"} />
+                </button>
+                <button type="button" className="icon-button" aria-label={isNoteLocked ? "Unlock note" : "Lock note"}
+                  aria-pressed={isNoteLocked} disabled={isBusy}
+                  title={isNoteLocked ? "View only — unlock to edit" : "Lock note to make it view only"}
+                  onClick={() => void toggleNoteLock()}>
+                  {isNoteLocked ? <LockKeyhole size={17} /> : <UnlockKeyhole size={17} />}
+                </button>
+                <button type="button" className="icon-button" aria-label="Find in note" title="Find in note (Ctrl+F)"
+                  aria-keyshortcuts="Control+F" onClick={() => editorHandleRef.current?.openSearch("replace")}><Search size={17} /></button>
+                <button type="button" className="icon-button" aria-label="Find and replace" title="Find and replace (Ctrl+H)"
+                  aria-keyshortcuts="Control+H" onClick={() => editorHandleRef.current?.openSearch("replace")}><Replace size={17} /></button>
+                <button type="button" aria-label="Full width" aria-pressed={settings.fullWidth}
+                  title={settings.fullWidth ? "Use readable width" : "Use full width"} className="icon-button reading-width-control"
+                  onClick={() => void updateAppSettings({ fullWidth: !settings.fullWidth })}><span>Reading width</span><span className="reading-width-switch" data-enabled={!settings.fullWidth} /></button>
+                <button type="button" className="icon-button" aria-label="Show heading minimap" aria-pressed={settings.showOutline}
+                  title="Toggle heading minimap" onClick={() => void updateAppSettings({ showOutline: !settings.showOutline })}><ListTree size={17} /></button>
+                <button
+                  type="button"
+                  className="secondary-button"
+                  onClick={() => void saveCurrentNote()}
+                  disabled={!isDirty || isBusy || isSaving}
+                  aria-keyshortcuts="Control+S"
+                >
+                  <Save size={15} />
+                  <span className="sr-only">Save</span>
+                </button>
+                <details className="action-menu editor-action-menu">
+                  <summary className="secondary-button" aria-label="Export note">
+                    <MoreHorizontal size={15} />
+                    <span className="sr-only">Export</span>
+                    <ChevronDown size={14} />
+                  </summary>
+                  <div className="action-menu-popover" role="menu" aria-label="Export note">
+                    {([
+                      ["markdown", "Markdown", "Export MD"],
+                      ["html", "HTML", "Export HTML"],
+                      ["pdf", "PDF", "Export PDF"]
+                    ] as Array<[ExportFormat, string, string]>).map(([format, label, ariaLabel]) => (
+                      <button
+                        key={format}
+                        type="button"
+                        role="menuitem"
+                        className="action-menu-item"
+                        aria-label={ariaLabel}
+                        onClick={(event) => {
+                          event.currentTarget.closest("details")?.removeAttribute("open");
+                          void exportCurrentNote(format);
+                        }}
+                        disabled={isBusy}
+                      >
+                        <FileOutput size={15} />
+                        <span>
+                          <strong>{label}</strong>
+                          <small>{format === "markdown" ? "Original note format" : `Export as ${label}`}</small>
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </details>
+              </div>
+            ) : null}
+          </div>
+
+          {selectedNoteContent ? (
+            <div className="toolbar-shell">
+              <div className="markdown-toolbar" aria-label="Markdown toolbar">
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isEditorDisabled} aria-label="Heading level" title="Heading level"
+                  aria-expanded={toolbarMenu?.kind === "headings"} onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "headings" ? null : { kind: "headings", left: rect.left, top: rect.bottom + 5 }); }}>H<ChevronDown size={11} /></button>
+                {getToolbarGroups(toolbarPlaceholders.filter((command) => primaryToolbarOrder.includes(command.id)).sort((a, b) => primaryToolbarOrder.indexOf(a.id) - primaryToolbarOrder.indexOf(b.id))).map((group) => (
+                  <div key={group.name} className="toolbar-group" aria-label={`${group.name} tools`}>
+                    {group.commands.map((command) => <button key={command.id} type="button"
+                      className={`toolbar-button ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
+                      aria-label={command.label} title={command.label} onMouseDown={(event) => event.preventDefault()}
+                      onClick={(event) => runToolbarCommand(command, event)} disabled={isEditorDisabled}>
+                      {command.id === "callout-note" ? <Lightbulb size={16} /> : command.icon}
+                    </button>)}
+                  </div>
+                ))}
+                <button type="button" className="toolbar-button toolbar-menu-trigger" disabled={isEditorDisabled} aria-label="More formatting" title="More formatting"
+                  aria-expanded={toolbarMenu?.kind === "more"} onMouseDown={(event) => event.preventDefault()}
+                  onClick={(event) => { const rect = event.currentTarget.getBoundingClientRect(); setToolbarMenu(toolbarMenu?.kind === "more" ? null : { kind: "more", left: Math.min(rect.left, window.innerWidth - 230), top: rect.bottom + 5 }); }}><MoreHorizontal size={16} /></button>
+              </div>
+              {toolbarMenu ? createPortal(<div className="toolbar-command-menu" role="group" aria-label={toolbarMenu.kind === "headings" ? "Heading levels" : "Additional formatting"}
+                style={{ left: toolbarMenu.left, top: toolbarMenu.top }}>
+                {toolbarPlaceholders.filter((command) => toolbarMenu.kind === "headings" ? command.group === "headings" :
+                  ["inline-code", "clear-format", "inline-math", "divider", "callout-warning", "callout-info", "callout-success", "table-add-row", "table-delete-row", "table-add-column", "table-delete-column", "table-delete"].includes(command.id)).map((command) =>
+                  <button key={command.id} type="button" aria-label={command.label} disabled={isEditorDisabled}
+                    className={`toolbar-button ${command.id.startsWith("table-delete") ? "danger" : ""} ${activeToolbarCommands.has(command.id) ? "toolbar-button-active" : ""}`}
+                    onMouseDown={(event) => event.preventDefault()} onClick={(event) => { runToolbarCommand(command, event); setToolbarMenu(null); }}>
+                    {command.icon}<span>{command.label}</span>
+                  </button>)}
+              </div>, document.body) : null}
+            </div>
+          ) : null}
 
           {externalNoteChange ? (
             <div className="external-change-banner" role="alert">
@@ -2580,16 +3186,23 @@ export function App() {
             </form>
           ) : null}
 
+          {/* Former empty-state copy: "Open or create a Markdown note to inspect its saved content here." */}
           {selectedNoteContent ? (
-            <article className="min-h-0 flex-1 overflow-y-auto p-8">
-              <VisualMarkdownEditor
+            <article className="editor-scroll" role="tabpanel" id="note-tab-panel" aria-labelledby="active-note-tab">
+              <MarkdownEditor
                 ref={editorHandleRef}
                 key={selectedNoteContent.path}
                 markdown={editorMarkdown}
                 workspacePath={workspace.path}
                 notePath={selectedNoteContent.path}
-                disabled={isBusy}
+                disabled={isEditorDisabled}
+                readOnly={isNoteLocked}
                 lineWrap={settings.lineWrap}
+                fullWidth={settings.fullWidth}
+                showOutline={settings.showOutline}
+                outlineWidth={settings.outlineWidth}
+                onOutlineWidthChange={(width) => void updateAppSettings({ outlineWidth: width })}
+                onOutlineClose={() => void updateAppSettings({ showOutline: false })}
                 onChange={(nextMarkdown) => {
                   editorMarkdownRef.current = nextMarkdown;
                   setEditorMarkdown(nextMarkdown);
@@ -2600,6 +3213,10 @@ export function App() {
                   setStatusMessage("Editing");
                 }}
                 onSelectionFormatChange={setActiveToolbarCommands}
+                onCommandRequest={(command) => {
+                  const tool = toolbarPlaceholders.find((tool) => tool.id === command);
+                  if (tool) void runToolbarCommand(tool);
+                }}
                 onLinkDialogRequest={openLinkDialog}
                 onImagePaste={(payload) => void insertPastedImage(payload)}
                 onLocalLinkRequest={(url) => void openLocalLink(url)}
@@ -2607,13 +3224,13 @@ export function App() {
             </article>
           ) : (
             <div className="flex flex-1 items-center justify-center p-8">
-              <div className="max-w-md text-center">
+              <div className="max-w-sm text-center">
                 <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-md bg-ink-100 text-ink-700">
                   <SquarePen size={22} />
                 </div>
                 <h3 className="text-lg font-semibold">No note selected</h3>
                 <p className="mt-2 text-sm leading-6 text-neutral-500">
-                  Open or create a Markdown note to inspect its saved content here.
+                  Select a note from the list or create a new one to start writing.
                 </p>
               </div>
             </div>
@@ -2621,21 +3238,116 @@ export function App() {
         </section>
       </section>
 
-      <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
+      {!settings.sidebarVisible ? (
+        <div className="sidebar-collapsed-controls fixed bottom-10 left-3 z-50 flex items-center gap-1 rounded-lg border border-ink-100 bg-white p-1 shadow-lg">
+          <button
+            type="button"
+            aria-label="Toggle sidebar"
+            aria-pressed={settings.sidebarVisible}
+            title="Show sidebar"
+            className="icon-button"
+            onClick={() => void updateAppSettings({ sidebarVisible: true })}
+          >
+            <PanelLeft size={18} />
+          </button>
+          <button
+            type="button"
+            aria-label="Settings"
+            aria-pressed={isSettingsOpen}
+            title="Settings"
+            className="icon-button"
+            onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+          >
+            <Settings size={18} />
+          </button>
+          {isSettingsOpen && !settings.sidebarVisible ? (
+            <SettingsPopover
+              settings={settings}
+              onUpdate={(patch) => void updateAppSettings(patch)}
+              onClose={() => setIsSettingsOpen(false)}
+              className="sidebar-settings-popover"
+            />
+          ) : null}
+        </div>
+      ) : null}
+
+      <footer className="app-status-bar grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center border-t border-ink-100 bg-white px-4 text-xs text-neutral-500">
         <span className="status-bar-path truncate" title={currentFilePath}>
           {currentFilePath}
         </span>
-        <span className="status-bar-mode">{currentMode}</span>
-        <span>{phase}</span>
-        <span className="status-bar-details justify-self-end truncate">
+        {currentMode ? <span className="status-bar-mode">{currentMode}</span> : null}
+        <span className="status-bar-details col-start-3 justify-self-end truncate">
+          {/* Previous combined status/count copy: {saveStatusLabel} - {wordCount} words - {characterCount} characters */}
           {settings.showWordCount ? (
-            <>{saveStatusLabel} - {wordCount} words - {characterCount} characters</>
+            <>{wordCount} words · {characterCount} characters</>
           ) : (
-            <>{saveStatusLabel} - {characterCount} characters</>
+            <>{characterCount} characters</>
           )}
           {saveError ? `: ${saveError}` : ""}
         </span>
       </footer>
+
+      {isEmptyTrashDialogOpen ? (
+        <div
+          className="confirmation-backdrop"
+          onMouseDown={(event) => {
+            if (event.currentTarget === event.target) {
+              setIsEmptyTrashDialogOpen(false);
+            }
+          }}
+        >
+          <div
+            className="confirmation-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="empty-trash-dialog-title"
+            onMouseDown={(event) => event.stopPropagation()}
+          >
+            <div className="confirmation-modal-header">
+              <span className="confirmation-modal-icon" aria-hidden="true">
+                <Trash2 size={18} />
+              </span>
+              <div className="min-w-0">
+                <h2 id="empty-trash-dialog-title">Empty Trash?</h2>
+                <p>
+                  {trashNotes.length > 0
+                    ? `This permanently deletes ${trashNotes.length} ${trashNotes.length === 1 ? "note" : "notes"}. This cannot be undone.`
+                    : "Trash is already empty."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="icon-button"
+                aria-label="Close confirmation"
+                title="Close confirmation"
+                onClick={() => setIsEmptyTrashDialogOpen(false)}
+                disabled={isBusy}
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <div className="confirmation-modal-actions">
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={() => setIsEmptyTrashDialogOpen(false)}
+                disabled={isBusy}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="secondary-button danger"
+                onClick={() => void emptyTrash()}
+                disabled={isBusy || trashNotes.length === 0}
+              >
+                <Trash2 size={15} />
+                Empty Trash
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       {isCommandPaletteOpen ? (
         <div
@@ -2729,712 +3441,148 @@ export function App() {
   );
 }
 
-type VisualMarkdownEditorProps = {
-  markdown: string;
-  workspacePath: string | null;
-  notePath: string;
-  disabled: boolean;
-  lineWrap: boolean;
-  onChange: (markdown: string) => void;
-  onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
-  onLinkDialogRequest: (details: LinkDialogDetails) => void;
-  onImagePaste: (payload: SaveImagePayload) => void;
-  onLocalLinkRequest: (url: string) => void;
-};
-
-type VisualMarkdownEditorHandle = {
-  runCommand: (
-    command: MarkdownEditorCommand,
-    options?: MarkdownEditorCommandOptions
-  ) => void;
-  getLinkDetails: () => {
-    text: string;
-    url: string;
-    isEditing: boolean;
-  };
-};
-
-const VisualMarkdownEditor = forwardRef<
-  VisualMarkdownEditorHandle,
-  VisualMarkdownEditorProps
->(function VisualMarkdownEditor(
-  {
-    markdown,
-    workspacePath,
-    notePath,
-    disabled,
-    lineWrap,
-    onChange,
-    onSelectionFormatChange,
-    onLinkDialogRequest,
-    onImagePaste,
-    onLocalLinkRequest
-  },
-  ref
-) {
-  const editorRef = useRef<HTMLDivElement | null>(null);
-  const lastRenderedMarkdown = useRef("");
-  const savedSelectionRange = useRef<Range | null>(null);
-
-  useEffect(() => {
-    if (!editorRef.current || lastRenderedMarkdown.current === markdown) {
-      return;
-    }
-
-    editorRef.current.innerHTML = markdownToHtml(markdown, {
-      workspacePath,
-      notePath
-    });
-    lastRenderedMarkdown.current = markdown;
-  }, [markdown, notePath, workspacePath]);
-
-  useEffect(() => {
-    function handleSelectionChange() {
-      rememberEditorSelection();
-    }
-
-    document.addEventListener("selectionchange", handleSelectionChange);
-
-    return () => {
-      document.removeEventListener("selectionchange", handleSelectionChange);
-    };
-  });
-
-  useEffect(() => {
-    const editorElement = editorRef.current;
-
-    if (!editorElement) {
-      return;
-    }
-
-    function handleNativeChange(event: Event) {
-      const target = event.target;
-
-      if (
-        !(target instanceof HTMLSelectElement) ||
-        target.dataset.codeLanguage !== "true" ||
-        !editorRef.current
-      ) {
-        return;
-      }
-
-      updateCodeBlockLanguageFromSelect(target);
-      syncMarkdownFromEditor(editorRef.current);
-    }
-
-    editorElement.addEventListener("change", handleNativeChange);
-
-    return () => {
-      editorElement.removeEventListener("change", handleNativeChange);
-    };
-  });
-
-  useEffect(() => {
-    const editorElement = editorRef.current;
-
-    if (!editorElement) {
-      return;
-    }
-
-    function handleImageError(event: Event) {
-      const target = event.target;
-
-      if (!(target instanceof HTMLImageElement)) {
-        return;
-      }
-
-      const markdownSrc = target.dataset.markdownSrc ?? target.getAttribute("src") ?? "";
-
-      if (
-        /^(?:data:|https?:|file:|blob:)/i.test(markdownSrc) ||
-        markdownSrc.startsWith("/") ||
-        target.dataset.imageBroken === "true"
-      ) {
-        return;
-      }
-
-      const placeholder = document.createElement("span");
-      placeholder.className = "broken-image-placeholder";
-      placeholder.contentEditable = "false";
-      placeholder.dataset.brokenImage = "true";
-      placeholder.dataset.markdownSrc = markdownSrc;
-      placeholder.dataset.imageAlt = target.alt;
-      placeholder.title = markdownSrc;
-      placeholder.textContent = `Missing image: ${target.alt || markdownSrc}`;
-      target.replaceWith(placeholder);
-    }
-
-    editorElement.addEventListener("error", handleImageError, true);
-
-    return () => {
-      editorElement.removeEventListener("error", handleImageError, true);
-    };
-  });
-
-  function getSelectionElement() {
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-      return null;
-    }
-
-    const anchorNode = selection.anchorNode;
-    return anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement ?? null;
-  }
-
-  function getSelectedOrNearbyLink() {
-    const editorElement = editorRef.current;
-    const element = getSelectionElement();
-    const link = element?.closest("a");
-
-    if (!(link instanceof HTMLAnchorElement) || !editorElement?.contains(link)) {
-      return null;
-    }
-
-    return link;
-  }
-
-  function getLinkDetailsFromSelection() {
-    const editorElement = editorRef.current;
-
-    if (!editorElement || disabled) {
-      return {
-        text: "",
-        url: "",
-        isEditing: false
-      };
-    }
-
-    editorElement.focus();
-    if (!restoreEditorSelection()) {
-      placeCaretAtEditorEnd(editorElement);
-    }
-
-    const link = getSelectedOrNearbyLink();
-
-    if (link) {
-      return {
-        text: link.textContent ?? "",
-        url: link.getAttribute("href") ?? "",
-        isEditing: true
-      };
-    }
-
-    return {
-      text: window.getSelection()?.toString() ?? "",
-      url: "",
-      isEditing: false
-    };
-  }
-
-  useImperativeHandle(ref, () => ({
-    runCommand(command, options) {
-      if (!editorRef.current || disabled) {
-        return;
-      }
-
-      editorRef.current.focus();
-      if (!restoreEditorSelection()) {
-        placeCaretAtEditorEnd(editorRef.current);
-      }
-      applyMarkdownEditorCommand(command, options);
-      syncMarkdownFromEditor(editorRef.current);
-    },
-    getLinkDetails() {
-      return getLinkDetailsFromSelection();
-    }
-  }));
-
-  function rememberEditorSelection() {
-    const editorElement = editorRef.current;
-    const selection = window.getSelection();
-
-    if (!editorElement || !selection || selection.rangeCount === 0) {
-      onSelectionFormatChange(new Set());
-      return;
-    }
-
-    const range = selection.getRangeAt(0);
-
-    if (editorElement.contains(range.commonAncestorContainer)) {
-      savedSelectionRange.current = range.cloneRange();
-      onSelectionFormatChange(collectActiveCommands(editorElement));
-    } else {
-      onSelectionFormatChange(new Set());
-    }
-  }
-
-  function restoreEditorSelection() {
-    const selection = window.getSelection();
-    const range = savedSelectionRange.current;
-
-    if (!selection || !range) {
-      return false;
-    }
-
-    selection.removeAllRanges();
-    selection.addRange(range);
-    return true;
-  }
-
-  function placeCaretAtEditorEnd(editorElement: HTMLDivElement) {
-    const range = document.createRange();
-    const selection = window.getSelection();
-
-    range.selectNodeContents(editorElement);
-    range.collapse(false);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-  }
-
-  function collectActiveCommands(editorElement: HTMLDivElement) {
-    const activeCommands = new Set<MarkdownEditorCommand>();
-    const selection = window.getSelection();
-
-    if (!selection || selection.rangeCount === 0) {
-      return activeCommands;
-    }
-
-    const anchorNode = selection.anchorNode;
-    const element =
-      anchorNode instanceof HTMLElement ? anchorNode : anchorNode?.parentElement;
-
-    if (!element || !editorElement.contains(element)) {
-      return activeCommands;
-    }
-
-    if (document.queryCommandState("bold")) {
-      activeCommands.add("bold");
-    }
-
-    if (document.queryCommandState("italic")) {
-      activeCommands.add("italic");
-    }
-
-    if (document.queryCommandState("strikeThrough")) {
-      activeCommands.add("strikethrough");
-    }
-
-    const heading = element.closest("h1,h2,h3,h4,h5,h6");
-    if (heading) {
-      activeCommands.add(`heading-${heading.tagName.slice(1)}` as MarkdownEditorCommand);
-    }
-
-    if (element.closest("blockquote")) {
-      activeCommands.add("blockquote");
-    }
-
-    if (element.closest("ul")) {
-      activeCommands.add("unordered-list");
-    }
-
-    if (element.closest("ol")) {
-      activeCommands.add("ordered-list");
-    }
-
-    if (element.closest("li[data-task='true']")) {
-      activeCommands.add("task-list");
-    }
-
-    if (element.closest("pre")) {
-      activeCommands.add("code-block");
-    } else if (element.closest("code")) {
-      activeCommands.add("inline-code");
-    }
-
-    if (element.closest("a")) {
-      activeCommands.add("link");
-    }
-
-    if (element.closest("table")) {
-      activeCommands.add("table");
-    }
-
-    if (element.closest("img")) {
-      activeCommands.add("image");
-    }
-
-    const mathElement = element.closest("[data-math]");
-    if (mathElement instanceof HTMLElement) {
-      activeCommands.add(
-        mathElement.dataset.mathDisplay === "block" ? "block-math" : "inline-math"
-      );
-    }
-
-    return activeCommands;
-  }
-
-  function syncMarkdownFromEditor(editorElement: HTMLDivElement) {
-    const nextMarkdown = editorDomToMarkdown(editorElement);
-
-    lastRenderedMarkdown.current = nextMarkdown;
-    onChange(nextMarkdown);
-    rememberEditorSelection();
-  }
-
-  function handleInput(event: FormEvent<HTMLDivElement>) {
-    syncMarkdownFromEditor(event.currentTarget);
-  }
-
-  function handleChange(event: FormEvent<HTMLDivElement>) {
-    const target = event.target;
-
-    if (
-      target instanceof HTMLSelectElement &&
-      target.dataset.codeLanguage === "true" &&
-      editorRef.current
-    ) {
-      updateCodeBlockLanguageFromSelect(target);
-      syncMarkdownFromEditor(editorRef.current);
-    }
-  }
-
-  async function handlePaste(event: ClipboardEvent<HTMLDivElement>) {
-    const imageItem = Array.from(event.clipboardData.items).find(
-      (item) => item.kind === "file" && item.type.startsWith("image/")
-    );
-
-    if (imageItem) {
-      const file = imageItem.getAsFile();
-
-      if (file) {
-        event.preventDefault();
-        const bytes = Array.from(new Uint8Array(await file.arrayBuffer()));
-        onImagePaste({
-          bytes,
-          fileName: file.name || undefined,
-          mimeType: file.type || imageItem.type
-        });
-        return;
-      }
-    }
-
-    event.preventDefault();
-    insertPlainTextAtSelection(event.clipboardData.getData("text/plain"));
-    handleInput(event);
-  }
-
-  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Backspace") {
-      if (isSelectionInsideCodeBlock()) {
-        return;
-      }
-
-      const didNormalizeBlock = normalizeEmptyBlockAtSelection();
-
-      if (didNormalizeBlock && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
-      const didExitInlineAtom = exitInlineAtomAtSelection();
-      const didExitBlock = didExitInlineAtom ? false : exitCurrentEditorBlock();
-
-      if ((didExitInlineAtom || didExitBlock) && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if ((event.ctrlKey || event.metaKey) && event.key === "ArrowRight") {
-      const didExitInlineAtom = exitInlineAtomAtSelection();
-
-      if (didExitInlineAtom && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if (event.key === "Tab") {
-      const didInsertCodeIndent = insertCodeIndentAtSelection();
-      const didMoveTableCell = !didInsertCodeIndent
-        ? moveTableSelection(!event.shiftKey)
-        : false;
-      const didHandleList = !didInsertCodeIndent && !didMoveTableCell
-        ? handleListKeyAtSelection(event.key, event.shiftKey)
-        : false;
-
-      if ((didInsertCodeIndent || didMoveTableCell || didHandleList) && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      return;
-    }
-
-    if (event.key === "Enter") {
-      if (isSelectionInsideCodeBlock()) {
-        return;
-      }
-
-      const didHandleList = handleListKeyAtSelection(event.key, event.shiftKey);
-
-      if (didHandleList && editorRef.current) {
-        event.preventDefault();
-        syncMarkdownFromEditor(editorRef.current);
-      }
-
-      if (didHandleList) {
-        return;
-      }
-    }
-
-    if (event.key !== " " && event.key !== "Enter") {
-      return;
-    }
-
-    const command = applySlashCommandAtSelection();
-
-    if (!command || !editorRef.current) {
-      return;
-    }
-
-    event.preventDefault();
-    syncMarkdownFromEditor(editorRef.current);
-  }
-
-  function handleMouseDown(event: MouseEvent<HTMLDivElement>) {
-    if (!event.altKey) {
-      return;
-    }
-
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement) || !target.closest("pre,blockquote")) {
-      return;
-    }
-
-    const didExitBlock = exitEditorBlockFromElement(target);
-
-    if (didExitBlock && editorRef.current) {
-      event.preventDefault();
-      syncMarkdownFromEditor(editorRef.current);
-    }
-  }
-
-  function selectImageForResize(image: HTMLImageElement) {
-    let frame = image.closest(".image-resize-frame") as HTMLSpanElement | null;
-
-    if (!frame) {
-      frame = document.createElement("span");
-      frame.className = "image-resize-frame";
-      frame.contentEditable = "false";
-      frame.dataset.imageResizeFrame = "true";
-      image.insertAdjacentElement("beforebegin", frame);
-      frame.append(image);
-    }
-
-    const imageWidth = image.getAttribute("width") ?? image.style.width.replace("px", "");
-    const width = Number.parseInt(imageWidth, 10) || Math.round(image.getBoundingClientRect().width) || 320;
-
-    frame.style.width = `${width}px`;
-    frame.classList.add("image-resize-frame-active");
-    image.style.width = "100%";
-    image.style.height = "auto";
-
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNode(frame);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    savedSelectionRange.current = range.cloneRange();
-
-    if (editorRef.current) {
-      onSelectionFormatChange(collectActiveCommands(editorRef.current));
-    }
-  }
-
-  function syncImageResizeFrames() {
-    if (!editorRef.current) {
-      return false;
-    }
-
-    let didResize = false;
-
-    for (const frame of Array.from(editorRef.current.querySelectorAll(".image-resize-frame"))) {
-      if (!(frame instanceof HTMLElement)) {
-        continue;
-      }
-
-      const image = frame.querySelector("img");
-
-      if (!(image instanceof HTMLImageElement)) {
-        continue;
-      }
-
-      const width = Math.round(frame.getBoundingClientRect().width);
-
-      if (width > 0 && image.getAttribute("width") !== String(width)) {
-        image.setAttribute("width", String(width));
-        image.style.width = "100%";
-        image.style.height = "auto";
-        didResize = true;
-      }
-    }
-
-    return didResize;
-  }
-
-  function handleMouseUp() {
-    if (syncImageResizeFrames() && editorRef.current) {
-      syncMarkdownFromEditor(editorRef.current);
-      return;
-    }
-
-    rememberEditorSelection();
-  }
-
-  async function copyTextToClipboard(text: string) {
-    try {
-      await navigator.clipboard?.writeText(text);
-
-      if (navigator.clipboard) {
-        return;
-      }
-    } catch {
-      // Fall back for Electron or browser contexts where async clipboard is unavailable.
-    }
-
-    const textarea = document.createElement("textarea");
-    textarea.value = text;
-    textarea.setAttribute("readonly", "true");
-    textarea.style.position = "fixed";
-    textarea.style.left = "-9999px";
-    document.body.append(textarea);
-    textarea.select();
-    document.execCommand("copy");
-    textarea.remove();
-  }
-
-  function handleClick(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target;
-    const codeCopyButton =
-      target instanceof HTMLElement ? target.closest("[data-code-copy='true']") : null;
-
-    if (codeCopyButton instanceof HTMLButtonElement) {
-      const code = codeCopyButton.closest("pre")?.querySelector("code")?.textContent ?? "";
-
-      event.preventDefault();
-      void copyTextToClipboard(code);
-      return;
-    }
-
-    const linkTarget = target instanceof HTMLElement ? target.closest("a") : null;
-
-    if (linkTarget instanceof HTMLAnchorElement && (event.ctrlKey || event.metaKey)) {
-      event.preventDefault();
-      const href = linkTarget.getAttribute("href") ?? "";
-
-      if (/^(?:https?:)?\/\//i.test(href)) {
-        void window.inknest.links.openExternal({ url: linkTarget.href });
-      } else {
-        onLocalLinkRequest(href);
-      }
-      return;
-    }
-
-    if (
-      target instanceof HTMLImageElement ||
-      (target instanceof HTMLElement && target.closest("[data-math]"))
-    ) {
-      const selection = window.getSelection();
-      const range = document.createRange();
-      const selectableTarget =
-        target instanceof HTMLImageElement ? target : target.closest("[data-math]");
-
-      if (!selectableTarget) {
-        return;
-      }
-
-      range.selectNode(selectableTarget);
-      selection?.removeAllRanges();
-      selection?.addRange(range);
-    }
-
-    if (!(target instanceof HTMLInputElement) || target.type !== "checkbox") {
-      return;
-    }
-
-    window.setTimeout(() => {
-      if (editorRef.current) {
-        syncMarkdownFromEditor(editorRef.current);
-      }
-    }, 0);
-  }
-
-  function handleDoubleClick(event: MouseEvent<HTMLDivElement>) {
-    const target = event.target;
-
-    if (!(target instanceof HTMLElement)) {
-      return;
-    }
-
-    if (target instanceof HTMLImageElement) {
-      event.preventDefault();
-      selectImageForResize(target);
-      return;
-    }
-
-    const link = target.closest("a");
-
-    if (!(link instanceof HTMLAnchorElement) || !editorRef.current?.contains(link)) {
-      return;
-    }
-
-    event.preventDefault();
-
-    const selection = window.getSelection();
-    const range = document.createRange();
-    range.selectNodeContents(link);
-    selection?.removeAllRanges();
-    selection?.addRange(range);
-    savedSelectionRange.current = range.cloneRange();
-    onSelectionFormatChange(collectActiveCommands(editorRef.current));
-
-    onLinkDialogRequest({
-      text: link.textContent ?? "",
-      url: link.getAttribute("href") ?? "",
-      isEditing: true,
-      position: getViewportPopoverPosition(event.clientX, event.clientY + 8)
-    });
-  }
-
-  return (
-    <div
-      ref={editorRef}
-      className={`visual-editor ${lineWrap ? "" : "visual-editor-no-wrap"}`}
-      contentEditable={!disabled}
-      suppressContentEditableWarning
-      aria-label="Visual Markdown editor"
-      role="textbox"
-      aria-multiline="true"
-      data-placeholder="Start writing..."
-      onInput={handleInput}
-      onChange={handleChange}
-      onClick={handleClick}
-      onDoubleClick={handleDoubleClick}
-      onKeyDown={handleKeyDown}
-      onKeyUp={rememberEditorSelection}
-      onMouseUp={handleMouseUp}
-      onMouseDown={handleMouseDown}
-      onPaste={handlePaste}
-    />
-  );
-});
-
 type EmptyStateProps = {
   icon: ReactNode;
   title: string;
   description: string;
 };
+
+type SettingsPopoverProps = {
+  settings: AppSettings;
+  onUpdate: (patch: SaveSettingsPayload) => void;
+  onClose: () => void;
+  className?: string;
+};
+
+function SettingsPopover({ settings, onUpdate, onClose, className = "" }: SettingsPopoverProps) {
+  return (
+    <div className={`settings-popover ${className}`} role="dialog" aria-label="Settings">
+      <div className="settings-popover-header">
+        <div>
+          <p className="settings-popover-title">Settings</p>
+          <p className="settings-popover-description">Customize your writing space.</p>
+        </div>
+        <button type="button" className="icon-button" aria-label="Close settings" onClick={onClose}>
+          <X size={16} />
+        </button>
+      </div>
+
+      <label className="settings-field">
+        <span>Theme</span>
+        <select
+          aria-label="Theme"
+          value={settings.theme}
+          onChange={(event) => onUpdate({ theme: event.target.value as AppSettings["theme"] })}
+        >
+          <option value="system">System</option>
+          <option value="light">Light</option>
+          <option value="dark">Dark</option>
+        </select>
+      </label>
+
+      <fieldset className="settings-accent-field">
+        <legend>Accent color</legend>
+        <div className="settings-accent-grid">
+          {accentColors.map((color) => (
+            <label key={color.id} className="settings-accent-choice">
+              <input type="radio" name="accent-color" aria-label={color.name} value={color.id}
+                checked={settings.accentColor === color.id} onChange={() => onUpdate({ accentColor: color.id })} />
+              <span className="settings-accent-swatch" style={{ "--swatch-color": `rgb(${color.light.join(" ")})` } as CSSProperties}>
+                {settings.accentColor === color.id ? <Check size={14} aria-hidden="true" /> : null}
+              </span>
+              <span>{color.name}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <label className="settings-field">
+        <span>Font size</span>
+        <select
+          aria-label="Font size"
+          value={settings.fontSize}
+          onChange={(event) => onUpdate({ fontSize: Number(event.target.value) })}
+        >
+          {[12, 14, 16, 18, 20, 22, 24].map((fontSize) => (
+            <option key={fontSize} value={fontSize}>
+              {fontSize}px
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="settings-field">
+        <span>Font family</span>
+        <select
+          aria-label="Font family"
+          value={settings.fontFamily}
+          onChange={(event) =>
+            onUpdate({ fontFamily: event.target.value as AppSettings["fontFamily"] })
+          }
+        >
+          <option value="system">System sans</option>
+          <option value="serif">Serif</option>
+          <option value="mono">Monospace</option>
+        </select>
+      </label>
+
+      <label className="settings-field">
+        <span>Auto-save delay</span>
+        <select
+          aria-label="Auto-save delay"
+          value={settings.autoSaveDelayMs}
+          onChange={(event) => onUpdate({ autoSaveDelayMs: Number(event.target.value) })}
+        >
+          {[500, 750, 1000, 1500, 2000, 3000, 5000].map((delay) => (
+            <option key={delay} value={delay}>
+              {delay} ms
+            </option>
+          ))}
+        </select>
+      </label>
+
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.lineWrap}
+          onChange={(event) => onUpdate({ lineWrap: event.target.checked })}
+        />
+        <span>Wrap editor lines</span>
+      </label>
+      <label className="settings-checkbox">
+        <input type="checkbox" checked={settings.fullWidth} onChange={(event) => onUpdate({ fullWidth: event.target.checked })} />
+        <span>Full width notes</span>
+      </label>
+      <label className="settings-checkbox">
+        <input type="checkbox" checked={settings.showOutline} onChange={(event) => onUpdate({ showOutline: event.target.checked })} />
+        <span>Show heading minimap</span>
+      </label>
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.showWordCount}
+          onChange={(event) => onUpdate({ showWordCount: event.target.checked })}
+        />
+        <span>Show word count</span>
+      </label>
+      <label className="settings-checkbox">
+        <input
+          type="checkbox"
+          checked={settings.sidebarVisible}
+          onChange={(event) => onUpdate({ sidebarVisible: event.target.checked })}
+        />
+        <span>Show sidebar</span>
+      </label>
+
+      <div className="settings-default-workspace">
+        <span>Default workspace</span>
+        <strong title={settings.lastWorkspacePath ?? undefined}>
+          {settings.lastWorkspacePath ?? "No workspace selected"}
+        </strong>
+      </div>
+    </div>
+  );
+}
 
 function EmptyState({ icon, title, description }: EmptyStateProps) {
   return (
@@ -3448,15 +3596,71 @@ function EmptyState({ icon, title, description }: EmptyStateProps) {
   );
 }
 
+type ContextMenuProps = {
+  label: string;
+  open: boolean;
+  onToggle: () => void;
+  onContextMenu?: () => void;
+  className?: string;
+  children: ReactNode;
+};
+
+function ContextMenu({
+  label,
+  open,
+  onToggle,
+  onContextMenu,
+  className = "",
+  children
+}: ContextMenuProps) {
+  return (
+    <div
+      className={`context-menu-anchor ${className} ${open ? "context-menu-anchor-open" : ""}`}
+      data-context-menu
+      onContextMenu={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        onContextMenu?.();
+      }}
+    >
+      <button
+        type="button"
+        className="context-menu-trigger"
+        aria-label={`${label} actions`}
+        title={`${label} actions`}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        <MoreHorizontal size={15} />
+      </button>
+      {open ? (
+        <div
+          className="context-menu"
+          role="menu"
+          aria-label={`${label} options`}
+          onPointerDown={(event) => event.stopPropagation()}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {children}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type FolderTreeNode = FolderSummary & {
   children: FolderTreeNode[];
+  notes: Array<NoteSummary | SearchResult>;
   depth: number;
   noteCount: number;
 };
 
 type FolderTreeProps = {
   nodes: FolderTreeNode[];
-  folders: FolderSummary[];
   selectedFolderPath: string;
   expandedFolderPaths: Set<string>;
   activeMoveFolderPath: string | null;
@@ -3471,13 +3675,14 @@ type FolderTreeProps = {
   onSubmitRename: (folder: FolderSummary) => void;
   onCancelRename: () => void;
   onToggleMove: (folderPath: string) => void;
-  onMove: (folder: FolderSummary, parentPath: string) => void;
+  onNewNote: (folderPath: string) => void;
+  onNewFolder: (parentPath: string) => void;
   onDelete: (folder: FolderSummary) => void;
+  renderNote: (note: NoteSummary | SearchResult) => ReactNode;
 };
 
 function FolderTree({
   nodes,
-  folders,
   selectedFolderPath,
   expandedFolderPaths,
   activeMoveFolderPath,
@@ -3492,8 +3697,10 @@ function FolderTree({
   onSubmitRename,
   onCancelRename,
   onToggleMove,
-  onMove,
-  onDelete
+  onNewNote,
+  onNewFolder,
+  onDelete,
+  renderNote
 }: FolderTreeProps) {
   return (
     <>
@@ -3501,7 +3708,6 @@ function FolderTree({
         <FolderTreeRow
           key={node.path}
           node={node}
-          folders={folders}
           selectedFolderPath={selectedFolderPath}
           expandedFolderPaths={expandedFolderPaths}
           activeMoveFolderPath={activeMoveFolderPath}
@@ -3516,8 +3722,10 @@ function FolderTree({
           onSubmitRename={onSubmitRename}
           onCancelRename={onCancelRename}
           onToggleMove={onToggleMove}
-          onMove={onMove}
+          onNewNote={onNewNote}
+          onNewFolder={onNewFolder}
           onDelete={onDelete}
+          renderNote={renderNote}
         />
       ))}
     </>
@@ -3526,7 +3734,6 @@ function FolderTree({
 
 function FolderTreeRow({
   node,
-  folders,
   selectedFolderPath,
   expandedFolderPaths,
   activeMoveFolderPath,
@@ -3541,32 +3748,42 @@ function FolderTreeRow({
   onSubmitRename,
   onCancelRename,
   onToggleMove,
-  onMove,
-  onDelete
+  onNewNote,
+  onNewFolder,
+  onDelete,
+  renderNote
 }: Omit<FolderTreeProps, "nodes"> & { node: FolderTreeNode }) {
   const isExpanded = expandedFolderPaths.has(node.path);
   const hasChildren = node.children.length > 0;
+  const hasExpandableContent = hasChildren || node.notes.length > 0;
   const isRoot = node.path === ".";
   const isRenaming = editingFolderPath === node.path;
   const isMoveMenuOpen = activeMoveFolderPath === node.path;
-  const moveTargets = folders.filter((folder) => isFolderMoveTarget(node, folder));
 
   return (
     <div>
       <div
         className={`tree-row group ${
           node.path === selectedFolderPath ? "tree-row-active" : ""
-        }`}
+        } ${isRoot ? "tree-row-root" : ""}`}
         style={{ "--folder-depth": node.depth } as CSSProperties}
+        onContextMenu={(event) => {
+          if (isRenaming || !hasWorkspace || isBusy) {
+            return;
+          }
+
+          event.preventDefault();
+          onToggleMove(node.path);
+        }}
       >
         <button
           type="button"
           aria-label={isExpanded ? "Collapse folder" : "Expand folder"}
           className="tree-toggle-button"
           onClick={() => onToggle(node.path)}
-          disabled={!hasWorkspace || !hasChildren}
+          disabled={!hasWorkspace || !hasExpandableContent}
         >
-          {hasChildren ? (
+          {hasExpandableContent ? (
             isExpanded ? (
               <ChevronDown size={14} />
             ) : (
@@ -3584,7 +3801,11 @@ function FolderTreeRow({
               onSubmitRename(node);
             }}
           >
-            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
+            {isExpanded && hasExpandableContent ? (
+              <FolderOpen className="shrink-0" size={15} />
+            ) : (
+              <Folder className="shrink-0" size={15} />
+            )}
             <input
               type="text"
               aria-label="Folder name"
@@ -3604,96 +3825,107 @@ function FolderTreeRow({
           <button
             type="button"
             className="tree-open-area"
-            onClick={() => onSelect(node.path)}
+            onClick={() => {
+              onSelect(node.path);
+              if (hasExpandableContent) {
+                onToggle(node.path);
+              }
+            }}
             disabled={!hasWorkspace}
           >
-            {isExpanded && hasChildren ? <FolderOpen size={15} /> : <Folder size={15} />}
-            <span className="truncate">{node.name}</span>
+            {isExpanded && hasExpandableContent ? (
+              <FolderOpen className="shrink-0" size={15} />
+            ) : (
+              <Folder className="shrink-0" size={15} />
+            )}
+            <span className="truncate" title={node.name}>
+              {node.name}
+            </span>
             <span className="tree-count">{node.noteCount}</span>
           </button>
         )}
-        {!isRoot ? (
-          <span
-            className={`folder-actions ${
-              isRenaming || isMoveMenuOpen ? "folder-actions-visible" : ""
-            }`}
+        {!isRenaming ? <button type="button" className="folder-add-note" aria-label={`Create note in ${node.name}`} title="New note"
+          onClick={() => onNewNote(node.path)} disabled={!hasWorkspace || isBusy}><Plus size={14} /></button> : null}
+        {!isRenaming ? (
+          <ContextMenu
+            label="Folder"
+            open={isMoveMenuOpen}
+            onToggle={() => onToggleMove(node.path)}
+            onContextMenu={() => onToggleMove(node.path)}
           >
             <button
               type="button"
-              aria-label={isRenaming ? "Save folder name" : "Rename folder"}
-              title={isRenaming ? "Save folder name" : "Rename folder"}
-              className="icon-button folder-action-button"
+              role="menuitem"
+              className="context-menu-item"
               onClick={() => {
-                if (isRenaming) {
-                  onSubmitRename(node);
-                } else {
-                  onStartRename(node);
-                }
+                onToggleMove(node.path);
+                onNewNote(node.path);
               }}
               disabled={!hasWorkspace || isBusy}
             >
-              {isRenaming ? <Check size={13} /> : <Edit3 size={13} />}
+              <FilePlus2 size={14} />
+              <span>New note</span>
             </button>
-            {isRenaming ? (
-              <button
-                type="button"
-                aria-label="Cancel folder rename"
-                title="Cancel folder rename"
-                className="icon-button folder-action-button"
-                onClick={onCancelRename}
-                disabled={isBusy}
-              >
-                <X size={13} />
-              </button>
-            ) : (
+            <button
+              type="button"
+              role="menuitem"
+              className="context-menu-item"
+              onClick={() => {
+                onToggleMove(node.path);
+                onNewFolder(node.path);
+              }}
+              disabled={!hasWorkspace || isBusy}
+            >
+              <FolderPlus size={14} />
+              <span>New folder</span>
+            </button>
+            {!isRoot ? (
               <>
-                <div className="relative">
-                  <button
-                    type="button"
-                    aria-label="Move folder"
-                    title="Move folder"
-                    className="icon-button folder-action-button"
-                    onClick={() => onToggleMove(node.path)}
-                    disabled={!hasWorkspace || isBusy || moveTargets.length === 0}
-                  >
-                    <FolderInput size={13} />
-                  </button>
-                  {isMoveMenuOpen ? (
-                    <div className="move-menu folder-move-menu" role="menu" aria-label="Move folder to parent">
-                      {moveTargets.map((folder) => (
-                        <button
-                          key={folder.path}
-                          type="button"
-                          className="move-menu-item"
-                          onClick={() => onMove(node, folder.path)}
-                        >
-                          <Folder size={13} />
-                          <span className="truncate">{folder.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  ) : null}
-                </div>
                 <button
                   type="button"
-                  aria-label="Delete folder"
-                  title="Delete folder"
-                  className="icon-button folder-action-button danger"
-                  onClick={() => onDelete(node)}
+                  role="menuitem"
+                  className="context-menu-item"
+                  onClick={() => {
+                    onToggleMove(node.path);
+                    onStartRename(node);
+                  }}
                   disabled={!hasWorkspace || isBusy}
                 >
-                  <Trash2 size={13} />
+                  <Edit3 size={14} />
+                  <span>Rename</span>
+                </button>
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="context-menu-item danger"
+                  onClick={() => {
+                    onToggleMove(node.path);
+                    onDelete(node);
+                  }}
+                  disabled={!hasWorkspace || isBusy}
+                >
+                  <Trash2 size={14} />
+                  <span>Delete</span>
                 </button>
               </>
-            )}
-          </span>
+            ) : null}
+          </ContextMenu>
         ) : null}
       </div>
+
+      {isExpanded && node.notes.length > 0 ? (
+        <div
+          className="folder-notes space-y-1"
+          style={{ "--folder-depth": node.depth } as CSSProperties}
+          aria-label={`${node.name} notes`}
+        >
+          {node.notes.map((note) => renderNote(note))}
+        </div>
+      ) : null}
 
       {isExpanded && hasChildren ? (
         <FolderTree
           nodes={node.children}
-          folders={folders}
           selectedFolderPath={selectedFolderPath}
           expandedFolderPaths={expandedFolderPaths}
           activeMoveFolderPath={activeMoveFolderPath}
@@ -3708,8 +3940,10 @@ function FolderTreeRow({
           onSubmitRename={onSubmitRename}
           onCancelRename={onCancelRename}
           onToggleMove={onToggleMove}
-          onMove={onMove}
+          onNewNote={onNewNote}
+          onNewFolder={onNewFolder}
           onDelete={onDelete}
+          renderNote={renderNote}
         />
       ) : null}
     </div>
@@ -3718,108 +3952,152 @@ function FolderTreeRow({
 
 type NoteRowProps = {
   note: NoteSummary | SearchResult;
-  folders: FolderSummary[];
   selected: boolean;
+  isFavorite: boolean;
+  isFavoriteSaving: boolean;
+  onToggleFavorite: () => void;
+  isRenaming: boolean;
+  noteNameDraft: string;
   isMoveMenuOpen: boolean;
   isBusy: boolean;
   onOpen: () => void;
+  onRename: () => void;
+  onRenameDraftChange: (name: string) => void;
+  onSubmitRename: () => void;
+  onCancelRename: () => void;
   onDuplicate: () => void;
   onToggleMove: () => void;
-  onMove: (folderPath: string) => void;
   onDelete: () => void;
 };
 
 function NoteRow({
   note,
-  folders,
   selected,
+  isFavorite,
+  isFavoriteSaving,
+  onToggleFavorite,
+  isRenaming,
+  noteNameDraft,
   isMoveMenuOpen,
   isBusy,
   onOpen,
+  onRename,
+  onRenameDraftChange,
+  onSubmitRename,
+  onCancelRename,
   onDuplicate,
   onToggleMove,
-  onMove,
   onDelete
 }: NoteRowProps) {
-  return (
-    <div className={`note-row group ${selected ? "note-row-active" : ""}`}>
-      <button type="button" className="note-open-area" onClick={onOpen}>
-        <div className="flex items-center gap-2">
-          <FileText size={15} />
-          <span className="truncate font-medium">{note.title}</span>
-        </div>
-        <p className="mt-1 truncate text-xs text-neutral-500">
-          {"snippet" in note ? note.snippet : note.path}
-        </p>
-        {"tags" in note && note.tags.length > 0 ? (
-          <div className="note-tag-list" aria-label="Note tags">
-            {note.tags.map((tag) => (
-              <span key={tag} className="note-tag">
-                #{tag}
-              </span>
-            ))}
-          </div>
-        ) : null}
-      </button>
+  const noteName = noteNameFromPath(note.path);
 
-      <div className="note-actions">
-        <button
-          type="button"
-          aria-label="Duplicate"
-          title="Duplicate"
-          className="icon-button note-action-button"
-          onClick={onDuplicate}
-          disabled={isBusy}
+  return (
+    <div
+      className={`note-row group ${selected ? "note-row-active" : ""}`}
+      onContextMenu={(event) => {
+        if (isRenaming) {
+          return;
+        }
+
+        event.preventDefault();
+        onToggleMove();
+      }}
+    >
+      {isRenaming ? (
+        <form
+          className="note-rename-form"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmitRename();
+          }}
         >
-          <Copy size={14} />
+          <FileText className="shrink-0" size={15} />
+          <input
+            type="text"
+            aria-label="File name"
+            value={noteNameDraft}
+            onChange={(event) => onRenameDraftChange(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") {
+                event.preventDefault();
+                onCancelRename();
+              }
+            }}
+            autoFocus
+            disabled={isBusy}
+          />
+        </form>
+      ) : (
+        <button type="button" className="note-open-area" onClick={onOpen}>
+          <div className="flex items-center gap-2">
+            {isFavorite ? <Star className="shrink-0 note-favorite-star" size={15} fill="currentColor" aria-label="Favorite note" /> : <FileText className="shrink-0" size={15} />}
+            <span className="truncate font-medium" title={noteName}>
+              {noteName}
+            </span>
+          </div>
         </button>
-        <div className="relative">
+      )}
+
+      {!isRenaming ? (
+        <ContextMenu
+          label="Note"
+          open={isMoveMenuOpen}
+          onToggle={onToggleMove}
+          onContextMenu={onToggleMove}
+        >
+          <button type="button" role="menuitem" className="context-menu-item" disabled={isBusy || isFavoriteSaving}
+            onClick={() => { onToggleMove(); onToggleFavorite(); }}>
+            <Star size={14} fill={isFavorite ? "currentColor" : "none"} />
+            <span>{isFavorite ? "Remove from favorites" : "Add to favorites"}</span>
+          </button>
           <button
             type="button"
-            aria-label="Move"
-            title="Move"
-            className="icon-button note-action-button"
-            onClick={onToggleMove}
+            role="menuitem"
+            className="context-menu-item"
+            onClick={() => {
+              onToggleMove();
+              onRename();
+            }}
             disabled={isBusy}
           >
-            <FolderInput size={14} />
+            <Edit3 size={14} />
+            <span>Rename</span>
           </button>
-          {isMoveMenuOpen ? (
-            <div className="move-menu" role="menu" aria-label="Move note to folder">
-              {folders.map((folder) => (
-                <button
-                  key={folder.path}
-                  type="button"
-                  role="menuitem"
-                  className="move-menu-item"
-                  onClick={() => onMove(folder.path)}
-                  disabled={folder.path === note.folderPath || isBusy}
-                >
-                  <Folder size={13} />
-                  <span className="truncate">{folder.name}</span>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-        <button
-          type="button"
-          aria-label="Delete"
-          title="Delete"
-          className="icon-button note-action-button danger"
-          onClick={onDelete}
-          disabled={isBusy}
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
+          <button
+            type="button"
+            role="menuitem"
+            className="context-menu-item"
+            onClick={() => {
+              onToggleMove();
+              onDuplicate();
+            }}
+            disabled={isBusy}
+          >
+            <Copy size={14} />
+            <span>Duplicate</span>
+          </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="context-menu-item danger"
+            onClick={() => {
+              onToggleMove();
+              onDelete();
+            }}
+            disabled={isBusy}
+          >
+            <Trash2 size={14} />
+            <span>Delete</span>
+          </button>
+        </ContextMenu>
+      ) : null}
     </div>
   );
 }
 
 function buildFolderTree(
   folders: FolderSummary[],
-  notes: NoteSummary[]
+  notes: Array<NoteSummary | SearchResult>
 ): FolderTreeNode[] {
   const folderNodes = new Map<string, FolderTreeNode>();
 
@@ -3827,6 +4105,7 @@ function buildFolderTree(
     folderNodes.set(folder.path, {
       ...folder,
       children: [],
+      notes: notes.filter((note) => note.folderPath === folder.path),
       depth: 0,
       noteCount: notes.filter((note) => note.folderPath === folder.path).length
     });
@@ -3865,6 +4144,10 @@ function buildFolderTree(
   return [rootNode];
 }
 
+function collectFolderTreePaths(nodes: FolderTreeNode[]): string[] {
+  return nodes.flatMap((node) => [node.path, ...collectFolderTreePaths(node.children)]);
+}
+
 function getParentFolderPath(folderPath: string) {
   if (folderPath === "." || !folderPath.includes("/")) {
     return ".";
@@ -3886,18 +4169,6 @@ function getAncestorFolderPaths(folderPath: string) {
   }
 
   return ancestorPaths;
-}
-
-function isFolderMoveTarget(source: FolderSummary, target: FolderSummary) {
-  if (source.path === "." || target.path === source.path) {
-    return false;
-  }
-
-  if (target.path.startsWith(`${source.path}/`)) {
-    return false;
-  }
-
-  return getParentFolderPath(source.path) !== target.path;
 }
 
 function isSameOrChildFolderPath(candidatePath: string, folderPath: string) {

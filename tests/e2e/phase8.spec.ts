@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
@@ -62,7 +63,10 @@ test("phase 8 edits formatted markdown content and saves it back to disk", async
     }, workspaceDir);
     await window.reload();
 
-    await window.getByRole("button", { name: /Phase 8 Note/ }).click();
+    await window
+      .locator(".note-open-area")
+      .filter({ hasText: "rich-note" })
+      .click();
 
     const editor = window.getByRole("textbox", {
       name: "Visual Markdown editor"
@@ -76,23 +80,22 @@ test("phase 8 edits formatted markdown content and saves it back to disk", async
     await expect(editor.locator("pre code")).toContainText("const value = 1;");
     await expect(editor.locator("table")).toContainText("Ink");
 
-    await editor.evaluate((editableElement) => {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = "Added from e2e.";
-      editableElement.appendChild(paragraph);
-      editableElement.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "Added from e2e.",
-          inputType: "insertText"
-        })
-      );
+    const bodyParagraph = editor.locator("p").filter({ hasText: "Existing body." });
+    await bodyParagraph.evaluate((element) => {
+      const range = document.createRange();
+      const selection = window.getSelection();
+      range.selectNodeContents(element);
+      selection?.removeAllRanges();
+      selection?.addRange(range);
     });
+    await editor.pressSequentially("Existing body. Added from e2e.");
 
-    await expect(window.getByText(/Unsaved changes/).first()).toBeVisible();
-    await window.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    const saveButton = window.getByRole("button", { name: "Save", exact: true });
+    await expect(saveButton).toBeEnabled();
+    await saveButton.click();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 
+    await expect.poll(() => readFile(notePath, "utf8")).toContain("Existing body. Added from e2e.");
     const savedMarkdown = await readFile(notePath, "utf8");
     expect(savedMarkdown).toContain("# Phase 8 Note");
     expect(savedMarkdown).toContain("- First item");
@@ -100,7 +103,7 @@ test("phase 8 edits formatted markdown content and saves it back to disk", async
     expect(savedMarkdown).toContain("> Quoted line");
     expect(savedMarkdown).toContain("```ts\nconst value = 1;\n```");
     expect(savedMarkdown).toContain("| Name | Value |");
-    expect(savedMarkdown).toContain("Added from e2e.");
+    expect(savedMarkdown).toContain("Existing body. Added from e2e.");
   } finally {
     await app.close();
   }
@@ -147,7 +150,7 @@ test("phase 8 save channel persists markdown and rejects unsafe paths", async ({
       ok: true,
       data: {
         path: "Saved Through Preload.md",
-        markdown: "# Saved Through Preload\n\n"
+        markdown: ""
       }
     });
     expect(saved).toEqual({

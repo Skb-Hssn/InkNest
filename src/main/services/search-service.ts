@@ -76,13 +76,14 @@ export class InMemorySearchIndex {
     return [...this.entries.values()];
   }
 
-  search(query = "", tag?: string): SearchResult[] {
+  search(query = "", tag?: string, scope: "all" | "name" = "all"): SearchResult[] {
     const normalizedQuery = normalizeSearchText(query);
     const terms = normalizedQuery.split(/\s+/).filter(Boolean);
     const normalizedTag = tag ? normalizeSearchText(tag) : "";
     const results: Array<{ result: SearchResult; score: number }> = [];
 
     for (const note of this.entries.values()) {
+      const name = (note.path.split(/[\\/]/).pop() ?? note.path).replace(/\.md$/i, "");
       if (
         normalizedTag &&
         !note.tags.some((noteTag) => normalizeSearchText(noteTag) === normalizedTag)
@@ -90,19 +91,20 @@ export class InMemorySearchIndex {
         continue;
       }
 
-      if (terms.length > 0 && !terms.every((term) => note.searchText.includes(term))) {
+      const searchText = scope === "name" ? normalizeSearchText(name) : note.searchText;
+      if (terms.length > 0 && !terms.every((term) => searchText.includes(term))) {
         continue;
       }
 
-      const score = scoreSearchMatch(note, terms);
+      const score = scope === "name" ? 0 : scoreSearchMatch(note, terms);
       results.push({
         result: {
           id: note.id,
-          title: note.title,
+          title: scope === "name" ? name : note.title,
           path: note.path,
           folderPath: note.folderPath,
           tags: note.tags,
-          snippet: createSearchSnippet(note.body, terms)
+          snippet: scope === "name" ? "" : createSearchSnippet(note.body, terms)
         },
         score
       });

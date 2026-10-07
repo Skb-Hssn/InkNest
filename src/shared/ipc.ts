@@ -1,3 +1,5 @@
+import type { AccentColor } from "./accent-colors";
+
 export type IpcSuccess<T> = {
   ok: true;
   data: T;
@@ -22,6 +24,17 @@ export type AppInfo = {
   phase: "phase-17-release-validation";
 };
 
+export type AppWindowState = {
+  isMaximized: boolean;
+};
+
+export type WorkspaceSession = {
+  openNotePaths: string[];
+  activeNotePath: string | null;
+};
+
+export type SaveWorkspaceSessionPayload = WorkspaceSession & { workspacePath: string };
+
 export type WorkspaceStatus =
   | "none"
   | "ready"
@@ -29,6 +42,7 @@ export type WorkspaceStatus =
   | "permission-denied";
 
 export type WorkspaceInfo = {
+  initialNotePaths?: string[];
   path: string | null;
   name: string | null;
   status: WorkspaceStatus;
@@ -104,12 +118,18 @@ export type WorkspaceChangeEvent = {
 
 export type AppSettings = {
   theme: "system" | "light" | "dark";
+  accentColor: AccentColor;
   fontSize: number;
   fontFamily: "system" | "serif" | "mono";
   autoSaveDelayMs: number;
   lineWrap: boolean;
+  fullWidth: boolean;
+  showOutline: boolean;
+  outlineWidth: number;
   showWordCount: boolean;
   sidebarVisible: boolean;
+  lockedNoteKeys: string[];
+  favoriteNoteKeys: string[];
   lastWorkspacePath: string | null;
   recentWorkspaces: string[];
 };
@@ -118,12 +138,18 @@ export type SaveSettingsPayload = Partial<
   Pick<
     AppSettings,
     | "theme"
+    | "accentColor"
     | "fontSize"
     | "fontFamily"
     | "autoSaveDelayMs"
     | "lineWrap"
+    | "fullWidth"
+    | "showOutline"
+    | "outlineWidth"
     | "showWordCount"
     | "sidebarVisible"
+    | "lockedNoteKeys"
+    | "favoriteNoteKeys"
   >
 >;
 
@@ -203,6 +229,7 @@ export type SaveNotePayload = {
 export type SearchNotesPayload = {
   query?: string;
   tag?: string;
+  scope?: "all" | "name";
 };
 
 export type SearchResult = {
@@ -270,6 +297,11 @@ const workspaceChangedChannel = ["workspace", "changed"].join(":");
 export const ipcChannels = {
   app: {
     getInfo: "app:get-info",
+    getWindowState: "app:get-window-state",
+    minimizeWindow: "app:minimize-window",
+    toggleMaximizeWindow: "app:toggle-maximize-window",
+    closeWindow: "app:close-window",
+    windowStateChanged: "app:window-state-changed",
     prepareToClose: appPrepareToCloseChannel,
     closeReady: appCloseReadyChannel,
     closeCanceled: appCloseCanceledChannel
@@ -279,6 +311,8 @@ export const ipcChannels = {
     choose: "workspace:choose",
     select: "workspace:select",
     scan: "workspace:scan",
+    getSession: "workspace:get-session",
+    saveSession: "workspace:save-session",
     changed: workspaceChangedChannel
   },
   notes: {
@@ -304,7 +338,8 @@ export const ipcChannels = {
   },
   settings: {
     get: "settings:get",
-    save: "settings:save"
+    save: "settings:save",
+    clearRecentWorkspaces: "settings:clear-recent-workspaces"
   },
   links: {
     openExternal: "links:open-external",

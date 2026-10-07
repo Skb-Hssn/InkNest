@@ -35,6 +35,11 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
 
   assert.deepEqual(channels.sort(), [
     "app:get-info",
+    "app:close-window",
+    "app:get-window-state",
+    "app:minimize-window",
+    "app:toggle-maximize-window",
+    "app:window-state-changed",
     "dialogs:select-image",
     "export:note",
     "folders:create",
@@ -54,9 +59,12 @@ test("phase 2 shared contract declares the expected narrow channels", async () =
     "notes:restore",
     "notes:save",
     "settings:get",
+    "settings:clear-recent-workspaces",
     "settings:save",
     "workspace:choose",
     "workspace:get-active",
+    "workspace:get-session",
+    "workspace:save-session",
     "workspace:scan",
     "workspace:select"
   ].sort());

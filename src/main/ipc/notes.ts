@@ -174,11 +174,14 @@ export function registerNoteHandlers(
 
   registerIpcHandler<NoteContent>(ipcChannels.notes.save, async (payload) => {
     assertPlainObject(payload);
+    if (typeof payload.markdown !== "string") {
+      throw invalidPayload("markdown must be a string.");
+    }
 
     const result = await saveMarkdownNote(
       assertActiveWorkspace(activeWorkspace),
       assertString(payload.path, "path"),
-      assertString(payload.markdown, "markdown")
+      payload.markdown
     );
 
     await refreshWorkspaceState(

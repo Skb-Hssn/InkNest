@@ -1,0 +1,129 @@
+name: Linux Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: linux-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Validate and build amd64 installer
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Verify release version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const pkg = JSON.parse(readFileSync('package.json', 'utf8'));
+          const lock = JSON.parse(readFileSync('package-lock.json', 'utf8'));
+          if (!/^\d+\.\d+\.\d+$/.test(pkg.version) ||
+              process.env.RELEASE_TAG !== `v${pkg.version}` ||
+              lock.version !== pkg.version || lock.packages[''].version !== pkg.version) {
+            throw new Error('Use a stable vX.Y.Z tag matching package.json and package-lock.json.');
+          }
+          NODE
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install headless desktop dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends openbox xvfb xauth libgtk-3-0 libnotify4 libnss3 libxss1 libxtst6 libatspi2.0-0 libsecret-1-0
+
+      - name: Run release validation headlessly
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' sh -c 'openbox > /tmp/inknest-openbox.log 2>&1 & npm run release-check'
+
+      - name: Build Debian installer
+        run: npm run package:deb
+
+      - name: Verify and extract installer
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          package="release/inknest_${version}_amd64.deb"
+          test "$(dpkg-deb --field "$package" Package)" = inknest
+          test "$(dpkg-deb --field "$package" Version)" = "$version"
+          test "$(dpkg-deb --field "$package" Architecture)" = amd64
+          dpkg-deb --info "$package"
+          dpkg-deb --extract "$package" "$RUNNER_TEMP/inknest-package"
+
+      - name: Test the packaged app headlessly
+        env:
+          INKNEST_PACKAGED_EXECUTABLE: ${{ runner.temp }}/inknest-package/opt/InkNest/inknest
+        run: xvfb-run -a -s '-screen 0 1280x1024x24' sh -c 'openbox > /tmp/inknest-package-openbox.log 2>&1 & node scripts/check-packaged-app.mjs'
+
+      - name: Generate checksum
+        working-directory: release
+        run: sha256sum -- *.deb > SHA256SUMS
+
+      - name: Store verified release files
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-release
+          path: |
+            release/*.deb
+            release/SHA256SUMS
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: linux-release-diagnostics
+          path: |
+            test-results/
+            /tmp/inknest-openbox.log
+            /tmp/inknest-package-openbox.log
+          retention-days: 7
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - name: Download verified release files
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: linux-release
+          path: release
+
+      - name: Verify checksum
+        working-directory: release
+        run: sha256sum --check SHA256SUMS
+
+      - name: Publish installer and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" release/*.deb release/SHA256SUMS \
+            --verify-tag --title "InkNest $RELEASE_TAG" --generate-notes

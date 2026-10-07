@@ -1,4 +1,5 @@
-import { _electron as electron, expect, test } from "@playwright/test";
+import { test } from "./fixtures";
+import { _electron as electron, expect } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 
@@ -50,24 +51,16 @@ test("phase 10 autosaves edits before the app closes", async ({}, testInfo) => {
       name: "Visual Markdown editor"
     });
 
-    await editor.evaluate((editableElement) => {
-      const paragraph = document.createElement("p");
-      paragraph.textContent = "Saved by autosave.";
-      editableElement.appendChild(paragraph);
-      editableElement.dispatchEvent(
-        new InputEvent("input", {
-          bubbles: true,
-          data: "Saved by autosave.",
-          inputType: "insertText"
-        })
-      );
-    });
+    await editor.click();
+    await editor.press("Control+End");
+    await editor.press("Enter");
+    await editor.pressSequentially("Saved by autosave.");
 
-    await expect(window.getByText(/Unsaved changes/).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeEnabled();
     await expect
       .poll(() => readFile(notePath, "utf8"), { timeout: 4000 })
       .toContain("Saved by autosave.");
-    await expect(window.getByText(/Saved - Saved/).first()).toBeVisible();
+    await expect(window.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
   } finally {
     await app.close();
   }
