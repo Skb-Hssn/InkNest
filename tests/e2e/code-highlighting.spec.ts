@@ -1,7 +1,7 @@
 import { _electron as electron, expect } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { test } from "./fixtures";
+import { test, waitForSavedNoteSession } from "./fixtures";
 
 test("C++ is colored in both themes, survives editing/reopening, and language changes clear or update colors", async ({}, info) => {
   const root = info.outputPath("workspace");
@@ -13,6 +13,17 @@ test("C++ is colored in both themes, survives editing/reopening, and language ch
     env: { ...process.env, INKNEST_USER_DATA_DIR: info.outputPath("user-data"), ELECTRON_RUN_AS_NODE: undefined } });
   const errors: string[] = [];
   try {
+    // Exercise slower CI storage: the session must be durable before a reload.
+    await app.evaluate(() => {
+      const fs = process.getBuiltinModule("fs/promises") as typeof import("node:fs/promises");
+      const rename = fs.rename;
+      fs.rename = async (...args: Parameters<typeof rename>) => {
+        if (String(args[1]).endsWith("workspace-sessions.json")) {
+          await new Promise(resolve => setTimeout(resolve, 300));
+        }
+        return rename(...args);
+      };
+    });
     const window = await app.firstWindow();
     window.on("pageerror", error => errors.push(error.message));
     await window.evaluate(root => window.inknest.workspace.select(root), root);
@@ -21,9 +32,12 @@ test("C++ is colored in both themes, survives editing/reopening, and language ch
     const editor = window.getByRole("textbox", { name: "Visual Markdown editor" });
     const code = editor.locator("pre code");
     const trigger = editor.getByRole("combobox", { name: "Code block language" });
+    await expect(code).toHaveText(source);
     for (const theme of ["light", "dark"] as const) {
       await window.evaluate(theme => window.inknest.settings.save({ theme }), theme);
+      await waitForSavedNoteSession(window, "Colors.md");
       await window.reload();
+      await expect(window.getByRole("tab", { name: "Colors", exact: true })).toHaveAttribute("aria-selected", "true");
       await expect(code).toHaveText(source);
       await expect(code.locator(".syntax-keyword").filter({ hasText: "namespace" })).toBeVisible();
       await expect(code.locator(".syntax-function")).toHaveText("main");

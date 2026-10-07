@@ -1,7 +1,7 @@
 import { _electron as electron, expect, type TestInfo } from "@playwright/test";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { test } from "./fixtures";
+import { test, waitForSavedNoteSession } from "./fixtures";
 
 async function launch(info: TestInfo, language = "javascript") {
   const root = info.outputPath("workspace");
@@ -89,6 +89,7 @@ test("language picker is contained in a small window and works in the dark theme
   const { app, window, trigger } = await launch(info);
   try {
     await window.evaluate(() => window.inknest.settings.save({ theme: "dark" }));
+    await waitForSavedNoteSession(window, "Code.md");
     await window.reload();
     await expect(trigger).toBeVisible();
     await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setBounds({ width: 900, height: 600 }));
