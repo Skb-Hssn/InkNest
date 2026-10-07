@@ -322,6 +322,59 @@ test("Ctrl+F opens find, highlights results, navigates and closes without editin
   } finally { await app.close(); }
 });
 
+test("search navigation reveals offscreen matches without moving visible matches or stealing find focus", async ({}, info) => {
+  const filler = Array.from({ length: 35 }, (_, index) => `Paragraph ${index}. ${"Some ordinary writing. ".repeat(12)}\n`).join("\n");
+  const { app, window, editor, notePath } = await launch(info, `# Notes\n\nneedle first\n\n${filler}\nneedle middle\n\nneedle nearby\n\n${filler}\nneedle last\n`);
+  try {
+    const before = await readFile(notePath, "utf8");
+    await editor.press("Control+Home"); await editor.press("Control+f");
+    await queryInput(window).fill("needle");
+    const scroller = window.locator(".note-writing-scroll");
+    const scrollTop = () => scroller.evaluate((element) => element.scrollTop);
+    const visible = () => editor.locator(".note-search-current").evaluate((element) => {
+      const viewport = element.closest(".note-writing-scroll")!;
+      const match = element.getBoundingClientRect(), area = viewport.getBoundingClientRect();
+      return match.top >= area.top && match.bottom <= area.top + viewport.clientHeight;
+    });
+    const count = panel(window).getByRole("status").first();
+    await expect(count).toHaveText("1 of 4");
+    await expect.poll(visible).toBe(true);
+    const initial = await scrollTop();
+    await panel(window).getByRole("button", { name: "Next match" }).click();
+    await expect(count).toHaveText("2 of 4");
+    await expect.poll(visible).toBe(true);
+    expect(await scrollTop()).toBeGreaterThan(initial + 300);
+    const middle = await scrollTop();
+    await panel(window).getByRole("button", { name: "Next match" }).click();
+    await expect(count).toHaveText("3 of 4");
+    await expect.poll(visible).toBe(true);
+    expect(await scrollTop()).toBeCloseTo(middle, 0);
+    await queryInput(window).focus(); await queryInput(window).press("Enter");
+    await expect(count).toHaveText("4 of 4");
+    await expect.poll(visible).toBe(true);
+    await expect(queryInput(window)).toBeFocused();
+    expect(await scrollTop()).toBeGreaterThan(middle + 300);
+    await queryInput(window).press("Shift+Enter");
+    await expect(count).toHaveText("3 of 4");
+    await expect.poll(visible).toBe(true);
+    await queryInput(window).press("Shift+F3");
+    await expect(count).toHaveText("2 of 4");
+    await expect.poll(visible).toBe(true);
+    await queryInput(window).press("F3");
+    await expect(count).toHaveText("3 of 4");
+    await queryInput(window).press("Enter");
+    await panel(window).getByRole("button", { name: "Next match" }).click();
+    await expect(count).toHaveText("1 of 4");
+    await expect.poll(visible).toBe(true);
+    await panel(window).getByRole("button", { name: "Previous match" }).click();
+    await expect(count).toHaveText("4 of 4");
+    await expect.poll(visible).toBe(true);
+    await expect(panel(window)).toBeVisible();
+    expect(await window.locator(".note-workspace").evaluate((element) => element.scrollTop)).toBe(0);
+    expect(await readFile(notePath, "utf8")).toBe(before);
+  } finally { await app.close(); }
+});
+
 test("match case, whole words, regex errors, no results and clearing work", async ({}, info) => {
   const { app, window } = await launch(info);
   try {

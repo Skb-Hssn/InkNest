@@ -123,13 +123,33 @@ export function createSearchStatePlugin(onChange: (state: NoteSearchState) => vo
 export function updateNoteSearch(view: EditorView, update: SearchUpdate) {
   view.dispatch(view.state.tr.setMeta(noteSearchKey, update).setMeta("addToHistory", false));
 }
+/** ProseMirror ignores scroll requests while the Find input owns focus. */
+export function revealNoteMatch(view: EditorView, match: SearchScope) {
+  const scroller = view.dom.closest<HTMLElement>(".note-writing-scroll");
+  if (!scroller || !scroller.clientHeight) return;
+  const viewport = scroller.getBoundingClientRect();
+  const start = view.coordsAtPos(match.from, 1);
+  const end = view.coordsAtPos(match.to, -1);
+  const top = Math.min(start.top, end.top);
+  const bottom = Math.max(start.bottom, end.bottom);
+  const visibleTop = viewport.top + scroller.clientTop;
+  const visibleBottom = visibleTop + scroller.clientHeight;
+  if (top >= visibleTop && bottom <= visibleBottom) return;
+  // Center ordinary matches; for a match taller than the page, reveal its start.
+  const offset = bottom - top > scroller.clientHeight - 24
+    ? top - visibleTop - 12
+    : (top + bottom) / 2 - (visibleTop + visibleBottom) / 2;
+  scroller.scrollTop += offset;
+}
+
 export function selectNoteMatch(view: EditorView, index: number, focus = false) {
   const search = noteSearchKey.getState(view.state)!;
   const match = search.matches[index];
   if (!match) return false;
   view.dispatch(view.state.tr.setSelection(TextSelection.create(view.state.doc, match.from, match.to))
-    .setMeta(noteSearchKey, { activeIndex: index }).setMeta("addToHistory", false).scrollIntoView());
+    .setMeta(noteSearchKey, { activeIndex: index }).setMeta("addToHistory", false));
   if (focus) view.focus();
+  revealNoteMatch(view, match);
   return true;
 }
 

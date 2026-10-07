@@ -10,7 +10,7 @@ import { history, undo, redo } from '@milkdown/kit/prose/history';
 const temp = await mkdtemp(path.join(fileURLToPath(new URL('../node_modules/', import.meta.url)), '.note-search-tests-'));
 const source = await readFile(new URL('../src/renderer/src/editor/search-plugin.ts', import.meta.url), 'utf8');
 await writeFile(path.join(temp, 'search.mjs'), ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText);
-const { createSearchStatePlugin, noteSearchKey, findNoteMatches, replacementFor, replaceNoteMatches } = await import(pathToFileURL(path.join(temp, 'search.mjs')).href);
+const { createSearchStatePlugin, noteSearchKey, findNoteMatches, replacementFor, replaceNoteMatches, revealNoteMatch } = await import(pathToFileURL(path.join(temp, 'search.mjs')).href);
 await rm(temp, { recursive: true });
 const schema = new Schema({ nodes: {
   doc: { content: 'block+' }, paragraph: { group: 'block', content: 'inline*' },
@@ -153,4 +153,23 @@ test('replacements in table cells retain the table', () => {
   const f = fixture(doc(schema.nodes.table.create(null, schema.nodes.table_row.create(null, [schema.nodes.table_cell.create(null, p('Alpha')), schema.nodes.table_cell.create(null, p('Alpha'))]))));
   f.find('Alpha'); assert.equal(f.replace('Beta'), 2); assert.equal(f.state.doc.firstChild.firstChild.childCount, 2);
   assert.equal(f.state.doc.textContent, 'BetaBeta');
+});
+
+for (const [name, first, last, expected] of [
+  ['below the page', { top: 800, bottom: 820 }, { top: 800, bottom: 820 }, 1010],
+  ['above the page', { top: 0, bottom: 20 }, { top: 0, bottom: 20 }, 210],
+  ['already visible', { top: 200, bottom: 220 }, { top: 200, bottom: 220 }, 500],
+  ['partially below the page', { top: 480, bottom: 500 }, { top: 500, bottom: 520 }, 700],
+  ['multiline match taller than the page', { top: 800, bottom: 820 }, { top: 1400, bottom: 1420 }, 1188],
+  ['zero-width match', { top: 700, bottom: 720 }, { top: 700, bottom: 720 }, 910]
+]) {
+  test(`search navigation reveals ${name} in the note scroller`, () => {
+    const scroller = { clientHeight: 400, clientTop: 0, scrollTop: 500, getBoundingClientRect: () => ({ top: 100 }) };
+    const view = { dom: { closest: () => scroller }, coordsAtPos: (_pos, side) => side === 1 ? first : last };
+    revealNoteMatch(view, { from: 1, to: 5 });
+    assert.equal(scroller.scrollTop, expected);
+  });
+}
+test('search scrolling ignores a missing writing pane', () => {
+  revealNoteMatch({ dom: { closest: () => null } }, { from: 1, to: 1 });
 });
