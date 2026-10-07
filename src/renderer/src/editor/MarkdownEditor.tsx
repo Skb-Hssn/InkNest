@@ -543,6 +543,9 @@ export const MarkdownEditor = forwardRef<
       onLinkDialogRequest(details) {
         propsRef.current.onLinkDialogRequest(details);
       },
+      onCommandRequest(command) {
+        if (!propsRef.current.disabled) propsRef.current.onCommandRequest(command);
+      },
       onImagePaste(payload) {
         propsRef.current.onImagePaste(payload);
       },

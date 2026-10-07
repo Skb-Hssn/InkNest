@@ -3149,6 +3149,10 @@ export function App() {
                   setStatusMessage("Editing");
                 }}
                 onSelectionFormatChange={setActiveToolbarCommands}
+                onCommandRequest={(command) => {
+                  const tool = toolbarPlaceholders.find((tool) => tool.id === command);
+                  if (tool) void runToolbarCommand(tool);
+                }}
                 onLinkDialogRequest={openLinkDialog}
                 onImagePaste={(payload) => void insertPastedImage(payload)}
                 onLocalLinkRequest={(url) => void openLocalLink(url)}

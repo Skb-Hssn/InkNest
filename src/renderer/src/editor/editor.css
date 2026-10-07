@@ -740,3 +740,15 @@
 .inknest-editor blockquote.inknest-callout[data-callout="info"] { border-color: color-mix(in srgb, #53949c 40%, var(--app-border)); border-left-color: #53949c; background: color-mix(in srgb, #53949c 9%, var(--app-surface)); }
 .inknest-editor-full-width .editor { max-width: none; }
 .note-writing-scroll { cursor: text; }
+/* Slash suggestions float beside the caret without moving the document. */
+.inknest-slash-menu { position: fixed; z-index: 110; width: 288px; max-width: calc(100vw - 16px); border: 1px solid var(--app-border); border-radius: 9px; background: var(--app-surface); color: var(--app-text); box-shadow: 0 12px 35px #0003; padding: 5px; }
+.inknest-slash-menu[hidden] { display: none; }
+.inknest-slash-menu button { font-family: inherit; }
+.inknest-slash-heading { padding: 7px 9px; font-size: 11px; font-weight: 600; color: var(--app-muted); }
+.inknest-slash-options { max-height: min(280px, 40vh); overflow-y: auto; }
+.inknest-slash-options > button { width: 100%; display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 9px; border-radius: 5px; text-align: left; font-size: 13px; }
+.inknest-slash-options small { color: var(--app-muted); font-size: 11px; }
+.inknest-slash-options > button:is(:hover, [aria-selected="true"]):not(:disabled) { color: var(--app-menu-safe); background: color-mix(in srgb, var(--app-menu-safe) 13%, var(--app-surface)); }
+.inknest-slash-options > button.danger:is(:hover, [aria-selected="true"]):not(:disabled) { color: var(--app-menu-danger); background: color-mix(in srgb, var(--app-menu-danger) 13%, var(--app-surface)); }
+.inknest-slash-options > button:disabled { opacity: .4; cursor: default; }
+.inknest-slash-footer { padding: 7px 9px 4px; font-size: 10px; color: var(--app-muted); border-top: 1px solid var(--app-border); }

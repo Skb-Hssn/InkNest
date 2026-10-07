@@ -83,6 +83,7 @@ export type MarkdownEditorProps = {
   onOutlineClose: () => void;
   onChange: (markdown: string) => void;
   onSelectionFormatChange: (commands: Set<MarkdownEditorCommand>) => void;
+  onCommandRequest: (command: MarkdownEditorCommand) => void;
   onLinkDialogRequest: (details: LinkDialogDetails) => void;
   onImagePaste: (payload: SaveImagePayload) => void;
   onLocalLinkRequest: (url: string) => void;

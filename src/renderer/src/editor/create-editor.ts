@@ -23,7 +23,7 @@ import { codeHighlightPlugin } from "./extensions/code-highlight-plugin";
 import { createDocumentObserverPlugin } from "./extensions/document-observer-plugin";
 import { createImageView } from "./extensions/image-view";
 import { listItemView } from "./extensions/list-item-view";
-import { runSlashCommand, slashCommandPlugin } from "./extensions/slash-command-plugin";
+import { runSlashCommand, slashCommandPlugin, createSlashSuggestionsPlugin, handleSlashSuggestionsKey } from "./extensions/slash-command-plugin";
 import {
   collectActiveEditorCommands,
   handleDeletableBlockKey,
@@ -45,6 +45,7 @@ type CreateEditorOptions = Pick<
   | "workspacePath"
   | "notePath"
   | "onSelectionFormatChange"
+  | "onCommandRequest"
   | "onLinkDialogRequest"
   | "onImagePaste"
   | "onLocalLinkRequest"
@@ -106,6 +107,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
         },
         handleKeyDown(view, event) {
           if (!view.editable) return false;
+          if (handleSlashSuggestionsKey(view, event)) return true;
           // Browser caret movement (Home/End and Shift+Arrow) may precede
           // ProseMirror's asynchronous selectionchange event.
           syncEditorDOMSelection(view);
@@ -295,6 +297,7 @@ export function createMarkdownEditor(options: CreateEditorOptions) {
     .use(calloutPlugin)
     .use(codeHighlightPlugin)
     .use(slashCommandPlugin)
+    .use(createSlashSuggestionsPlugin(options.onCommandRequest))
     .use(createImageView({
       workspacePath: options.workspacePath,
       notePath: options.notePath

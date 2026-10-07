@@ -115,7 +115,17 @@ tab (Enter to apply, Escape to cancel). Shift+F10 opens the menu from a focused
 tab, and arrow keys navigate its options.
 
 
+## Slash formatting
+
+Type `/` at the start of a text block or after a space to open formatting
+suggestions. Keep typing to filter the commands; use arrow keys and Enter or Tab
+to choose, or click an option. Escape keeps the typed text and dismisses the menu.
+The menu includes all toolbar formatting options, with table actions enabled
+inside tables. Suggestions stay off in code and locked notes. Existing shortcuts
+such as `/heading`, `/todo`, `/table`, and `/math` still work.
+
 ## Searching notes
+
 
 The sidebar search (`Ctrl+K`) matches file and folder names only, with partial and
 case-insensitive matching. Its filtered list hides unrelated entries and parent
