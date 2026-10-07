@@ -106,3 +106,56 @@ inside the app-data folder beside `settings.json`. Closed tabs stay closed;
 missing files are skipped, and the first surviving tab becomes active if the
 previously active file is unavailable. Pending note edits and the latest tab
 session are saved before the window closes.
+
+
+## Linux installer
+
+Build an amd64 Debian/Ubuntu installer with:
+
+```sh
+npm ci
+npm run package:deb
+```
+
+The installer is written to `release/inknest_0.1.0_amd64.deb` (the version follows
+`package.json`). Install it with:
+
+```sh
+sudo apt install ./release/inknest_0.1.0_amd64.deb
+```
+
+Launch InkNest from the application menu or run `inknest`. Installed builds use
+the same `inknest` app-data directory as development builds, preserving settings,
+workspace sessions, and the local example workspace. Your Markdown files stay in
+their existing workspace folders. Node.js is only needed to build the package;
+the installer includes the Electron runtime.
+
+## Automated GitHub releases
+
+`.github/workflows/release.yml` builds and publishes the amd64 `.deb` when a stable
+version tag such as `v0.1.0` is pushed. The tag must match the version in both
+`package.json` and `package-lock.json`. The workflow runs all release checks
+headlessly, builds the installer, verifies its metadata, and checks the extracted
+app's rendering, note saving, and tab restoration before publishing.
+
+Commit the packaging files and workflow, merge them into `main`, then push a tag:
+
+```sh
+git switch main
+git pull --ff-only
+git tag -a v0.1.0 -m "InkNest 0.1.0"
+git push origin v0.1.0
+```
+
+Check the **Actions** tab for progress. On success, **Releases** contains the
+installer, `SHA256SUMS`, and generated release notes. Publishing uses the built-in
+GitHub token; no personal access token is required. Existing releases are not
+overwritten. For later releases, update both version files (for example with
+`npm version patch --no-git-tag-version`), commit and merge, then push the matching
+new tag. Generated packages remain excluded from Git history.
+
+To check a downloaded installer, place it beside `SHA256SUMS` and run:
+
+```sh
+sha256sum --check SHA256SUMS
+```

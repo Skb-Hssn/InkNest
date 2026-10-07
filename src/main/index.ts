@@ -5,6 +5,9 @@ import { ipcChannels } from "../shared/ipc";
 
 if (process.env.INKNEST_USER_DATA_DIR) {
   app.setPath("userData", path.resolve(process.env.INKNEST_USER_DATA_DIR));
+} else {
+  // Keep the same configuration directory in development and installed builds.
+  app.setPath("userData", path.join(app.getPath("appData"), "inknest"));
 }
 
 if (process.platform === "linux") {
@@ -26,6 +29,7 @@ if (process.platform === "linux") {
 function createMainWindow() {
   const mainWindow = new BrowserWindow({
     title: "InkNest",
+    icon: app.isPackaged ? path.join(process.resourcesPath, "icon.png") : path.join(app.getAppPath(), "resources", "icon.png"),
     width: 1280,
     height: 820,
     minWidth: 760,

@@ -11,7 +11,8 @@
     "test": "node --test tests/*.test.mjs",
     "build": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json && electron-vite build",
     "package": "npm run build",
-    "release-check": "node scripts/release-check.mjs"
+    "release-check": "node scripts/release-check.mjs",
+    "package:deb": "npm run build && electron-builder --linux deb --x64 --publish never"
   },
   "keywords": [
     "markdown",
@@ -37,10 +38,13 @@
     "@vitejs/plugin-react": "^5.2.0",
     "autoprefixer": "^10.4.20",
     "electron": "^42.5.0",
+    "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "postcss": "^8.4.49",
     "tailwindcss": "^3.4.17",
     "typescript": "^6.0.3",
     "vite": "^7.3.6"
-  }
+  },
+  "homepage": "https://github.com/Skb-Hssn/InkNest",
+  "desktopName": "io.github.skb-hssn.inknest"
 }
